@@ -9,6 +9,6 @@ services:
       - key: SE_EPHE_PATH
         value: /app/ephe
       - key: SUPABASE_URL
-        sync: false
+        value: https://rfbrmoctathqzpwowbzr.supabase.co
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
