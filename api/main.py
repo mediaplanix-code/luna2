@@ -235,3 +235,112 @@ def transits(req: TransitRequest):
         "transits": transits_now,
         "aspects_to_natal": aspetti_transito,
     }
+    
+# =========================================================
+# ONBOARDING — riceve dati dal form, calcola tema, salva
+# =========================================================
+from supabase import create_client
+import httpx
+
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+
+class OnboardingRequest(BaseModel):
+    nome: str
+    email: str
+    birth_date: str      # "YYYY-MM-DD"
+    birth_time: str      # "HH:MM"
+    birth_city: str
+    telegram_id: str | None = None
+
+async def geocode_city(city: str) -> tuple[float, float, str]:
+    """Geocodifica la città con Nominatim (OpenStreetMap)."""
+    url = "https://nominatim.openstreetmap.org/search"
+    params = {"q": city, "format": "json", "limit": 1}
+    headers = {"User-Agent": "Luna2/0.1 (contatti@luna2.app)"}
+    async with httpx.AsyncClient(timeout=10) as client:
+        r = await client.get(url, params=params, headers=headers)
+        data = r.json()
+    if not data:
+        raise HTTPException(status_code=400, detail=f"Città non trovata: {city}")
+    return float(data[0]["lat"]), float(data[0]["lon"]), data[0]["display_name"]
+
+@app.post("/onboarding")
+async def onboarding(req: OnboardingRequest):
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        raise HTTPException(status_code=500, detail="Supabase non configurato")
+
+    # 1. Geocodifica
+    try:
+        lat, lon, full_name = await geocode_city(req.birth_city)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Errore geocodifica: {e}")
+
+    # 2. Calcola tema natale
+    tz_offset = 1.0  # semplificazione: Italia inverno. Estivo 2.0 (si può raffinare dopo)
+    try:
+        chart = natal_chart(BirthData(
+            date=req.birth_date,
+            time=req.birth_time,
+            lat=lat,
+            lon=lon,
+            tz_offset=tz_offset,
+        ))
+    except HTTPException:
+        raise
+
+    # 3. Salva su Supabase
+    sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+    profile_payload = {
+        "email": req.email,
+        "nome": req.nome,
+        "telegram_id": req.telegram_id or None,
+        "birth_date": req.birth_date,
+        "birth_time": req.birth_time,
+        "birth_lat": lat,
+        "birth_lon": lon,
+        "birth_city": full_name,
+        "timezone": "Europe/Rome",
+        "consent_gdpr": True,
+    }
+
+    try:
+        prof_res = sb.table("profiles").insert(profile_payload).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Errore salvataggio profilo: {e}")
+
+    if not prof_res.data:
+        raise HTTPException(status_code=500, detail="Profilo non creato")
+
+    profile_id = prof_res.data[0]["id"]
+    access_token = prof_res.data[0]["access_token"]
+
+    # 4. Salva tema natale
+    chart_payload = {
+        "profile_id": profile_id,
+        "planets_json": chart["planets"],
+        "houses_json": chart["houses"],
+        "aspects_json": chart["aspects"],
+        "ascendant": chart["ascendant"]["longitude"],
+        "mc": chart["mc"]["longitude"],
+    }
+
+    try:
+        sb.table("natal_charts").insert(chart_payload).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Errore salvataggio tema: {e}")
+
+    return {
+        "status": "ok",
+        "message": f"Tema natale calcolato per {req.nome}.",
+        "profile_id": profile_id,
+        "access_token": access_token,
+        "chart_preview": {
+            "sole": chart["planets"].get("Sole"),
+            "luna": chart["planets"].get("Luna"),
+            "ascendente": chart["ascendant"],
+        },
+    }
