@@ -3,6 +3,7 @@
 # =========================================================
 
 import os
+import traceback
 from datetime import datetime, timezone
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,7 +12,7 @@ import swisseph as swe
 import httpx
 from supabase import create_client
 
-app = FastAPI(title="Luna2 Astro API", version="0.2.0")
+app = FastAPI(title="Luna2 Astro API", version="0.3.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -30,7 +31,7 @@ if os.path.isdir(EPHE_PATH):
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-TELEGRAM_API = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
+TELEGRAM_API = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}" if TELEGRAM_TOKEN else None
 
 PIANETI = {
     "Sole": swe.SUN,
@@ -127,7 +128,13 @@ def julian_day_from_local(date_str: str, time_str: str, tz_offset: float) -> flo
 # ---------------------------------------------------------
 @app.get("/")
 def root():
-    return {"status": "ok", "service": "Luna2 Astro API", "version": "0.2.0"}
+    return {
+        "status": "ok",
+        "service": "Luna2 Astro API",
+        "version": "0.3.0",
+        "supabase_configured": bool(SUPABASE_URL and SUPABASE_KEY),
+        "telegram_configured": bool(TELEGRAM_TOKEN),
+    }
 
 # ---------------------------------------------------------
 # Tema natale
@@ -184,48 +191,6 @@ def natal_chart(data: BirthData):
     }
 
 # ---------------------------------------------------------
-# Transiti
-# ---------------------------------------------------------
-@app.post("/transits")
-def transits(req: TransitRequest):
-    natal = natal_chart(BirthData(
-        date=req.date, time=req.time,
-        lat=req.lat, lon=req.lon, tz_offset=req.tz_offset
-    ))
-    if req.target_date:
-        tgt = datetime.strptime(req.target_date, "%Y-%m-%d")
-    else:
-        tgt = datetime.now(timezone.utc)
-    jd_today = swe.julday(tgt.year, tgt.month, tgt.day, 12.0)
-
-    transits_now = {}
-    for nome, pid in PIANETI.items():
-        try:
-            xx, _ = swe.calc_ut(jd_today, pid)
-            transits_now[nome] = lon_to_sign(xx[0])
-        except Exception:
-            continue
-
-    aspetti_transito = []
-    for t_nome, t_pos in transits_now.items():
-        for n_nome, n_pos in natal["planets"].items():
-            diff = abs(t_pos["longitude"] - n_pos["longitude"])
-            diff = min(diff, 360 - diff)
-            for nome_asp, (ang, orb) in ASPETTI.items():
-                if abs(diff - ang) <= orb:
-                    aspetti_transito.append({
-                        "transito": t_nome,
-                        "natale": n_nome,
-                        "tipo": nome_asp,
-                        "orb": round(abs(diff - ang), 2),
-                    })
-    return {
-        "target_date": tgt.strftime("%Y-%m-%d"),
-        "transits": transits_now,
-        "aspects_to_natal": aspetti_transito,
-    }
-
-# ---------------------------------------------------------
 # Geocodifica
 # ---------------------------------------------------------
 async def geocode_city(city: str) -> tuple[float, float, str]:
@@ -244,84 +209,115 @@ async def geocode_city(city: str) -> tuple[float, float, str]:
 # ---------------------------------------------------------
 @app.post("/onboarding")
 async def onboarding(req: OnboardingRequest):
-    if not SUPABASE_URL or not SUPABASE_KEY:
-        raise HTTPException(status_code=500, detail="Supabase non configurato")
-
     try:
-        lat, lon, full_name = await geocode_city(req.birth_city)
+        if not SUPABASE_URL or not SUPABASE_KEY:
+            raise HTTPException(status_code=500, detail="Supabase non configurato (mancano env vars)")
+
+        # 1. Geocodifica
+        try:
+            lat, lon, full_name = await geocode_city(req.birth_city)
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Errore geocodifica: {e}")
+
+        # 2. Tema natale
+        tz_offset = 1.0
+        try:
+            chart = natal_chart(BirthData(
+                date=req.birth_date,
+                time=req.birth_time,
+                lat=lat,
+                lon=lon,
+                tz_offset=tz_offset,
+            ))
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Errore calcolo tema: {e}")
+
+        # 3. Supabase
+        sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+        # Se l'email esiste già, riutilizza il profilo
+        existing = sb.table("profiles").select("*").eq("email", req.email).execute()
+        if existing.data:
+            profile_id = existing.data[0]["id"]
+            access_token = existing.data[0]["access_token"]
+            sb.table("profiles").update({
+                "nome": req.nome,
+                "birth_date": req.birth_date,
+                "birth_time": req.birth_time,
+                "birth_lat": lat,
+                "birth_lon": lon,
+                "birth_city": full_name,
+            }).eq("id", profile_id).execute()
+        else:
+            profile_payload = {
+                "email": req.email,
+                "nome": req.nome,
+                "telegram_id": None,
+                "birth_date": req.birth_date,
+                "birth_time": req.birth_time,
+                "birth_lat": lat,
+                "birth_lon": lon,
+                "birth_city": full_name,
+                "timezone": "Europe/Rome",
+                "consent_gdpr": True,
+            }
+            try:
+                prof_res = sb.table("profiles").insert(profile_payload).execute()
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Errore salvataggio profilo: {e}")
+
+            if not prof_res.data:
+                raise HTTPException(status_code=500, detail="Profilo non creato")
+
+            profile_id = prof_res.data[0]["id"]
+            access_token = prof_res.data[0]["access_token"]
+
+        # 4. Salva tema natale
+        chart_payload = {
+            "profile_id": profile_id,
+            "planets_json": chart["planets"],
+            "houses_json": chart["houses"],
+            "aspects_json": chart["aspects"],
+            "ascendant": chart["ascendant"]["longitude"],
+            "mc": chart["mc"]["longitude"],
+        }
+
+        try:
+            sb.table("natal_charts").insert(chart_payload).execute()
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Errore salvataggio tema: {e}")
+
+        return {
+            "status": "ok",
+            "message": f"Tema natale calcolato per {req.nome}.",
+            "profile_id": profile_id,
+            "access_token": access_token,
+            "chart_preview": {
+                "sole": chart["planets"].get("Sole"),
+                "luna": chart["planets"].get("Luna"),
+                "ascendente": chart["ascendant"],
+            },
+        }
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Errore geocodifica: {e}")
-
-    tz_offset = 1.0
-    chart = natal_chart(BirthData(
-        date=req.birth_date,
-        time=req.birth_time,
-        lat=lat,
-        lon=lon,
-        tz_offset=tz_offset,
-    ))
-
-    sb = create_client(SUPABASE_URL, SUPABASE_KEY)
-
-    profile_payload = {
-        "email": req.email,
-        "nome": req.nome,
-        "telegram_id": None,
-        "birth_date": req.birth_date,
-        "birth_time": req.birth_time,
-        "birth_lat": lat,
-        "birth_lon": lon,
-        "birth_city": full_name,
-        "timezone": "Europe/Rome",
-        "consent_gdpr": True,
-    }
-
-    try:
-        prof_res = sb.table("profiles").insert(profile_payload).execute()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Errore salvataggio profilo: {e}")
-
-    if not prof_res.data:
-        raise HTTPException(status_code=500, detail="Profilo non creato")
-
-    profile_id = prof_res.data[0]["id"]
-    access_token = prof_res.data[0]["access_token"]
-
-    chart_payload = {
-        "profile_id": profile_id,
-        "planets_json": chart["planets"],
-        "houses_json": chart["houses"],
-        "aspects_json": chart["aspects"],
-        "ascendant": chart["ascendant"]["longitude"],
-        "mc": chart["mc"]["longitude"],
-    }
-
-    try:
-        sb.table("natal_charts").insert(chart_payload).execute()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Errore salvataggio tema: {e}")
-
-    return {
-        "status": "ok",
-        "message": f"Tema natale calcolato per {req.nome}.",
-        "profile_id": profile_id,
-        "access_token": access_token,
-        "chart_preview": {
-            "sole": chart["planets"].get("Sole"),
-            "luna": chart["planets"].get("Luna"),
-            "ascendente": chart["ascendant"],
-        },
-    }
+        # Log dettagliato lato server, risposta pulita al client
+        tb = traceback.format_exc()
+        print("=== ONBOARDING ERROR ===")
+        print(tb)
+        print("========================")
+        raise HTTPException(status_code=500, detail=f"Errore interno: {type(e).__name__}: {e}")
 
 # ---------------------------------------------------------
-# TELEGRAM WEBHOOK
+# Telegram
 # ---------------------------------------------------------
 @app.post("/telegram/webhook")
 async def telegram_webhook(request: Request):
-    """Riceve gli aggiornamenti da Telegram."""
-    if not TELEGRAM_TOKEN:
+    if not TELEGRAM_TOKEN or not TELEGRAM_API:
         raise HTTPException(status_code=500, detail="TELEGRAM_BOT_TOKEN non configurato")
 
     update = await request.json()
@@ -337,7 +333,6 @@ async def telegram_webhook(request: Request):
         if len(parts) < 2:
             await send_telegram(chat_id, "Ciao! Per attivare il tuo oroscopo, apri il link che ti è stato dato dal sito Luna2.")
             return {"ok": True}
-
         token = parts[1].strip()
         await link_telegram_account(chat_id, token)
         await send_telegram(chat_id, "✅ Perfetto! Il tuo profilo è collegato. Da domani riceverai il tuo oroscopo giornaliero.")
@@ -352,6 +347,8 @@ async def telegram_webhook(request: Request):
     return {"ok": True}
 
 async def send_telegram(chat_id: int, text: str):
+    if not TELEGRAM_API:
+        return
     async with httpx.AsyncClient(timeout=10) as client:
         await client.post(f"{TELEGRAM_API}/sendMessage", json={
             "chat_id": chat_id,
@@ -379,11 +376,20 @@ async def unlink_telegram_account(chat_id: int):
 
 @app.get("/telegram/set-webhook")
 async def set_telegram_webhook():
-    """Chiama questo endpoint UNA volta dopo il deploy per registrare il webhook."""
-    if not TELEGRAM_TOKEN:
-        raise HTTPException(status_code=500, detail="TELEGRAM_BOT_TOKEN non configurato")
-
+    if not TELEGRAM_TOKEN or not TELEGRAM_API:
+        return {
+            "ok": False,
+            "error": "TELEGRAM_BOT_TOKEN non configurato su Render",
+        }
     webhook_url = "https://luna2-api.onrender.com/telegram/webhook"
     async with httpx.AsyncClient(timeout=10) as client:
         r = await client.post(f"{TELEGRAM_API}/setWebhook", json={"url": webhook_url})
+    return r.json()
+
+@app.get("/telegram/webhook-info")
+async def webhook_info():
+    if not TELEGRAM_TOKEN or not TELEGRAM_API:
+        return {"ok": False, "error": "TELEGRAM_BOT_TOKEN non configurato"}
+    async with httpx.AsyncClient(timeout=10) as client:
+        r = await client.get(f"{TELEGRAM_API}/getWebhookInfo")
     return r.json()
