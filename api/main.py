@@ -4,7 +4,7 @@
 
 import os
 import traceback
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -12,7 +12,9 @@ import swisseph as swe
 import httpx
 from supabase import create_client
 
-app = FastAPI(title="Luna2 Astro API", version="0.9.3")
+from transiti import calcola_transiti_lenti
+
+app = FastAPI(title="Luna2 Astro API", version="0.10.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -206,10 +208,9 @@ def root():
     return {
         "status": "ok",
         "service": "Luna2 Astro API",
-        "version": "0.9.3",
+        "version": "0.10.0",
         "supabase_configured": bool(SUPABASE_URL and SUPABASE_KEY),
         "telegram_configured": bool(TELEGRAM_TOKEN),
-        "telegram_token_prefix": TELEGRAM_TOKEN[:10] if TELEGRAM_TOKEN else None,
     }
 
 
@@ -253,7 +254,7 @@ async def geocode(q: str = ""):
     url = "https://photon.komoot.io/api/"
     params = {"q": q, "limit": 5, "lang": "default"}
     headers = {
-        "User-Agent": "Luna2/0.9 (contatti@luna2.app)",
+        "User-Agent": "Luna2/0.10 (contatti@luna2.app)",
         "Accept": "application/json",
     }
     try:
@@ -495,6 +496,75 @@ async def get_sala(token: str):
             "mc": {"longitude": tema["mc"]},
         },
         "transits": transits_data,
+    }
+
+
+@app.get("/segnali/{token}")
+async def get_segnali(token: str):
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        raise HTTPException(status_code=500, detail="Supabase non configurato")
+
+    sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+    try:
+        res = sb.table("profiles").select("*").eq("access_token", token).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Errore lettura profilo: {e}")
+
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Profilo non trovato")
+
+    profile = res.data[0]
+
+    try:
+        tema = calcola_tema_completo(
+            str(profile["birth_date"]),
+            str(profile["birth_time"])[:5],
+            float(profile["birth_lat"]),
+            float(profile["birth_lon"]),
+            1.0,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Errore calcolo tema: {e}")
+
+    data_iscrizione = profile.get("created_at")
+    if data_iscrizione:
+        data_start = str(data_iscrizione)[:10]
+    else:
+        data_start = datetime.utcnow().strftime("%Y-%m-%d")
+
+    try:
+        transiti = calcola_transiti_lenti(
+            data_inizio=data_start,
+            planets=tema["planets"],
+            houses=tema["houses"],
+            ascendant=tema["ascendant"],
+            mc=tema["mc"],
+            mesi_finestra=12,
+        )
+    except Exception as e:
+        print("=== ERRORE CALCOLO TRANSITI LENTI ===")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Errore calcolo transiti: {e}")
+
+    oggi = datetime.utcnow()
+    tra_6_mesi = oggi + timedelta(days=180)
+    alert_pronti = []
+    for t in transiti:
+        try:
+            d = datetime.strptime(t["data_esatta"], "%Y-%m-%d")
+            if oggi <= d <= tra_6_mesi:
+                alert_pronti.append(t)
+        except Exception:
+            continue
+
+    return {
+        "profile_id": profile["id"],
+        "nome": profile.get("nome"),
+        "data_iscrizione": data_start,
+        "transiti_totali_12_mesi": len(transiti),
+        "alert_pronti_prossimi_6_mesi": alert_pronti,
+        "tutti_i_transiti": transiti,
     }
 
 
