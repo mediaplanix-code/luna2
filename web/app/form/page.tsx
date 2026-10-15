@@ -28,7 +28,6 @@ export default function FormPage() {
 
   const update = (k: string, v: any) => setForm({ ...form, [k]: v });
 
-  // Chiude la tendina cliccando fuori
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
@@ -39,7 +38,6 @@ export default function FormPage() {
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
-  // Autocomplete Photon
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (cityQuery.length < 2) {
@@ -83,7 +81,6 @@ export default function FormPage() {
     setShowSuggestions(false);
   }
 
-  // Se l'utente ha scritto la città senza cliccare un suggerimento, prova a risolverla
   async function resolveCityIfNeeded(): Promise<{ lat: number; lon: number; label: string } | null> {
     if (form.birth_lat && form.birth_lon && form.birth_city) {
       return { lat: form.birth_lat, lon: form.birth_lon, label: form.birth_city };
@@ -112,12 +109,11 @@ export default function FormPage() {
     e.preventDefault();
     setError('');
 
-    // Se l'utente non ha scelto dai suggerimenti, risolvi la città automaticamente
     if (!form.birth_lat || !form.birth_lon) {
       setLoading(true);
       const resolved = await resolveCityIfNeeded();
       if (!resolved) {
-        setError('Città non trovata. Scrivi il nome della città e scegli dai suggerimenti.');
+        setError('Città non trovata. Scrivi il nome della città.');
         setLoading(false);
         return;
       }
@@ -218,18 +214,9 @@ export default function FormPage() {
             )}
           </div>
           <div className="hint">
-            Scrivi 2-3 lettere e scegli dalla lista. Se la lista non appare, premi comunque &quot;Scopri&quot;: troviamo noi la città.
+            Scrivi 2-3 lettere e scegli dalla lista.
           </div>
         </div>
-
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={form.wants_telegram}
-            onChange={(e) => update('wants_telegram', e.target.checked)}
-          />
-          <span>Voglio ricevere l&apos;oroscopo su Telegram</span>
-        </label>
 
         <button type="submit" className="cta" disabled={loading}
           style={{ marginTop: '22px' }}>
