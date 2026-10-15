@@ -8,18 +8,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
-# Scarica i file delle effemeridi Swiss Ephemeris
+# Scarica i file delle effemeridi Swiss Ephemeris dal repository ufficiale GitHub
+# Il range _18 copre gli anni 1800-2400, sufficiente per qualsiasi data di nascita moderna
 RUN mkdir -p /app/ephe && \
     cd /app/ephe && \
-    wget -q https://www.astro.com/ftp/swisseph/ephe/seas_18.se1 && \
-    wget -q https://www.astro.com/ftp/swisseph/ephe/sepl_18.se1 && \
-    wget -q https://www.astro.com/ftp/swisseph/ephe/semo_18.se1 && \
-    wget -q https://www.astro.com/ftp/swisseph/ephe/seas_12.se1 && \
-    wget -q https://www.astro.com/ftp/swisseph/ephe/sepl_12.se1 && \
-    wget -q https://www.astro.com/ftp/swisseph/ephe/semo_12.se1 && \
-    wget -q https://www.astro.com/ftp/swisseph/ephe/seas_06.se1 && \
-    wget -q https://www.astro.com/ftp/swisseph/ephe/sepl_06.se1 && \
-    wget -q https://www.astro.com/ftp/swisseph/ephe/semo_06.se1
+    wget -q https://raw.githubusercontent.com/aloistr/swisseph/master/ephe/sepl_18.se1 && \
+    wget -q https://raw.githubusercontent.com/aloistr/swisseph/master/ephe/semo_18.se1 && \
+    wget -q https://raw.githubusercontent.com/aloistr/swisseph/master/ephe/seas_18.se1
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
