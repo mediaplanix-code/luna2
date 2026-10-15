@@ -12,7 +12,7 @@ import swisseph as swe
 import httpx
 from supabase import create_client
 
-app = FastAPI(title="Luna2 Astro API", version="0.5.0")
+app = FastAPI(title="Luna2 Astro API", version="0.6.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -30,7 +30,7 @@ SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_API = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}" if TELEGRAM_TOKEN else None
 
-SITE_URL = "https://luna2.pages.dev"
+SITE_URL = "https://luna2-2hw.pages.dev"
 
 PIANETI = {
     "Sole": swe.SUN,
@@ -131,10 +131,33 @@ def root():
     return {
         "status": "ok",
         "service": "Luna2 Astro API",
-        "version": "0.5.0",
+        "version": "0.6.0",
         "supabase_configured": bool(SUPABASE_URL and SUPABASE_KEY),
         "telegram_configured": bool(TELEGRAM_TOKEN),
     }
+
+
+@app.get("/geocode")
+async def geocode(q: str = ""):
+    """Proxy verso Photon per l'autocomplete delle città."""
+    if len(q) < 3:
+        return {"features": []}
+
+    url = "https://photon.komoot.io/"
+    params = {"q": q, "limit": 5, "lang": "it"}
+    headers = {
+        "User-Agent": "Luna2/0.6 (contatti@luna2.app)",
+        "Accept": "application/json",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(url, params=params, headers=headers)
+        if r.status_code != 200:
+            return {"features": [], "error": f"HTTP {r.status_code}"}
+        return r.json()
+    except Exception as e:
+        return {"features": [], "error": str(e)}
 
 
 @app.post("/natal-chart")
@@ -379,7 +402,6 @@ async def send_telegram(chat_id, text):
 
 
 async def link_telegram_account(chat_id, token):
-    """Collega chat_id al profilo. Restituisce il nome utente o None."""
     if not SUPABASE_URL or not SUPABASE_KEY:
         return None
     sb = create_client(SUPABASE_URL, SUPABASE_KEY)
