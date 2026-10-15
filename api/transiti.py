@@ -1,7 +1,5 @@
 # =========================================================
 # LUNA2 — Motore dei transiti lenti
-# Calcola i transiti dei pianeti lenti sui punti sensibili
-# del tema natale, in una finestra temporale di 12 mesi.
 # =========================================================
 
 from datetime import datetime, timedelta
@@ -15,10 +13,6 @@ PIANETI_LENTI = {
     "Plutone": swe.PLUTO,
 }
 
-PUNTI_SENSIBILI = ["Sole", "Luna", "Ascendente", "MC"]
-
-CASE_ANGOLARI = [1, 4, 7, 10]
-
 ASPETTI = {
     "congiunzione": 0,
     "sestile": 60,
@@ -26,8 +20,6 @@ ASPETTI = {
     "trigono": 120,
     "opposizione": 180,
 }
-
-ORBITA = 2.0
 
 
 def _calc_lon(jd: float, planet_id) -> float:
@@ -68,36 +60,36 @@ def _settore_da_casa(casa: int) -> str:
     return "Vita quotidiana"
 
 
-def _casa_di_punto(lon_punto: float, houses: list) -> int:
-    for k in range(12):
-        c1 = houses[k]
-        c2 = houses[(k + 1) % 12]
-        if c1 <= c2:
-            if c1 <= lon_punto < c2:
-                return k + 1
-        else:
-            if lon_punto >= c1 or lon_punto < c2:
-                return k + 1
-    return 1
-
-
 def calcola_transiti_lenti(
     data_inizio: str,
     planets: dict,
     houses: list,
     ascendant: float,
     mc: float,
+    planets_in_houses: dict,
     mesi_finestra: int = 12,
 ):
+    """
+    Calcola i transiti dei pianeti lenti sui punti natale sensibili.
+    planets_in_houses: dict { "Sole": 10, "Luna": 11, ... } già calcolato
+    dal backend.
+    """
     dt_start = datetime.strptime(data_inizio, "%Y-%m-%d")
     dt_end = dt_start + timedelta(days=mesi_finestra * 30)
 
-    punti = {
-        "Sole": planets.get("Sole", {}).get("longitude", 0),
-        "Luna": planets.get("Luna", {}).get("longitude", 0),
-        "Ascendente": ascendant,
-        "MC": mc,
-    }
+    # Mappa: nome punto natale -> (longitudine, casa)
+    punti = {}
+    for nome in ["Sole", "Luna"]:
+        lon = planets.get(nome, {}).get("longitude")
+        casa = planets_in_houses.get(nome)
+        if lon is not None and casa:
+            punti[nome] = {"lon": lon, "casa": casa}
+
+    # Ascendente e MC: la loro casa è fissa (1 e 10)
+    if ascendant is not None:
+        punti["Ascendente"] = {"lon": ascendant, "casa": 1}
+    if mc is not None:
+        punti["MC"] = {"lon": mc, "casa": 10}
 
     risultati = []
 
@@ -112,7 +104,10 @@ def calcola_transiti_lenti(
                 dt += timedelta(days=1)
                 continue
 
-            for punto_nome, lon_punto in punti.items():
+            for punto_nome, info in punti.items():
+                lon_punto = info["lon"]
+                casa = info["casa"]
+
                 for aspetto_nome, angolo in ASPETTI.items():
                     diff = _diff_angle(lon_transito, lon_punto)
                     delta = diff - angolo
@@ -122,7 +117,6 @@ def calcola_transiti_lenti(
 
                     if prev_val is not None:
                         if (prev_val > 0 and delta <= 0) or (prev_val < 0 and delta >= 0):
-                            casa = _casa_di_punto(lon_punto, houses)
                             settore = _settore_da_casa(casa)
                             risultati.append({
                                 "data_esatta": dt.strftime("%Y-%m-%d"),
