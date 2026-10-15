@@ -7,7 +7,8 @@ import os
 import httpx
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent"
+MODELLO = "gemini-2.5-flash"
+GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{MODELLO}:generateContent"
 
 
 async def _chiama_gemini(prompt: str, max_tokens: int = 800) -> str:
@@ -21,26 +22,37 @@ async def _chiama_gemini(prompt: str, max_tokens: int = 800) -> str:
             "parts": [{"text": prompt}]
         }],
         "generationConfig": {
-            "temperature": 0.7,
             "maxOutputTokens": max_tokens,
         }
     }
 
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with httpx.AsyncClient(timeout=120) as client:
             r = await client.post(url, json=body)
-            data = r.json()
+            try:
+                data = r.json()
+            except Exception:
+                return f"ERRORE Gemini ({r.status_code}): risposta non JSON: {r.text[:300]}"
+
             if r.status_code != 200:
                 return f"ERRORE Gemini ({r.status_code}): {data}"
+
             candidates = data.get("candidates", [])
             if not candidates:
-                return "ERRORE: nessuna risposta da Gemini"
+                return f"ERRORE: nessuna risposta da Gemini. Dettagli: {data}"
+
             parts = candidates[0].get("content", {}).get("parts", [])
             if not parts:
-                return "ERRORE: risposta vuota"
+                finish = candidates[0].get("finishReason", "sconosciuto")
+                return f"ERRORE: risposta vuota (finishReason={finish})"
+
             return parts[0].get("text", "")
+    except httpx.TimeoutException:
+        return "ERRORE chiamata Gemini: timeout (120s)"
+    except httpx.ConnectError as e:
+        return f"ERRORE chiamata Gemini: connessione fallita ({e})"
     except Exception as e:
-        return f"ERRORE chiamata Gemini: {e}"
+        return f"ERRORE chiamata Gemini: {type(e).__name__}: {e}"
 
 
 async def genera_oroscopo_settimanale(report: dict) -> str:
@@ -55,7 +67,7 @@ REPORT INTERNO:
 
 Scrivi l'oroscopo settimanale. Inizia con una frase di saluto personalizzata. Poi 3-4 frasi sul tema principale della settimana, basandoti sui transiti attivi e sui settori toccati. Chiudi con una breve indicazione pratica."""
 
-    return await _chiama_gemini(prompt, max_tokens=500)
+    return await _chiama_gemini(prompt, max_tokens=800)
 
 
 async def rispondi_chat(report: dict, domanda: str, storico: list) -> str:
@@ -64,7 +76,7 @@ async def rispondi_chat(report: dict, domanda: str, storico: list) -> str:
     nome = report.get("profile", {}).get("nome", "utente")
 
     storico_testo = ""
-    for m in storico[-6:]:  # ultimi 6 messaggi per contesto
+    for m in storico[-6:]:
         ruolo = "Utente" if m.get("role") == "user" else "Astrologa"
         storico_testo += f"{ruolo}: {m.get('content', '')}\n"
 
@@ -81,7 +93,7 @@ DOMANDA DI {nome}:
 
 Rispondi come astrologa."""
 
-    return await _chiama_gemini(prompt, max_tokens=400)
+    return await _chiama_gemini(prompt, max_tokens=600)
 
 
 async def genera_copione_voce(report: dict) -> str:
@@ -100,4 +112,4 @@ REPORT INTERNO:
 {riepilogo}
 
 Scrivi il copione di apertura."""
-    return await _chiama_gemini(prompt, max_tokens=600)
+    return await _chiama_gemini(prompt, max_tokens=900)
