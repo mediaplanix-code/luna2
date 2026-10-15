@@ -12,7 +12,7 @@ import swisseph as swe
 import httpx
 from supabase import create_client
 
-app = FastAPI(title="Luna2 Astro API", version="0.9.2")
+app = FastAPI(title="Luna2 Astro API", version="0.9.3")
 
 app.add_middleware(
     CORSMiddleware,
@@ -186,14 +186,30 @@ def calcola_tema_completo(date_str: str, time_str: str, lat: float, lon: float, 
     }
 
 
+@app.on_event("startup")
+async def on_startup():
+    if not TELEGRAM_TOKEN or not TELEGRAM_API:
+        print("=== Telegram non configurato: salto auto-webhook ===")
+        return
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.post(f"{TELEGRAM_API}/setWebhook", json={
+                "url": "https://luna2-api.onrender.com/telegram/webhook"
+            })
+            print(f"=== Auto-webhook Telegram: {r.json()} ===")
+    except Exception as e:
+        print(f"=== Errore auto-webhook: {e} ===")
+
+
 @app.get("/")
 def root():
     return {
         "status": "ok",
         "service": "Luna2 Astro API",
-        "version": "0.9.2",
+        "version": "0.9.3",
         "supabase_configured": bool(SUPABASE_URL and SUPABASE_KEY),
         "telegram_configured": bool(TELEGRAM_TOKEN),
+        "telegram_token_prefix": TELEGRAM_TOKEN[:10] if TELEGRAM_TOKEN else None,
     }
 
 
@@ -213,7 +229,6 @@ def debug_ephe():
         test_result = {
             "tipo_ritorno": str(type(raw)),
             "len_ritorno": len(raw) if hasattr(raw, "__len__") else "no_len",
-            "raw_repr": str(raw)[:300],
         }
         try:
             longit = calc_ut_safe(jd, swe.SUN)
@@ -377,9 +392,6 @@ async def onboarding(req: OnboardingRequest):
         if not chart_res.data:
             raise HTTPException(status_code=500, detail="Tema natale non salvato")
 
-        # =====================================================
-        # INVIO TELEGRAM IMMEDIATO (se l'utente ha già collegato il bot)
-        # =====================================================
         try:
             chat_id = None
             refreshed = sb.table("profiles").select("telegram_id").eq("id", profile_id).execute()
@@ -394,9 +406,6 @@ async def onboarding(req: OnboardingRequest):
                     f"🌐 Torna qui quando vuoi per vedere tutto, parlare con l'AI e prenotare il consulto:\n"
                     f"{SITE_URL}/sala"
                 )
-                print(f"=== Telegram post-onboarding inviato a chat_id {chat_id} ===")
-            else:
-                print("=== Nessun telegram_id collegato: nessun messaggio inviato ===")
         except Exception as e:
             print(f"Errore invio Telegram post-onboarding: {e}")
 
@@ -475,6 +484,7 @@ async def get_sala(token: str):
             "chat_questions_used": profile.get("chat_questions_used", 0),
             "chat_questions_limit": profile.get("chat_questions_limit", 5),
             "is_paying": profile.get("is_paying", False),
+            "telegram_id": profile.get("telegram_id"),
         },
         "chart": {
             "planets": tema["planets"],
@@ -490,45 +500,65 @@ async def get_sala(token: str):
 
 @app.post("/telegram/webhook")
 async def telegram_webhook(request: Request):
-    if not TELEGRAM_TOKEN or not TELEGRAM_API:
-        raise HTTPException(status_code=500, detail="TELEGRAM_BOT_TOKEN non configurato")
+    print("=== WEBHOOK TELEGRAM CHIAMATO ===")
+    try:
+        raw = await request.body()
+        print(f"=== BODY: {raw.decode('utf-8')[:500]} ===")
+    except Exception as e:
+        print(f"=== Errore lettura body: {e} ===")
 
-    update = await request.json()
+    if not TELEGRAM_TOKEN or not TELEGRAM_API:
+        print("=== TELEGRAM_TOKEN mancante ===")
+        return {"ok": True}
+
+    try:
+        update = await request.json()
+    except Exception as e:
+        print(f"=== JSON non valido: {e} ===")
+        return {"ok": True}
+
     message = update.get("message") or update.get("edited_message")
     if not message:
+        print("=== Nessun message nell'update ===")
         return {"ok": True}
 
     chat_id = message["chat"]["id"]
     text = (message.get("text") or "").strip()
+    print(f"=== CHAT_ID: {chat_id}, TEXT: '{text}' ===")
 
     if text.startswith("/start"):
         parts = text.split(maxsplit=1)
         if len(parts) < 2:
-            await send_telegram(
+            print("=== /start senza token ===")
+            result = await send_telegram(
                 chat_id,
-                "Ciao! Per attivare il tuo oroscopo, apri il link che ti è stato dato dal sito Luna2."
+                "Ciao! Per attivare il tuo oroscopo, apri il link dal sito Luna2."
             )
+            print(f"=== Risultato: {result} ===")
             return {"ok": True}
 
         token = parts[1].strip()
+        print(f"=== /start con token: {token} ===")
         nome = await link_telegram_account(chat_id, token)
+        print(f"=== Nome trovato: {nome} ===")
 
         if nome:
-            await send_telegram(
+            result = await send_telegram(
                 chat_id,
                 f"Benvenuto <b>{nome}</b>! 🌙\n\n"
                 f"Il tuo profilo è collegato correttamente.\n"
                 f"Da ora riceverai qui il tuo oroscopo.\n\n"
-                f"🌐 Torna sul sito quando vuoi per vedere tutto, parlare con l'AI e prenotare il consulto:\n"
-                f"{SITE_URL}/sala\n\n"
+                f"🌐 Sito: {SITE_URL}/sala\n\n"
                 f"Comandi disponibili:\n"
                 f"/stop — disattiva le notifiche"
             )
+            print(f"=== Risultato: {result} ===")
         else:
-            await send_telegram(
+            result = await send_telegram(
                 chat_id,
                 "Non ho trovato il tuo profilo. Apri di nuovo il sito Luna2 e rifai l'iscrizione."
             )
+            print(f"=== Risultato: {result} ===")
         return {"ok": True}
 
     if text == "/stop":
@@ -542,13 +572,22 @@ async def telegram_webhook(request: Request):
 
 async def send_telegram(chat_id, text):
     if not TELEGRAM_API:
-        return
-    async with httpx.AsyncClient(timeout=10) as client:
-        await client.post(f"{TELEGRAM_API}/sendMessage", json={
-            "chat_id": chat_id,
-            "text": text,
-            "parse_mode": "HTML",
-        })
+        print("=== send_telegram: TELEGRAM_API mancante ===")
+        return {"ok": False, "error": "TELEGRAM_API mancante"}
+    url = f"{TELEGRAM_API}/sendMessage"
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.post(url, json={
+                "chat_id": chat_id,
+                "text": text,
+                "parse_mode": "HTML",
+            })
+            data = r.json()
+            print(f"=== Telegram risposta: status={r.status_code}, data={data} ===")
+            return data
+    except Exception as e:
+        print(f"=== Errore chiamata Telegram: {e} ===")
+        return {"ok": False, "error": str(e)}
 
 
 async def link_telegram_account(chat_id, token):
@@ -593,4 +632,13 @@ async def webhook_info():
         return {"ok": False, "error": "TELEGRAM_BOT_TOKEN non configurato"}
     async with httpx.AsyncClient(timeout=10) as client:
         r = await client.get(f"{TELEGRAM_API}/getWebhookInfo")
+    return r.json()
+
+
+@app.get("/telegram/getme")
+async def telegram_getme():
+    if not TELEGRAM_TOKEN or not TELEGRAM_API:
+        return {"ok": False, "error": "TELEGRAM_BOT_TOKEN non configurato"}
+    async with httpx.AsyncClient(timeout=10) as client:
+        r = await client.get(f"{TELEGRAM_API}/getMe")
     return r.json()
