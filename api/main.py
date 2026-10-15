@@ -12,7 +12,7 @@ import swisseph as swe
 import httpx
 from supabase import create_client
 
-app = FastAPI(title="Luna2 Astro API", version="0.4.0")
+app = FastAPI(title="Luna2 Astro API", version="0.5.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -85,6 +85,9 @@ class OnboardingRequest(BaseModel):
     birth_date: str
     birth_time: str
     birth_city: str
+    birth_country: str = ""
+    birth_lat: float = 0
+    birth_lon: float = 0
     wants_telegram: bool = False
 
 
@@ -128,7 +131,7 @@ def root():
     return {
         "status": "ok",
         "service": "Luna2 Astro API",
-        "version": "0.4.0",
+        "version": "0.5.0",
         "supabase_configured": bool(SUPABASE_URL and SUPABASE_KEY),
         "telegram_configured": bool(TELEGRAM_TOKEN),
     }
@@ -226,30 +229,21 @@ def transits(req: TransitRequest):
     }
 
 
-async def geocode_city(city: str):
-    url = "https://nominatim.openstreetmap.org/search"
-    params = {"q": city, "format": "json", "limit": 1}
-    headers = {"User-Agent": "Luna2/0.1"}
-    async with httpx.AsyncClient(timeout=10) as client:
-        r = await client.get(url, params=params, headers=headers)
-        data = r.json()
-    if not data:
-        raise HTTPException(status_code=400, detail=f"Città non trovata: {city}")
-    return float(data[0]["lat"]), float(data[0]["lon"]), data[0]["display_name"]
-
-
 @app.post("/onboarding")
 async def onboarding(req: OnboardingRequest):
     try:
         if not SUPABASE_URL or not SUPABASE_KEY:
             raise HTTPException(status_code=500, detail="Supabase non configurato")
 
-        try:
-            lat, lon, full_name = await geocode_city(req.birth_city)
-        except HTTPException:
-            raise
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Errore geocodifica: {e}")
+        if not req.birth_lat or not req.birth_lon:
+            raise HTTPException(
+                status_code=400,
+                detail="Coordinate di nascita mancanti. Seleziona la città dai suggerimenti."
+            )
+
+        lat = req.birth_lat
+        lon = req.birth_lon
+        full_name = req.birth_city
 
         chart = natal_chart(BirthData(
             date=req.birth_date,
