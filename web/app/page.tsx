@@ -3,6 +3,7 @@
 import { useState } from 'react';
 
 export default function Home() {
+  const [step, setStep] = useState<'form' | 'result'>('form');
   const [form, setForm] = useState({
     nome: '',
     email: '',
@@ -11,7 +12,7 @@ export default function Home() {
     birth_city: '',
     wants_telegram: false,
   });
-  const [status, setStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle');
+  const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   const [message, setMessage] = useState('');
   const [result, setResult] = useState<any>(null);
 
@@ -20,6 +21,7 @@ export default function Home() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setStatus('loading');
+    setMessage('');
     try {
       const res = await fetch('https://luna2-api.onrender.com/onboarding', {
         method: 'POST',
@@ -28,30 +30,36 @@ export default function Home() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Errore');
-      setStatus('ok');
-      setMessage(data.message || 'Registrazione completata!');
       setResult(data);
+      setStep('result');
+      setStatus('idle');
     } catch (err: any) {
       setStatus('error');
       setMessage(err.message);
     }
   }
 
-  return (
-    <main>
-      <h1>Luna2</h1>
-      <p>Il tuo tema natale reale. Il tuo oroscopo su Telegram.</p>
+  if (step === 'result' && result) {
+    const sole = result.chart_preview?.sole;
+    const luna = result.chart_preview?.luna;
+    const asc = result.chart_preview?.ascendente;
 
-      {status === 'ok' && result ? (
+    return (
+      <main>
+        <h1>Tema natale</h1>
+        <p>Ecco i tuoi dati astronomici reali.</p>
+
         <div className="success">
-          <strong>Fatto!</strong> {message}
-          {result.chart_preview && (
-            <div style={{ marginTop: '1rem' }}>
-              <div>Sole: {result.chart_preview.sole?.segno} {result.chart_preview.sole?.grado}°</div>
-              <div>Luna: {result.chart_preview.luna?.segno} {result.chart_preview.luna?.grado}°</div>
-              <div>Ascendente: {result.chart_preview.ascendente?.segno} {result.chart_preview.ascendente?.grado}°</div>
-            </div>
-          )}
+          <div style={{ marginBottom: '1rem' }}>
+            <strong>Sole:</strong> {sole?.segno} {sole?.grado}°
+          </div>
+          <div style={{ marginBottom: '1rem' }}>
+            <strong>Luna:</strong> {luna?.segno} {luna?.grado}°
+          </div>
+          <div style={{ marginBottom: '1rem' }}>
+            <strong>Ascendente:</strong> {asc?.segno} {asc?.grado}°
+          </div>
+
           {form.wants_telegram && result.access_token && (
             <a
               href={`https://t.me/Luna2OroscopoBot?start=${result.access_token}`}
@@ -67,42 +75,49 @@ export default function Home() {
                 fontWeight: 600,
               }}
             >
-              Apri Telegram e attiva il bot →
+              Apri Telegram e attiva l&apos;oroscopo →
             </a>
           )}
         </div>
-      ) : (
-        <form onSubmit={handleSubmit}>
-          <label>Nome</label>
-          <input value={form.nome} onChange={(e) => update('nome', e.target.value)} required />
+      </main>
+    );
+  }
 
-          <label>Email</label>
-          <input type="email" value={form.email} onChange={(e) => update('email', e.target.value)} required />
+  return (
+    <main>
+      <h1>Luna2</h1>
+      <p>Il tuo tema natale reale. Il tuo oroscopo su Telegram.</p>
 
-          <label>Data di nascita</label>
-          <input type="date" value={form.birth_date} onChange={(e) => update('birth_date', e.target.value)} required />
+      <form onSubmit={handleSubmit}>
+        <label>Nome</label>
+        <input value={form.nome} onChange={(e) => update('nome', e.target.value)} required />
 
-          <label>Ora di nascita (esatta)</label>
-          <input type="time" value={form.birth_time} onChange={(e) => update('birth_time', e.target.value)} required />
+        <label>Email</label>
+        <input type="email" value={form.email} onChange={(e) => update('email', e.target.value)} required />
 
-          <label>Città di nascita</label>
-          <input value={form.birth_city} onChange={(e) => update('birth_city', e.target.value)} placeholder="es. Roma, Italia" required />
+        <label>Data di nascita</label>
+        <input type="date" value={form.birth_date} onChange={(e) => update('birth_date', e.target.value)} required />
 
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem' }}>
-            <input
-              type="checkbox"
-              checked={form.wants_telegram}
-              onChange={(e) => update('wants_telegram', e.target.checked)}
-              style={{ width: 'auto' }}
-            />
-            Voglio ricevere l&apos;oroscopo su Telegram
-          </label>
+        <label>Ora di nascita (esatta)</label>
+        <input type="time" value={form.birth_time} onChange={(e) => update('birth_time', e.target.value)} required />
 
-          <button type="submit" disabled={status === 'loading'}>
-            {status === 'loading' ? 'Calcolo in corso...' : 'Scopri il tuo tema natale'}
-          </button>
-        </form>
-      )}
+        <label>Città di nascita</label>
+        <input value={form.birth_city} onChange={(e) => update('birth_city', e.target.value)} placeholder="es. Roma, Italia" required />
+
+        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem' }}>
+          <input
+            type="checkbox"
+            checked={form.wants_telegram}
+            onChange={(e) => update('wants_telegram', e.target.checked)}
+            style={{ width: 'auto' }}
+          />
+          Voglio ricevere l&apos;oroscopo su Telegram
+        </label>
+
+        <button type="submit" disabled={status === 'loading'}>
+          {status === 'loading' ? 'Calcolo in corso...' : 'Scopri il tuo tema natale'}
+        </button>
+      </form>
 
       {status === 'error' && <div className="error">Errore: {message}</div>}
     </main>
