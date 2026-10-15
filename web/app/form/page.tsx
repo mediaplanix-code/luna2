@@ -20,17 +20,16 @@ export default function FormPage() {
   const [cityQuery, setCityQuery] = useState('');
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle');
+  const [status, setStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle');
   const [message, setMessage] = useState('');
 
   const debounceRef = useRef<any>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const skipFetchRef = useRef(false); // blocca la fetch dopo la selezione
-  const selectedRef = useRef(false);   // blocca la tendina dopo la selezione
+  const skipFetchRef = useRef(false);
+  const selectedRef = useRef(false);
 
   const update = (k: string, v: any) => setForm({ ...form, [k]: v });
 
-  // Chiude la tendina cliccando fuori
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
@@ -41,27 +40,18 @@ export default function FormPage() {
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
-  // Autocomplete
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-
-    // Se l'utente ha appena selezionato una città, salta la fetch
     if (skipFetchRef.current) {
       skipFetchRef.current = false;
       return;
     }
-
-    // Se la città è già stata selezionata, non ricercare
-    if (selectedRef.current && cityQuery === form.birth_city) {
-      return;
-    }
-
+    if (selectedRef.current && cityQuery === form.birth_city) return;
     if (cityQuery.length < 2) {
       setSuggestions([]);
       setShowSuggestions(false);
       return;
     }
-
     debounceRef.current = setTimeout(async () => {
       try {
         const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(cityQuery)}&limit=5&lang=default`;
@@ -82,7 +72,6 @@ export default function FormPage() {
         setSuggestions([]);
       }
     }, 150);
-
     return () => clearTimeout(debounceRef.current);
   }, [cityQuery, form.birth_city]);
 
@@ -103,7 +92,6 @@ export default function FormPage() {
 
   function handleCityChange(v: string) {
     setCityQuery(v);
-    // Se l'utente modifica dopo aver scelto, azzera la selezione
     if (v !== form.birth_city) {
       selectedRef.current = false;
       update('birth_city', '');
@@ -120,25 +108,34 @@ export default function FormPage() {
       return;
     }
     setStatus('loading');
-    setMessage('');
+    setMessage('Invio i dati al server...');
+
     try {
       const res = await fetch('https://luna2-api.onrender.com/onboarding', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       });
+
+      setMessage('Risposta ricevuta. Elaboro...');
       const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || 'Errore');
+
+      if (!res.ok) {
+        throw new Error(data.detail || `Errore HTTP ${res.status}`);
+      }
 
       if (data.access_token) {
         localStorage.setItem('luna2_token', data.access_token);
         localStorage.setItem('luna2_nome', form.nome);
+        setMessage('Calcolo completato! Reindirizzo alla sala...');
+        setStatus('ok');
+        setTimeout(() => router.push('/sala'), 800);
+      } else {
+        throw new Error('Il server non ha restituito un token.');
       }
-
-      router.push('/sala');
     } catch (err: any) {
       setStatus('error');
-      setMessage(err.message);
+      setMessage(err.message || 'Errore sconosciuto');
     }
   }
 
@@ -167,66 +164,82 @@ export default function FormPage() {
         Inserisci i tuoi dati di nascita
       </p>
 
-      <form onSubmit={handleSubmit}>
-        <div className="field">
-          <label>Nome</label>
-          <input value={form.nome} onChange={(e) => update('nome', e.target.value)} required />
+      {status === 'ok' ? (
+        <div className="success">
+          <strong>Fatto!</strong> {message}
         </div>
-
-        <div className="field">
-          <label>Email</label>
-          <input type="email" value={form.email} onChange={(e) => update('email', e.target.value)} required />
-        </div>
-
-        <div className="field">
-          <label>Data di nascita</label>
-          <input type="date" value={form.birth_date} onChange={(e) => update('birth_date', e.target.value)} required />
-        </div>
-
-        <div className="field">
-          <label>Ora di nascita (esatta)</label>
-          <input type="time" value={form.birth_time} onChange={(e) => update('birth_time', e.target.value)} required />
-          <div className="hint">Serve per calcolare correttamente Ascendente e Case.</div>
-        </div>
-
-        <div className="field">
-          <label>Città di nascita</label>
-          <div ref={wrapperRef} className="city-wrap">
-            <input
-              value={cityQuery}
-              onChange={(e) => handleCityChange(e.target.value)}
-              placeholder="es. Roma"
-              autoComplete="off"
-              required
-            />
-            {showSuggestions && suggestions.length > 0 && (
-              <ul className="city-suggestions">
-                {suggestions.map((s, i) => (
-                  <li key={i} onMouseDown={(e) => { e.preventDefault(); pickCity(s); }}>
-                    {s.label}
-                  </li>
-                ))}
-              </ul>
-            )}
+      ) : (
+        <form onSubmit={handleSubmit}>
+          <div className="field">
+            <label>Nome</label>
+            <input value={form.nome} onChange={(e) => update('nome', e.target.value)} required />
           </div>
-        </div>
 
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={form.wants_telegram}
-            onChange={(e) => update('wants_telegram', e.target.checked)}
-          />
-          <span>Voglio ricevere l&apos;oroscopo su Telegram</span>
-        </label>
+          <div className="field">
+            <label>Email</label>
+            <input type="email" value={form.email} onChange={(e) => update('email', e.target.value)} required />
+          </div>
 
-        <button type="submit" className="cta" disabled={status === 'loading'}
-          style={{ marginTop: '22px' }}>
-          {status === 'loading' ? 'Calcolo in corso...' : 'Scopri il tuo tema natale'}
-        </button>
-      </form>
+          <div className="field">
+            <label>Data di nascita</label>
+            <input type="date" value={form.birth_date} onChange={(e) => update('birth_date', e.target.value)} required />
+          </div>
 
-      {status === 'error' && <div className="error">Errore: {message}</div>}
+          <div className="field">
+            <label>Ora di nascita (esatta)</label>
+            <input type="time" value={form.birth_time} onChange={(e) => update('birth_time', e.target.value)} required />
+            <div className="hint">Serve per calcolare correttamente Ascendente e Case.</div>
+          </div>
+
+          <div className="field">
+            <label>Città di nascita</label>
+            <div ref={wrapperRef} className="city-wrap">
+              <input
+                value={cityQuery}
+                onChange={(e) => handleCityChange(e.target.value)}
+                placeholder="es. Roma"
+                autoComplete="off"
+                required
+              />
+              {showSuggestions && suggestions.length > 0 && (
+                <ul className="city-suggestions">
+                  {suggestions.map((s, i) => (
+                    <li key={i} onMouseDown={(e) => { e.preventDefault(); pickCity(s); }}>
+                      {s.label}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={form.wants_telegram}
+              onChange={(e) => update('wants_telegram', e.target.checked)}
+            />
+            <span>Voglio ricevere l&apos;oroscopo su Telegram</span>
+          </label>
+
+          <button type="submit" className="cta" disabled={status === 'loading'}
+            style={{ marginTop: '22px' }}>
+            {status === 'loading' ? 'Calcolo in corso...' : 'Scopri il tuo tema natale'}
+          </button>
+
+          {status === 'loading' && (
+            <div className="success" style={{ marginTop: '14px' }}>
+              {message}
+            </div>
+          )}
+
+          {status === 'error' && (
+            <div className="error" style={{ marginTop: '14px' }}>
+              <strong>Errore:</strong> {message}
+            </div>
+          )}
+        </form>
+      )}
 
       <div className="footer">
         <Link href="/privacy">Privacy</Link>·
