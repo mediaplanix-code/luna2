@@ -14,58 +14,56 @@ const PIANETI_SIMB: Record<string,string> = {
   NodoNord:'☊', Chirone:'⚷',
 };
 
-// Colori elementi: fuoco, terra, aria, acqua
-const COLORI_ELEMENTI: string[] = [
-  '#E85D3C', // Ariete   fuoco
-  '#6B8E3C', // Toro     terra
-  '#E8B23C', // Gemelli  aria
-  '#3C7FE8', // Cancro   acqua
-  '#E85D3C', // Leone    fuoco
-  '#6B8E3C', // Vergine  terra
-  '#E8B23C', // Bilancia aria
-  '#3C7FE8', // Scorpione acqua
-  '#E85D3C', // Sagittario fuoco
-  '#6B8E3C', // Capricorno terra
-  '#E8B23C', // Acquario aria
-  '#3C7FE8', // Pesci    acqua
+// Colori degli spicchi zodiacali: alternati in modo leggibile
+const COLORI_SPICCHI: string[] = [
+  '#8B2E3F', '#2E5C8B', '#8B6F2E', '#2E8B6F',
+  '#6F2E8B', '#8B4A2E', '#2E8B4A', '#8B2E6F',
+  '#4A2E8B', '#8B8B2E', '#2E4A8B', '#8B2E2E',
 ];
 
 const COLORI_ASPETTI: Record<string,string> = {
-  congiunzione: '#F5A623',
+  trigono: '#06D6A0',
   sestile: '#5BC0EB',
   quadratura: '#EF476F',
-  trigono: '#06D6A0',
   opposizione: '#9D4EDD',
+  congiunzione: '#F5A623',
 };
 
 interface Props {
   planets: Record<string, { longitude: number; segno: string; grado: number }>;
   aspects?: Array<{ pianeta1: string; pianeta2: string; tipo: string; orb: number }>;
   ascendant?: number;
+  houses?: number[];
   size?: number;
 }
 
-export default function Wheel({ planets, aspects = [], ascendant = 0, size = 460 }: Props) {
+export default function Wheel({
+  planets,
+  aspects = [],
+  ascendant = 0,
+  houses = [],
+  size = 500,
+}: Props) {
   const cx = size / 2;
   const cy = size / 2;
 
-  // Raggi (dal centro verso l'esterno)
-  const r_bordo_out    = size / 2 - 2;
-  const r_segni_out    = r_bordo_out - 2;
-  const r_segni_in     = r_segni_out - 42;   // fascia dei segni (più larga)
-  const r_case_out     = r_segni_in - 2;
-  const r_case_in      = r_case_out - 26;    // fascia delle case
-  const r_pianeti      = r_case_in - 34;     // fascia dei pianeti
-  const r_aspetti      = r_pianeti - 10;     // raggio per linee di aspetto
+  // Raggi
+  const r_out       = size / 2 - 2;
+  const r_zod_out   = r_out - 2;
+  const r_zod_in    = r_zod_out - 46;   // fascia zodiacale
+  const r_case_out  = r_zod_in - 2;
+  const r_case_in   = r_case_out - 30;  // fascia case
+  const r_plan      = r_case_in - 46;   // fascia pianeti
+  const r_asp       = r_plan - 12;      // raggio linee aspetti
 
-  // Ascendente a sinistra (ore 9)
   const offset = 180 - ascendant;
 
   function pos(lon: number, raggio: number) {
     const angle = (offset + lon) * Math.PI / 180;
-    const x = cx + raggio * Math.cos(angle);
-    const y = cy - raggio * Math.sin(angle);
-    return { x, y };
+    return {
+      x: cx + raggio * Math.cos(angle),
+      y: cy - raggio * Math.sin(angle),
+    };
   }
 
   function settore(lonStart: number, lonEnd: number, r1: number, r2: number) {
@@ -84,13 +82,13 @@ export default function Wheel({ planets, aspects = [], ascendant = 0, size = 460
     ].join(' ');
   }
 
-  // Raggruppa pianeti vicini per evitare sovrapposizioni (distanza minima 6°)
+  // Anticollisione pianeti (min 8° di distanza visiva)
   const pianetiOrdinati = Object.entries(planets)
     .map(([nome, p]) => ({ nome, ...p }))
     .sort((a, b) => a.longitude - b.longitude);
 
-  const pianetiSpostati: Array<{ nome: string; longitude: number; segno: string; grado: number; origLon: number }> = [];
-  const MIN_DIST = 7;
+  const pianetiSpostati: Array<{ nome: string; longitude: number; grado: number; origLon: number }> = [];
+  const MIN_DIST = 9;
   for (const p of pianetiOrdinati) {
     let lon = p.longitude;
     for (const prev of pianetiSpostati) {
@@ -107,120 +105,148 @@ export default function Wheel({ planets, aspects = [], ascendant = 0, size = 460
       width="100%"
       viewBox={`0 0 ${size} ${size}`}
       style={{ maxWidth: '100%', display: 'block', margin: '0 auto' }}
-      fontFamily="Georgia, serif"
+      fontFamily="Georgia, 'Times New Roman', serif"
     >
-      {/* Sfondo esterno */}
-      <circle cx={cx} cy={cy} r={r_bordo_out} fill="#0A0E1A" />
-      <circle cx={cx} cy={cy} r={r_bordo_out} fill="none" stroke="#F5A623" strokeWidth="1.5" />
+      <defs>
+        <radialGradient id="fondoRuota" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#0F1424" />
+          <stop offset="100%" stopColor="#0A0E1A" />
+        </radialGradient>
+      </defs>
 
-      {/* 12 spicchi zodiacali */}
+      {/* Sfondo */}
+      <circle cx={cx} cy={cy} r={r_out} fill="url(#fondoRuota)" />
+      <circle cx={cx} cy={cy} r={r_out} fill="none" stroke="#F5A623" strokeWidth="2" />
+
+      {/* Spicchi zodiacali */}
       {SEGNI.map((s, i) => {
         const start = i * 30;
         const end = start + 30;
-        const colore = COLORI_ELEMENTI[i];
-        const mid = pos(start + 15, (r_segni_out + r_segni_in) / 2);
-        const labelPos = pos(start + 15, r_segni_out - 14);
+        const colore = COLORI_SPICCHI[i];
+        const centro = pos(start + 15, (r_zod_out + r_zod_in) / 2);
+        const nomePos = pos(start + 15, r_zod_in + 9);
         return (
           <g key={s}>
             <path
-              d={settore(start, end, r_segni_in, r_segni_out)}
+              d={settore(start, end, r_zod_in, r_zod_out)}
               fill={colore}
-              fillOpacity="0.18"
-              stroke={colore}
-              strokeWidth="1"
-              strokeOpacity="0.6"
+              fillOpacity="0.55"
+              stroke="#F5F0E6"
+              strokeWidth="0.6"
+              strokeOpacity="0.3"
             />
-            {/* Simbolo del segno */}
+            {/* Simbolo zodiacale */}
             <text
-              x={mid.x}
-              y={mid.y - 4}
-              fill="#F5F0E6"
-              fontSize="20"
+              x={centro.x}
+              y={centro.y}
+              fill="#FFFFFF"
+              fontSize="24"
               textAnchor="middle"
               dominantBaseline="middle"
-              fontWeight="600"
+              fontWeight="700"
             >
               {SIMBOLI[s]}
             </text>
-            {/* Nome abbreviato */}
+            {/* Nome segno (piccolo) */}
             <text
-              x={labelPos.x}
-              y={labelPos.y}
-              fill={colore}
-              fontSize="8"
+              x={nomePos.x}
+              y={nomePos.y}
+              fill="#F5F0E6"
+              fontSize="7"
               textAnchor="middle"
               dominantBaseline="middle"
               fontWeight="700"
               letterSpacing="0.5"
             >
-              {s.slice(0, 3).toUpperCase()}
+              {s.toUpperCase()}
             </text>
           </g>
         );
       })}
 
-      {/* Anelli */}
-      <circle cx={cx} cy={cy} r={r_segni_out} fill="none" stroke="#2A3450" strokeWidth="1" />
-      <circle cx={cx} cy={cy} r={r_segni_in} fill="none" stroke="#2A3450" strokeWidth="1" />
+      {/* Anelli guida */}
+      <circle cx={cx} cy={cy} r={r_zod_out} fill="none" stroke="#F5A623" strokeWidth="1" strokeOpacity="0.6" />
+      <circle cx={cx} cy={cy} r={r_zod_in} fill="none" stroke="#F5A623" strokeWidth="1" strokeOpacity="0.6" />
       <circle cx={cx} cy={cy} r={r_case_out} fill="none" stroke="#2A3450" strokeWidth="1" />
       <circle cx={cx} cy={cy} r={r_case_in} fill="none" stroke="#2A3450" strokeWidth="1" />
-      <circle cx={cx} cy={cy} r={r_pianeti} fill="none" stroke="#2A3450" strokeWidth="0.5" strokeDasharray="2 4" />
+      <circle cx={cx} cy={cy} r={r_plan} fill="none" stroke="#2A3450" strokeWidth="0.6" strokeDasharray="2 4" />
 
-      {/* Cerchio centrale */}
-      <circle cx={cx} cy={cy} r={r_aspetti - 8} fill="#0F1424" stroke="#2A3450" strokeWidth="1" />
-
-      {/* Linee aspetti */}
-      {aspects.slice(0, 30).map((a, i) => {
-        const p1 = planets[a.pianeta1];
-        const p2 = planets[a.pianeta2];
-        if (!p1 || !p2) return null;
-        const colore = COLORI_ASPETTI[a.tipo] || '#5A6072';
-        const c1 = pos(p1.longitude, r_aspetti - 8);
-        const c2 = pos(p2.longitude, r_aspetti - 8);
+      {/* Cuspidi delle case reali */}
+      {houses.length === 12 && houses.map((cusp, i) => {
+        const p1 = pos(cusp, r_case_out);
+        const p2 = pos(cusp, r_case_in);
+        // Numero della casa al centro tra questa cuspide e la successiva
+        const next = houses[(i + 1) % 12];
+        let midLon = cusp + ((next - cusp + 360) % 360) / 2;
+        midLon = midLon % 360;
+        const numPos = pos(midLon, (r_case_out + r_case_in) / 2);
         return (
-          <line
-            key={i}
-            x1={c1.x} y1={c1.y}
-            x2={c2.x} y2={c2.y}
-            stroke={colore}
-            strokeWidth={a.tipo === 'congiunzione' ? 0.8 : 1.2}
-            opacity="0.55"
-          />
+          <g key={`casa-${i}`}>
+            <line
+              x1={p1.x} y1={p1.y}
+              x2={p2.x} y2={p2.y}
+              stroke="#5A6072"
+              strokeWidth="1"
+              strokeOpacity="0.8"
+            />
+            <text
+              x={numPos.x}
+              y={numPos.y}
+              fill="#8A94B0"
+              fontSize="11"
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fontWeight="700"
+            >
+              {i + 1}
+            </text>
+          </g>
         );
       })}
 
-      {/* Cuspidi delle case */}
-      {Array.from({ length: 12 }).map((_, i) => {
-        // Le case vengono passate come cuspidi: qui le ricaviamo dall'ascendente + 30° non è corretto,
-        // quindi usiamo solo l'ASC e disegniamo i raggi ogni 30° a partire dall'ASC come indicatore visivo.
-        // (la ruota mostra le case reali solo se in futuro passiamo anche le cuspidi)
-        return null;
-      })}
+      {/* Cerchio centrale */}
+      <circle cx={cx} cy={cy} r={r_asp - 10} fill="#0A0E1A" stroke="#2A3450" strokeWidth="0.6" />
 
-      {/* Numeri dei settori ogni 30° a partire dall'ASC (indicatori angolari) */}
-      {Array.from({ length: 12 }).map((_, i) => {
-        const lon = (ascendant + i * 30) % 360;
-        const numPos = pos(lon + 15, r_case_in + 13);
-        return null; // disabilitato finché non passiamo le cuspidi reali
-      })}
+      {/* Linee aspetti (solo principali) */}
+      {aspects
+        .filter(a => a.orb < 6)
+        .slice(0, 18)
+        .map((a, i) => {
+          const p1 = planets[a.pianeta1];
+          const p2 = planets[a.pianeta2];
+          if (!p1 || !p2) return null;
+          const colore = COLORI_ASPETTI[a.tipo] || '#5A6072';
+          const c1 = pos(p1.longitude, r_asp - 10);
+          const c2 = pos(p2.longitude, r_asp - 10);
+          return (
+            <line
+              key={i}
+              x1={c1.x} y1={c1.y}
+              x2={c2.x} y2={c2.y}
+              stroke={colore}
+              strokeWidth="1"
+              opacity="0.5"
+            />
+          );
+        })}
 
-      {/* Ascendente e MC */}
+      {/* ASC */}
       {(() => {
-        const ascIn = pos(ascendant, r_case_out);
-        const ascOut = pos(ascendant, r_segni_out + 6);
-        const ascLabel = pos(ascendant, r_segni_out + 18);
+        const ascOut = pos(ascendant, r_out - 4);
+        const ascIn = pos(ascendant, r_plan - 4);
+        const label = pos(ascendant, r_out + 12);
         return (
           <g>
             <line
               x1={ascOut.x} y1={ascOut.y}
               x2={ascIn.x} y2={ascIn.y}
-              stroke="#F5A623" strokeWidth="2.5"
+              stroke="#F5A623"
+              strokeWidth="2.5"
             />
             <text
-              x={ascLabel.x} y={ascLabel.y}
+              x={label.x} y={label.y}
               fill="#F5A623" fontSize="10" fontWeight="700"
               textAnchor="middle" dominantBaseline="middle"
-              letterSpacing="0.5"
             >
               ASC
             </text>
@@ -230,38 +256,54 @@ export default function Wheel({ planets, aspects = [], ascendant = 0, size = 460
 
       {/* Pianeti */}
       {pianetiSpostati.map((p) => {
-        const coords = pos(p.longitude, r_pianeti);
-        const tickOuter = pos(p.origLon, r_pianeti + 14);
-        const tickInner = pos(p.origLon, r_pianeti - 14);
+        const coords = pos(p.longitude, r_plan);
+        const orig = pos(p.origLon, r_plan);
+        const tick1 = pos(p.origLon, r_plan + 16);
+        const tick2 = pos(p.origLon, r_plan - 16);
         const simb = PIANETI_SIMB[p.nome] || p.nome[0];
         return (
           <g key={p.nome}>
-            {/* Tacca sul grado esatto */}
+            {/* Tacca sul grado reale */}
             <line
-              x1={tickOuter.x} y1={tickOuter.y}
-              x2={tickInner.x} y2={tickInner.y}
-              stroke="#F5A623" strokeWidth="0.8" opacity="0.7"
+              x1={tick1.x} y1={tick1.y}
+              x2={tick2.x} y2={tick2.y}
+              stroke="#F5A623"
+              strokeWidth="1"
+              opacity="0.6"
             />
-            {/* Glifo del pianeta */}
+            {/* Linea di collegamento se spostato */}
+            {Math.abs(p.longitude - p.origLon) > 0.5 && (
+              <line
+                x1={orig.x} y1={orig.y}
+                x2={coords.x} y2={coords.y}
+                stroke="#8A94B0"
+                strokeWidth="0.6"
+                opacity="0.6"
+              />
+            )}
+            {/* Cerchietto scuro dietro il glifo */}
+            <circle cx={coords.x} cy={coords.y} r="13" fill="#0A0E1A" stroke="#F5A623" strokeWidth="0.8" />
+            {/* Glifo pianeta */}
             <text
               x={coords.x}
-              y={coords.y}
+              y={coords.y - 1}
               fill="#F5F0E6"
               fontSize="15"
               textAnchor="middle"
               dominantBaseline="middle"
-              fontWeight="600"
+              fontWeight="700"
             >
               {simb}
             </text>
-            {/* Grado accanto (piccolo) */}
+            {/* Grado sotto il pianeta */}
             <text
               x={coords.x}
-              y={coords.y + 11}
-              fill="#8A94B0"
-              fontSize="7"
+              y={coords.y + 22}
+              fill="#F5A623"
+              fontSize="8"
               textAnchor="middle"
               dominantBaseline="middle"
+              fontWeight="700"
             >
               {Math.floor(p.grado)}°
             </text>
@@ -269,13 +311,13 @@ export default function Wheel({ planets, aspects = [], ascendant = 0, size = 460
         );
       })}
 
-      {/* Legenda aspetti in basso a destra */}
-      <g transform={`translate(${size - 78}, ${size - 60})`}>
+      {/* Legenda aspetti in basso a sinistra */}
+      <g transform={`translate(14, ${size - 70})`}>
         {Object.entries(COLORI_ASPETTI).map(([tipo, col], i) => (
-          <g key={tipo} transform={`translate(0, ${i * 10})`}>
-            <line x1="0" y1="3" x2="12" y2="3" stroke={col} strokeWidth="2" />
-            <text x="16" y="3" fill="#8A94B0" fontSize="7" dominantBaseline="middle">
-              {tipo.slice(0, 5)}
+          <g key={tipo} transform={`translate(0, ${i * 12})`}>
+            <line x1="0" y1="4" x2="14" y2="4" stroke={col} strokeWidth="2" />
+            <text x="18" y="4" fill="#8A94B0" fontSize="8" dominantBaseline="middle">
+              {tipo}
             </text>
           </g>
         ))}
