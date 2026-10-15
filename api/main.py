@@ -12,7 +12,7 @@ import swisseph as swe
 import httpx
 from supabase import create_client
 
-app = FastAPI(title="Luna2 Astro API", version="0.6.0")
+app = FastAPI(title="Luna2 Astro API", version="0.7.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -126,12 +126,31 @@ def julian_day_from_local(date_str: str, time_str: str, tz_offset: float) -> flo
     return swe.julday(dt_local.year, dt_local.month, dt_local.day, ut_hour)
 
 
+def calcola_pianeti_in_case(planets: dict, houses: list) -> dict:
+    """Ritorna {nome_pianeta: numero_casa}."""
+    out = {}
+    for nome, p in planets.items():
+        lon_p = p["longitude"]
+        for k in range(12):
+            c1 = houses[k]
+            c2 = houses[(k + 1) % 12]
+            if c1 <= c2:
+                if c1 <= lon_p < c2:
+                    out[nome] = k + 1
+                    break
+            else:
+                if lon_p >= c1 or lon_p < c2:
+                    out[nome] = k + 1
+                    break
+    return out
+
+
 @app.get("/")
 def root():
     return {
         "status": "ok",
         "service": "Luna2 Astro API",
-        "version": "0.6.0",
+        "version": "0.7.0",
         "supabase_configured": bool(SUPABASE_URL and SUPABASE_KEY),
         "telegram_configured": bool(TELEGRAM_TOKEN),
     }
@@ -139,17 +158,14 @@ def root():
 
 @app.get("/geocode")
 async def geocode(q: str = ""):
-    """Proxy verso Photon per l'autocomplete delle città."""
     if len(q) < 3:
         return {"features": []}
-
     url = "https://photon.komoot.io/api/"
     params = {"q": q, "limit": 5, "lang": "default"}
     headers = {
-        "User-Agent": "Luna2/0.6 (contatti@luna2.app)",
+        "User-Agent": "Luna2/0.7 (contatti@luna2.app)",
         "Accept": "application/json",
     }
-
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.get(url, params=params, headers=headers)
@@ -184,21 +200,7 @@ def natal_chart(data: BirthData):
         raise HTTPException(status_code=500, detail=f"Errore calcolo case: {e}")
 
     aspects = compute_aspects(planets)
-
-    planets_in_houses = {}
-    for nome, p in planets.items():
-        lon_p = p["longitude"]
-        for k in range(12):
-            c1 = houses[k]
-            c2 = houses[(k + 1) % 12]
-            if c1 <= c2:
-                if c1 <= lon_p < c2:
-                    planets_in_houses[nome] = k + 1
-                    break
-            else:
-                if lon_p >= c1 or lon_p < c2:
-                    planets_in_houses[nome] = k + 1
-                    break
+    planets_in_houses = calcola_pianeti_in_case(planets, houses)
 
     return {
         "input": data.model_dump(),
@@ -309,6 +311,7 @@ async def onboarding(req: OnboardingRequest):
             profile_id = prof_res.data[0]["id"]
             access_token = prof_res.data[0]["access_token"]
 
+        # Salva SOLO i dati grezzi, senza planets_in_houses (verrà ricalcolato al volo dalla sala)
         sb.table("natal_charts").insert({
             "profile_id": profile_id,
             "planets_json": chart["planets"],
@@ -339,6 +342,87 @@ async def onboarding(req: OnboardingRequest):
         raise HTTPException(status_code=500, detail=f"Errore interno: {type(e).__name__}: {e}")
 
 
+# =========================================================
+# SALA — recupera tema natale completo dal token
+# =========================================================
+@app.get("/sala/{token}")
+async def get_sala(token: str):
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        raise HTTPException(status_code=500, detail="Supabase non configurato")
+
+    sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+    try:
+        res = sb.table("profiles").select("*").eq("access_token", token).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Errore lettura profilo: {e}")
+
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Profilo non trovato")
+
+    profile = res.data[0]
+    profile_id = profile["id"]
+
+    try:
+        chart_res = sb.table("natal_charts").select("*").eq("profile_id", profile_id).order("computed_at", desc=True).limit(1).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Errore lettura tema: {e}")
+
+    if not chart_res.data:
+        raise HTTPException(status_code=404, detail="Tema natale non trovato")
+
+    chart = chart_res.data[0]
+
+    # Transiti di oggi
+    try:
+        today = datetime.utcnow().strftime("%Y-%m-%d")
+        transits_req = TransitRequest(
+            date=profile["birth_date"],
+            time=str(profile["birth_time"])[:5],
+            lat=float(profile["birth_lat"]),
+            lon=float(profile["birth_lon"]),
+            tz_offset=1.0,
+            target_date=today,
+        )
+        transits_data = transits(transits_req)
+    except Exception:
+        transits_data = {"transits": {}, "aspects_to_natal": []}
+
+    # Ricalcola pianeti nelle case (non salvato in DB)
+    planets_in_houses = {}
+    try:
+        houses_list = chart["houses_json"]
+        planets_dict = chart["planets_json"]
+        planets_in_houses = calcola_pianeti_in_case(planets_dict, houses_list)
+    except Exception:
+        planets_in_houses = {}
+
+    return {
+        "profile": {
+            "nome": profile.get("nome"),
+            "email": profile.get("email"),
+            "birth_date": profile.get("birth_date"),
+            "birth_time": str(profile.get("birth_time"))[:5] if profile.get("birth_time") else None,
+            "birth_city": profile.get("birth_city"),
+            "chat_questions_used": profile.get("chat_questions_used", 0),
+            "chat_questions_limit": profile.get("chat_questions_limit", 5),
+            "is_paying": profile.get("is_paying", False),
+        },
+        "chart": {
+            "planets": chart["planets_json"],
+            "planets_in_houses": planets_in_houses,
+            "houses": chart["houses_json"],
+            "aspects": chart["aspects_json"],
+            "ascendant": {"longitude": float(chart["ascendant"])} if chart.get("ascendant") else None,
+            "mc": {"longitude": float(chart["mc"])} if chart.get("mc") else None,
+        },
+        "transits": transits_data,
+    }
+
+
+# =========================================================
+# TELEGRAM
+# =========================================================
 @app.post("/telegram/webhook")
 async def telegram_webhook(request: Request):
     if not TELEGRAM_TOKEN or not TELEGRAM_API:
@@ -444,72 +528,3 @@ async def webhook_info():
     async with httpx.AsyncClient(timeout=10) as client:
         r = await client.get(f"{TELEGRAM_API}/getWebhookInfo")
     return r.json()
-
-
-# =========================================================
-# SALA — recupera tema natale completo dal token
-# =========================================================
-@app.get("/sala/{token}")
-async def get_sala(token: str):
-    if not SUPABASE_URL or not SUPABASE_KEY:
-        raise HTTPException(status_code=500, detail="Supabase non configurato")
-
-    sb = create_client(SUPABASE_URL, SUPABASE_KEY)
-
-    try:
-        res = sb.table("profiles").select("*").eq("access_token", token).execute()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Errore lettura profilo: {e}")
-
-    if not res.data:
-        raise HTTPException(status_code=404, detail="Profilo non trovato")
-
-    profile = res.data[0]
-    profile_id = profile["id"]
-
-    try:
-        chart_res = sb.table("natal_charts").select("*").eq("profile_id", profile_id).order("computed_at", desc=True).limit(1).execute()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Errore lettura tema: {e}")
-
-    if not chart_res.data:
-        raise HTTPException(status_code=404, detail="Tema natale non trovato")
-
-    chart = chart_res.data[0]
-
-    # Transiti di oggi (calcolati in tempo reale)
-    try:
-        from datetime import datetime as dt
-        today = dt.utcnow().strftime("%Y-%m-%d")
-        transits_req = TransitRequest(
-            date=profile["birth_date"],
-            time=str(profile["birth_time"])[:5],
-            lat=float(profile["birth_lat"]),
-            lon=float(profile["birth_lon"]),
-            tz_offset=1.0,
-            target_date=today,
-        )
-        transits_data = transits(transits_req)
-    except Exception:
-        transits_data = {"transits": {}, "aspects_to_natal": []}
-
-    return {
-        "profile": {
-            "nome": profile.get("nome"),
-            "email": profile.get("email"),
-            "birth_date": profile.get("birth_date"),
-            "birth_time": profile.get("birth_time"),
-            "birth_city": profile.get("birth_city"),
-            "chat_questions_used": profile.get("chat_questions_used", 0),
-            "chat_questions_limit": profile.get("chat_questions_limit", 5),
-            "is_paying": profile.get("is_paying", False),
-        },
-        "chart": {
-            "planets": chart["planets_json"],
-            "houses": chart["houses_json"],
-            "aspects": chart["aspects_json"],
-            "ascendant": {"longitude": float(chart["ascendant"])} if chart.get("ascendant") else None,
-            "mc": {"longitude": float(chart["mc"])} if chart.get("mc") else None,
-        },
-        "transits": transits_data,
-    }
