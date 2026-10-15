@@ -88,6 +88,10 @@ class ChatRequest(BaseModel):
     storico: list = []
 
 
+class RecuperoRequest(BaseModel):
+    email: str
+
+
 def lon_to_sign(lon: float) -> dict:
     lon = lon % 360
     segno_idx = int(lon // 30)
@@ -168,7 +172,6 @@ def calcola_tema_completo(date_str: str, time_str: str, lat: float, lon: float, 
 
 
 def carica_significati(sb):
-    """Carica i tre dataset di significati da Supabase."""
     try:
         ps = sb.table("significati_pianeti_segni").select("*").execute().data or []
     except Exception:
@@ -185,7 +188,6 @@ def carica_significati(sb):
 
 
 def genera_report_interno(profile: dict, tema: dict, sb):
-    """Genera il report completo per un utente."""
     ps, pc, tr = carica_significati(sb)
     return assembla_report(
         profile=profile,
@@ -282,7 +284,6 @@ async def onboarding(req: OnboardingRequest):
             "mc": tema["mc"],
         }).execute()
 
-        # Genera subito il report interno
         try:
             profile = sb.table("profiles").select("*").eq("id", profile_id).execute().data[0]
             report = genera_report_interno(profile, tema, sb)
@@ -295,7 +296,6 @@ async def onboarding(req: OnboardingRequest):
         except Exception as e:
             print(f"Errore generazione report post-onboarding: {e}")
 
-        # Notifica Telegram se collegato
         try:
             refreshed = sb.table("profiles").select("telegram_id").eq("id", profile_id).execute()
             chat_id = refreshed.data[0].get("telegram_id") if refreshed.data else None
@@ -315,6 +315,32 @@ async def onboarding(req: OnboardingRequest):
                 "luna": tema["planets"].get("Luna"),
                 "ascendente": lon_to_sign(tema["ascendant"]),
             },
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Errore: {type(e).__name__}: {e}")
+
+
+@app.post("/recupera-token")
+async def recupera_token(req: RecuperoRequest):
+    """Restituisce l'access_token dato un'email già registrata."""
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        raise HTTPException(status_code=500, detail="Supabase non configurato")
+    email = (req.email or "").strip().lower()
+    if not email:
+        raise HTTPException(status_code=400, detail="Email mancante.")
+    try:
+        sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+        res = sb.table("profiles").select("id, nome, access_token").eq("email", email).execute()
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Nessun profilo trovato con questa email.")
+        prof = res.data[0]
+        return {
+            "status": "ok",
+            "access_token": prof["access_token"],
+            "nome": prof.get("nome", ""),
         }
     except HTTPException:
         raise
@@ -385,7 +411,6 @@ async def get_report(token: str):
 
     report = genera_report_interno(profile, tema, sb)
 
-    # Salva in internal_reports
     try:
         sb.table("internal_reports").delete().eq("profile_id", profile["id"]).execute()
         sb.table("internal_reports").insert({
@@ -445,11 +470,9 @@ async def chat_endpoint(token: str, req: ChatRequest):
 
     risposta = await rispondi_chat(report, req.domanda, req.storico)
 
-    # Aggiorna contatore
     if not is_paying:
         sb.table("profiles").update({"chat_questions_used": usate + 1}).eq("id", profile["id"]).execute()
 
-    # Log domanda
     try:
         sb.table("chat_questions").insert({
             "profile_id": profile["id"],
