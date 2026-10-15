@@ -25,11 +25,10 @@ export default function FormPage() {
 
   const debounceRef = useRef<any>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const skipFetchRef = useRef(false);
-  const selectedRef = useRef(false);
 
   const update = (k: string, v: any) => setForm({ ...form, [k]: v });
 
+  // Chiude la tendina cliccando fuori
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
@@ -40,13 +39,9 @@ export default function FormPage() {
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
+  // Autocomplete Photon
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (skipFetchRef.current) {
-      skipFetchRef.current = false;
-      return;
-    }
-    if (selectedRef.current && cityQuery === form.birth_city) return;
     if (cityQuery.length < 2) {
       setSuggestions([]);
       setShowSuggestions(false);
@@ -54,7 +49,7 @@ export default function FormPage() {
     }
     debounceRef.current = setTimeout(async () => {
       try {
-        const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(cityQuery)}&limit=5&lang=default`;
+        const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(cityQuery)}&limit=6&lang=default`;
         const res = await fetch(url);
         const data = await res.json();
         const items = (data.features || []).map((f: any) => ({
@@ -67,17 +62,15 @@ export default function FormPage() {
           lon: f.geometry.coordinates[0],
         }));
         setSuggestions(items);
-        setShowSuggestions(true);
+        setShowSuggestions(items.length > 0);
       } catch {
         setSuggestions([]);
       }
-    }, 150);
+    }, 100);
     return () => clearTimeout(debounceRef.current);
-  }, [cityQuery, form.birth_city]);
+  }, [cityQuery]);
 
   function pickCity(s: any) {
-    skipFetchRef.current = true;
-    selectedRef.current = true;
     setForm({
       ...form,
       birth_city: s.label,
@@ -90,23 +83,49 @@ export default function FormPage() {
     setShowSuggestions(false);
   }
 
-  function handleCityChange(v: string) {
-    setCityQuery(v);
-    if (v !== form.birth_city) {
-      selectedRef.current = false;
-      update('birth_city', '');
-      update('birth_lat', 0);
-      update('birth_lon', 0);
+  // Se l'utente ha scritto la città senza cliccare un suggerimento, prova a risolverla
+  async function resolveCityIfNeeded(): Promise<{ lat: number; lon: number; label: string } | null> {
+    if (form.birth_lat && form.birth_lon && form.birth_city) {
+      return { lat: form.birth_lat, lon: form.birth_lon, label: form.birth_city };
+    }
+    if (!cityQuery || cityQuery.length < 2) return null;
+    try {
+      const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(cityQuery)}&limit=1&lang=default`;
+      const res = await fetch(url);
+      const data = await res.json();
+      const f = (data.features || [])[0];
+      if (!f) return null;
+      const label = [f.properties.name, f.properties.state, f.properties.country]
+        .filter(Boolean)
+        .join(', ');
+      return {
+        lat: f.geometry.coordinates[1],
+        lon: f.geometry.coordinates[0],
+        label,
+      };
+    } catch {
+      return null;
     }
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
+
+    // Se l'utente non ha scelto dai suggerimenti, risolvi la città automaticamente
     if (!form.birth_lat || !form.birth_lon) {
-      setError('Seleziona la città di nascita dai suggerimenti.');
-      return;
+      setLoading(true);
+      const resolved = await resolveCityIfNeeded();
+      if (!resolved) {
+        setError('Città non trovata. Scrivi il nome della città e scegli dai suggerimenti.');
+        setLoading(false);
+        return;
+      }
+      form.birth_lat = resolved.lat;
+      form.birth_lon = resolved.lon;
+      form.birth_city = resolved.label;
     }
+
     setLoading(true);
     try {
       const res = await fetch('https://luna2-api.onrender.com/onboarding', {
@@ -179,7 +198,7 @@ export default function FormPage() {
           <div ref={wrapperRef} className="city-wrap">
             <input
               value={cityQuery}
-              onChange={(e) => handleCityChange(e.target.value)}
+              onChange={(e) => setCityQuery(e.target.value)}
               placeholder="es. Roma"
               autoComplete="off"
               required
@@ -187,12 +206,19 @@ export default function FormPage() {
             {showSuggestions && suggestions.length > 0 && (
               <ul className="city-suggestions">
                 {suggestions.map((s, i) => (
-                  <li key={i} onMouseDown={(e) => { e.preventDefault(); pickCity(s); }}>
+                  <li
+                    key={i}
+                    onMouseDown={(e) => { e.preventDefault(); pickCity(s); }}
+                    onTouchStart={(e) => { e.preventDefault(); pickCity(s); }}
+                  >
                     {s.label}
                   </li>
                 ))}
               </ul>
             )}
+          </div>
+          <div className="hint">
+            Scrivi 2-3 lettere e scegli dalla lista. Se la lista non appare, premi comunque &quot;Scopri&quot;: troviamo noi la città.
           </div>
         </div>
 
