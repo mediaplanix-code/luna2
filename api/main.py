@@ -12,7 +12,7 @@ import swisseph as swe
 import httpx
 from supabase import create_client
 
-app = FastAPI(title="Luna2 Astro API", version="0.3.0")
+app = FastAPI(title="Luna2 Astro API", version="0.4.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -29,6 +29,8 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_API = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}" if TELEGRAM_TOKEN else None
+
+SITE_URL = "https://luna2.pages.dev"
 
 PIANETI = {
     "Sole": swe.SUN,
@@ -126,7 +128,7 @@ def root():
     return {
         "status": "ok",
         "service": "Luna2 Astro API",
-        "version": "0.3.0",
+        "version": "0.4.0",
         "supabase_configured": bool(SUPABASE_URL and SUPABASE_KEY),
         "telegram_configured": bool(TELEGRAM_TOKEN),
     }
@@ -336,11 +338,30 @@ async def telegram_webhook(request: Request):
     if text.startswith("/start"):
         parts = text.split(maxsplit=1)
         if len(parts) < 2:
-            await send_telegram(chat_id, "Ciao! Per attivare il tuo oroscopo, apri il link dal sito Luna2.")
+            await send_telegram(
+                chat_id,
+                "Ciao! Per attivare il tuo oroscopo, apri il link che ti è stato dato dal sito Luna2."
+            )
             return {"ok": True}
+
         token = parts[1].strip()
-        await link_telegram_account(chat_id, token)
-        await send_telegram(chat_id, "✅ Perfetto! Il tuo profilo è collegato. Da domani riceverai il tuo oroscopo giornaliero.")
+        nome = await link_telegram_account(chat_id, token)
+
+        if nome:
+            await send_telegram(
+                chat_id,
+                f"Benvenuto <b>{nome}</b>! 🌙\n\n"
+                f"Il tuo profilo è collegato correttamente.\n"
+                f"Da ora riceverai qui il tuo oroscopo.\n\n"
+                f"🌐 Sito: {SITE_URL}\n\n"
+                f"Comandi disponibili:\n"
+                f"/stop — disattiva le notifiche"
+            )
+        else:
+            await send_telegram(
+                chat_id,
+                "Non ho trovato il tuo profilo. Apri di nuovo il sito Luna2 e rifai l'iscrizione."
+            )
         return {"ok": True}
 
     if text == "/stop":
@@ -364,13 +385,19 @@ async def send_telegram(chat_id, text):
 
 
 async def link_telegram_account(chat_id, token):
+    """Collega chat_id al profilo. Restituisce il nome utente o None."""
     if not SUPABASE_URL or not SUPABASE_KEY:
-        return
+        return None
     sb = create_client(SUPABASE_URL, SUPABASE_KEY)
     try:
+        res = sb.table("profiles").select("id, nome").eq("access_token", token).execute()
+        if not res.data:
+            return None
+        nome = res.data[0]["nome"]
         sb.table("profiles").update({"telegram_id": str(chat_id)}).eq("access_token", token).execute()
+        return nome
     except Exception:
-        pass
+        return None
 
 
 async def unlink_telegram_account(chat_id):
