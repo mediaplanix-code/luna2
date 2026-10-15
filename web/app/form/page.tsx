@@ -84,7 +84,6 @@ export default function FormPage() {
       return;
     }
 
-    // Se in cache, mostra subito
     if (cacheRef.current[q]) {
       setSuggestions(cacheRef.current[q]);
       setShowSuggestions(true);
@@ -109,7 +108,6 @@ export default function FormPage() {
           lat: f.geometry.coordinates[1],
           lon: f.geometry.coordinates[0],
         }));
-        // Salva in cache
         cacheRef.current[q] = items;
         salvaCache(cacheRef.current);
         setSuggestions(items);
@@ -148,7 +146,6 @@ export default function FormPage() {
     const q = cityQuery.trim().toLowerCase();
     if (q.length < 2) return null;
 
-    // Prova dalla cache
     if (cacheRef.current[q] && cacheRef.current[q][0]) {
       const c = cacheRef.current[q][0];
       return { lat: c.lat, lon: c.lon, label: c.label };
