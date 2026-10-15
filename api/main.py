@@ -143,7 +143,7 @@ async def geocode(q: str = ""):
     if len(q) < 3:
         return {"features": []}
 
-    url = "https://photon.komoot.io/"
+    url = "https://photon.komoot.io/api/"
     params = {"q": q, "limit": 5, "lang": "it"}
     headers = {
         "User-Agent": "Luna2/0.6 (contatti@luna2.app)",
