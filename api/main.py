@@ -271,7 +271,8 @@ def transits(req: TransitRequest):
     transits_now = {}
     for nome, pid in PIANETI.items():
         try:
-            xx, _ = swe.calc_ut(jd_today, pid)
+            res = swe.calc_ut(jd, pid)
+xx = res[0]
             transits_now[nome] = lon_to_sign(xx[0])
         except Exception:
             continue
