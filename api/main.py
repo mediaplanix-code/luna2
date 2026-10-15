@@ -12,7 +12,7 @@ import swisseph as swe
 import httpx
 from supabase import create_client
 
-app = FastAPI(title="Luna2 Astro API", version="0.8.0")
+app = FastAPI(title="Luna2 Astro API", version="0.9.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -145,7 +145,6 @@ def calcola_pianeti_in_case(planets: dict, houses: list) -> dict:
 
 
 def calcola_tema_completo(date_str: str, time_str: str, lat: float, lon: float, tz_offset: float = 1.0) -> dict:
-    """Calcola il tema natale completo. Ritorna dict pronto per il salvataggio."""
     jd = julian_day_from_local(date_str, time_str, tz_offset)
 
     planets = {}
@@ -162,7 +161,6 @@ def calcola_tema_completo(date_str: str, time_str: str, lat: float, lon: float, 
         print(f"  {k}: {v['segno']} {v['grado']}°")
 
     cusps, ascmc = swe.houses(jd, lat, lon, b'P')
-    # Prendi solo le prime 12 cuspidi (Swiss Ephemeris ne restituisce 12 + 1 duplicata)
     houses = [round(c, 4) for c in cusps[:12]]
     ascendant = round(ascmc[0], 4)
     mc = round(ascmc[1], 4)
@@ -186,9 +184,37 @@ def root():
     return {
         "status": "ok",
         "service": "Luna2 Astro API",
-        "version": "0.8.0",
+        "version": "0.9.0",
         "supabase_configured": bool(SUPABASE_URL and SUPABASE_KEY),
         "telegram_configured": bool(TELEGRAM_TOKEN),
+    }
+
+
+@app.get("/debug-ephe")
+def debug_ephe():
+    files = []
+    try:
+        if os.path.isdir(EPHE_PATH):
+            files = os.listdir(EPHE_PATH)
+    except Exception as e:
+        files = [f"ERRORE listdir: {e}"]
+
+    test_result = {}
+    try:
+        jd = swe.julday(1961, 7, 7, 9.5)
+        xx, retflag = swe.calc_ut(jd, swe.SUN)
+        test_result = {
+            "sole_longitude": xx[0],
+            "retflag": retflag,
+        }
+    except Exception as e:
+        test_result = {"errore": str(e)}
+
+    return {
+        "ephe_path": EPHE_PATH,
+        "path_exists": os.path.isdir(EPHE_PATH),
+        "files_in_path": files,
+        "test_calc": test_result,
     }
 
 
@@ -199,7 +225,7 @@ async def geocode(q: str = ""):
     url = "https://photon.komoot.io/api/"
     params = {"q": q, "limit": 5, "lang": "default"}
     headers = {
-        "User-Agent": "Luna2/0.8 (contatti@luna2.app)",
+        "User-Agent": "Luna2/0.9 (contatti@luna2.app)",
         "Accept": "application/json",
     }
     try:
@@ -285,7 +311,6 @@ async def onboarding(req: OnboardingRequest):
         lon = req.birth_lon
         full_name = req.birth_city
 
-        # Calcolo tema
         try:
             tema = calcola_tema_completo(req.birth_date, req.birth_time, lat, lon, 1.0)
         except Exception as e:
@@ -293,13 +318,8 @@ async def onboarding(req: OnboardingRequest):
             print(traceback.format_exc())
             raise HTTPException(status_code=500, detail=f"Errore calcolo tema: {e}")
 
-        print(f"=== TEMA CALCOLATO: {len(tema['planets'])} pianeti ===")
-        print(f"=== CASE: {len(tema['houses'])} ===")
-        print(f"=== ASPETTI: {len(tema['aspects'])} ===")
-
         sb = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-        # Profilo: aggiorna o crea
         existing = sb.table("profiles").select("*").eq("email", req.email).execute()
         if existing.data:
             profile_id = existing.data[0]["id"]
@@ -312,7 +332,6 @@ async def onboarding(req: OnboardingRequest):
                 "birth_lon": lon,
                 "birth_city": full_name,
             }).eq("id", profile_id).execute()
-            # Cancella temi precedenti per non accumulare
             sb.table("natal_charts").delete().eq("profile_id", profile_id).execute()
         else:
             profile_payload = {
@@ -333,7 +352,6 @@ async def onboarding(req: OnboardingRequest):
             profile_id = prof_res.data[0]["id"]
             access_token = prof_res.data[0]["access_token"]
 
-        # Salva tema natale — con verifica
         insert_payload = {
             "profile_id": profile_id,
             "planets_json": tema["planets"],
@@ -342,11 +360,7 @@ async def onboarding(req: OnboardingRequest):
             "ascendant": tema["ascendant"],
             "mc": tema["mc"],
         }
-        print(f"=== INSERT CHART PAYLOAD: planets={len(insert_payload['planets_json'])}, houses={len(insert_payload['houses_json'])} ===")
-
         chart_res = sb.table("natal_charts").insert(insert_payload).execute()
-        print(f"=== CHART INSERT RESPONSE: {bool(chart_res.data)} ===")
-
         if not chart_res.data:
             raise HTTPException(status_code=500, detail="Tema natale non salvato")
 
@@ -371,9 +385,6 @@ async def onboarding(req: OnboardingRequest):
         raise HTTPException(status_code=500, detail=f"Errore interno: {type(e).__name__}: {e}")
 
 
-# =========================================================
-# SALA — ricalcola il tema al volo, non si fida del DB
-# =========================================================
 @app.get("/sala/{token}")
 async def get_sala(token: str):
     if not SUPABASE_URL or not SUPABASE_KEY:
@@ -391,7 +402,6 @@ async def get_sala(token: str):
 
     profile = res.data[0]
 
-    # Ricalcola sempre il tema al volo dai dati di nascita (fonte di verità)
     try:
         tema = calcola_tema_completo(
             str(profile["birth_date"]),
@@ -405,7 +415,6 @@ async def get_sala(token: str):
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Errore calcolo tema: {e}")
 
-    # Transiti oggi
     try:
         today = datetime.utcnow().strftime("%Y-%m-%d")
         transits_req = TransitRequest(
@@ -443,9 +452,6 @@ async def get_sala(token: str):
     }
 
 
-# =========================================================
-# TELEGRAM
-# =========================================================
 @app.post("/telegram/webhook")
 async def telegram_webhook(request: Request):
     if not TELEGRAM_TOKEN or not TELEGRAM_API:
