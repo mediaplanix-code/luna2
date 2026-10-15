@@ -108,7 +108,6 @@ export default function SalaPage() {
   const compatibili = COMPATIBILI[soleSegno] || [];
   const transitiList = (data.transits?.aspects_to_natal || []).slice(0, 5);
 
-  // Testo oroscopo settimanale: prime 3 righe dai transiti
   const oroscopoSettimanale = transitiList.length > 0
     ? `Questa settimana ${transitiList.map((t: any) => `${t.transito} in ${t.tipo} al tuo ${t.natale}`).slice(0, 2).join(', ')}.`
     : 'Nessun transito rilevante questa settimana.';
@@ -193,10 +192,10 @@ export default function SalaPage() {
       <div className="wheel-wrap">
         <Wheel
           planets={planets}
-  aspects={aspects}
-  ascendant={ascLon || 0}
-  houses={houses}
-  size={500}
+          aspects={aspects}
+          ascendant={ascLon || 0}
+          houses={houses}
+          size={500}
         />
       </div>
 
