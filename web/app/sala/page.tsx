@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Accordion from '../components/Accordion';
+import Wheel from '../components/Wheel';
 
 const SIMBOLI: Record<string, string> = {
   Ariete: '♈', Toro: '♉', Gemelli: '♊', Cancro: '♋',
@@ -45,14 +46,16 @@ export default function SalaPage() {
   const [data, setData] = useState<any>(null);
   const [status, setStatus] = useState<'loading' | 'ok' | 'error'>('loading');
   const [message, setMessage] = useState('');
+  const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
-    const token = localStorage.getItem('luna2_token');
-    if (!token) {
+    const t = localStorage.getItem('luna2_token');
+    if (!t) {
       router.push('/form');
       return;
     }
-    fetch(`https://luna2-api.onrender.com/sala/${token}`)
+    setToken(t);
+    fetch(`https://luna2-api.onrender.com/sala/${t}`)
       .then((r) => r.json())
       .then((d) => {
         if (d.detail) throw new Error(d.detail);
@@ -95,14 +98,11 @@ export default function SalaPage() {
   const houses = data.chart.houses;
   const aspects = data.chart.aspects;
   const ascLon = data.chart.ascendant?.longitude;
-  const mcLon = data.chart.mc?.longitude;
 
-  const soleLon = planets.Sole?.longitude || 0;
-  const lunaLon = planets.Luna?.longitude || 0;
   const soleSegno = planets.Sole?.segno || 'Ariete';
   const lunaSegno = planets.Luna?.segno || 'Ariete';
   const ascSegno = ascLon !== undefined ? lonToSign(ascLon) : '—';
-  const mcSegno = mcLon !== undefined ? lonToSign(mcLon) : '—';
+  const mcSegno = data.chart.mc?.longitude !== undefined ? lonToSign(data.chart.mc.longitude) : '—';
 
   const compatibili = COMPATIBILI[soleSegno] || [];
   const transitiList = (data.transits?.aspects_to_natal || []).slice(0, 5);
@@ -163,7 +163,7 @@ export default function SalaPage() {
 
       <div className="section-label">La tua ruota zodiacale</div>
       <div className="wheel-wrap">
-        <div className="wheel"></div>
+        <Wheel planets={planets} ascendant={ascLon || 0} size={340} />
       </div>
 
       <div className="section-label">I tuoi dati</div>
@@ -318,6 +318,23 @@ export default function SalaPage() {
       <div className="confronto">
         <div className="info">2 confronti gratuiti · poi su prenotazione</div>
         <Link href="/compatibilita" className="btn-line">Compatibilità</Link>
+      </div>
+
+      <div className="section-label">Collega Telegram</div>
+      <div className="confronto">
+        <div className="info">
+          Ricevi l&apos;oroscopo, gli alert e gli auguri direttamente su Telegram.
+        </div>
+        {token && (
+          <a
+            href={`https://t.me/Luna2OroscopoBot?start=${token}`}
+            className="btn-line"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Apri Telegram e collega il bot →
+          </a>
+        )}
       </div>
 
       <button className="cta-voice" onClick={() => router.push('/consulenza')}>
