@@ -7,7 +7,7 @@ import os
 import httpx
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-MODELLO = "gemini-2.5-flash"
+MODELLO = "gemini-3.8-flash"
 GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{MODELLO}:generateContent"
 
 
@@ -22,6 +22,9 @@ async def _chiama_gemini(prompt: str, max_tokens: int = 800) -> str:
             "parts": [{"text": prompt}]
         }],
         "generationConfig": {
+            "thinkingConfig": {
+                "thinkingLevel": "low"
+            },
             "maxOutputTokens": max_tokens,
         }
     }
