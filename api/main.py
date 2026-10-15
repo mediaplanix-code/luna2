@@ -12,7 +12,7 @@ import swisseph as swe
 import httpx
 from supabase import create_client
 
-app = FastAPI(title="Luna2 Astro API", version="0.7.0")
+app = FastAPI(title="Luna2 Astro API", version="0.8.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -127,7 +127,6 @@ def julian_day_from_local(date_str: str, time_str: str, tz_offset: float) -> flo
 
 
 def calcola_pianeti_in_case(planets: dict, houses: list) -> dict:
-    """Ritorna {nome_pianeta: numero_casa}."""
     out = {}
     for nome, p in planets.items():
         lon_p = p["longitude"]
@@ -145,12 +144,49 @@ def calcola_pianeti_in_case(planets: dict, houses: list) -> dict:
     return out
 
 
+def calcola_tema_completo(date_str: str, time_str: str, lat: float, lon: float, tz_offset: float = 1.0) -> dict:
+    """Calcola il tema natale completo. Ritorna dict pronto per il salvataggio."""
+    jd = julian_day_from_local(date_str, time_str, tz_offset)
+
+    planets = {}
+    for nome, pid in PIANETI.items():
+        try:
+            xx, _ = swe.calc_ut(jd, pid)
+            planets[nome] = lon_to_sign(xx[0])
+        except Exception as e:
+            print(f"Errore calcolo {nome}: {e}")
+            continue
+
+    print(f"=== Pianeti calcolati: {len(planets)} ===")
+    for k, v in planets.items():
+        print(f"  {k}: {v['segno']} {v['grado']}°")
+
+    cusps, ascmc = swe.houses(jd, lat, lon, b'P')
+    # Prendi solo le prime 12 cuspidi (Swiss Ephemeris ne restituisce 12 + 1 duplicata)
+    houses = [round(c, 4) for c in cusps[:12]]
+    ascendant = round(ascmc[0], 4)
+    mc = round(ascmc[1], 4)
+
+    aspects = compute_aspects(planets)
+    planets_in_houses = calcola_pianeti_in_case(planets, houses)
+
+    return {
+        "julian_day": round(jd, 6),
+        "planets": planets,
+        "houses": houses,
+        "ascendant": ascendant,
+        "mc": mc,
+        "aspects": aspects,
+        "planets_in_houses": planets_in_houses,
+    }
+
+
 @app.get("/")
 def root():
     return {
         "status": "ok",
         "service": "Luna2 Astro API",
-        "version": "0.7.0",
+        "version": "0.8.0",
         "supabase_configured": bool(SUPABASE_URL and SUPABASE_KEY),
         "telegram_configured": bool(TELEGRAM_TOKEN),
     }
@@ -163,7 +199,7 @@ async def geocode(q: str = ""):
     url = "https://photon.komoot.io/api/"
     params = {"q": q, "limit": 5, "lang": "default"}
     headers = {
-        "User-Agent": "Luna2/0.7 (contatti@luna2.app)",
+        "User-Agent": "Luna2/0.8 (contatti@luna2.app)",
         "Accept": "application/json",
     }
     try:
@@ -179,47 +215,26 @@ async def geocode(q: str = ""):
 @app.post("/natal-chart")
 def natal_chart(data: BirthData):
     try:
-        jd = julian_day_from_local(data.date, data.time, data.tz_offset)
+        tema = calcola_tema_completo(data.date, data.time, data.lat, data.lon, data.tz_offset)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Data/ora non valide: {e}")
-
-    planets = {}
-    for nome, pid in PIANETI.items():
-        try:
-            xx, _ = swe.calc_ut(jd, pid)
-            planets[nome] = lon_to_sign(xx[0])
-        except Exception:
-            continue
-
-    try:
-        cusps, ascmc = swe.houses(jd, data.lat, data.lon, b'P')
-        houses = [round(c, 4) for c in cusps]
-        ascendant = round(ascmc[0], 4)
-        mc = round(ascmc[1], 4)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Errore calcolo case: {e}")
-
-    aspects = compute_aspects(planets)
-    planets_in_houses = calcola_pianeti_in_case(planets, houses)
+        raise HTTPException(status_code=500, detail=f"Errore calcolo: {e}")
 
     return {
         "input": data.model_dump(),
-        "julian_day": round(jd, 6),
-        "planets": planets,
-        "houses": houses,
-        "ascendant": lon_to_sign(ascendant),
-        "mc": lon_to_sign(mc),
-        "aspects": aspects,
-        "planets_in_houses": planets_in_houses,
+        "julian_day": tema["julian_day"],
+        "planets": tema["planets"],
+        "houses": tema["houses"],
+        "ascendant": lon_to_sign(tema["ascendant"]),
+        "mc": lon_to_sign(tema["mc"]),
+        "aspects": tema["aspects"],
+        "planets_in_houses": tema["planets_in_houses"],
     }
 
 
 @app.post("/transits")
 def transits(req: TransitRequest):
-    natal = natal_chart(BirthData(
-        date=req.date, time=req.time,
-        lat=req.lat, lon=req.lon, tz_offset=req.tz_offset
-    ))
+    tema = calcola_tema_completo(req.date, req.time, req.lat, req.lon, req.tz_offset)
+
     if req.target_date:
         tgt = datetime.strptime(req.target_date, "%Y-%m-%d")
     else:
@@ -236,7 +251,7 @@ def transits(req: TransitRequest):
 
     aspetti_transito = []
     for t_nome, t_pos in transits_now.items():
-        for n_nome, n_pos in natal["planets"].items():
+        for n_nome, n_pos in tema["planets"].items():
             diff = abs(t_pos["longitude"] - n_pos["longitude"])
             diff = min(diff, 360 - diff)
             for nome_asp, (ang, orb) in ASPETTI.items():
@@ -270,16 +285,21 @@ async def onboarding(req: OnboardingRequest):
         lon = req.birth_lon
         full_name = req.birth_city
 
-        chart = natal_chart(BirthData(
-            date=req.birth_date,
-            time=req.birth_time,
-            lat=lat,
-            lon=lon,
-            tz_offset=1.0,
-        ))
+        # Calcolo tema
+        try:
+            tema = calcola_tema_completo(req.birth_date, req.birth_time, lat, lon, 1.0)
+        except Exception as e:
+            print("=== ERRORE CALCOLO TEMA ===")
+            print(traceback.format_exc())
+            raise HTTPException(status_code=500, detail=f"Errore calcolo tema: {e}")
+
+        print(f"=== TEMA CALCOLATO: {len(tema['planets'])} pianeti ===")
+        print(f"=== CASE: {len(tema['houses'])} ===")
+        print(f"=== ASPETTI: {len(tema['aspects'])} ===")
 
         sb = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+        # Profilo: aggiorna o crea
         existing = sb.table("profiles").select("*").eq("email", req.email).execute()
         if existing.data:
             profile_id = existing.data[0]["id"]
@@ -292,6 +312,8 @@ async def onboarding(req: OnboardingRequest):
                 "birth_lon": lon,
                 "birth_city": full_name,
             }).eq("id", profile_id).execute()
+            # Cancella temi precedenti per non accumulare
+            sb.table("natal_charts").delete().eq("profile_id", profile_id).execute()
         else:
             profile_payload = {
                 "email": req.email,
@@ -311,15 +333,22 @@ async def onboarding(req: OnboardingRequest):
             profile_id = prof_res.data[0]["id"]
             access_token = prof_res.data[0]["access_token"]
 
-        # Salva SOLO i dati grezzi, senza planets_in_houses (verrà ricalcolato al volo dalla sala)
-        sb.table("natal_charts").insert({
+        # Salva tema natale — con verifica
+        insert_payload = {
             "profile_id": profile_id,
-            "planets_json": chart["planets"],
-            "houses_json": chart["houses"],
-            "aspects_json": chart["aspects"],
-            "ascendant": chart["ascendant"]["longitude"],
-            "mc": chart["mc"]["longitude"],
-        }).execute()
+            "planets_json": tema["planets"],
+            "houses_json": tema["houses"],
+            "aspects_json": tema["aspects"],
+            "ascendant": tema["ascendant"],
+            "mc": tema["mc"],
+        }
+        print(f"=== INSERT CHART PAYLOAD: planets={len(insert_payload['planets_json'])}, houses={len(insert_payload['houses_json'])} ===")
+
+        chart_res = sb.table("natal_charts").insert(insert_payload).execute()
+        print(f"=== CHART INSERT RESPONSE: {bool(chart_res.data)} ===")
+
+        if not chart_res.data:
+            raise HTTPException(status_code=500, detail="Tema natale non salvato")
 
         return {
             "status": "ok",
@@ -327,9 +356,9 @@ async def onboarding(req: OnboardingRequest):
             "profile_id": profile_id,
             "access_token": access_token,
             "chart_preview": {
-                "sole": chart["planets"].get("Sole"),
-                "luna": chart["planets"].get("Luna"),
-                "ascendente": chart["ascendant"],
+                "sole": tema["planets"].get("Sole"),
+                "luna": tema["planets"].get("Luna"),
+                "ascendente": lon_to_sign(tema["ascendant"]),
             },
         }
 
@@ -343,7 +372,7 @@ async def onboarding(req: OnboardingRequest):
 
 
 # =========================================================
-# SALA — recupera tema natale completo dal token
+# SALA — ricalcola il tema al volo, non si fida del DB
 # =========================================================
 @app.get("/sala/{token}")
 async def get_sala(token: str):
@@ -361,23 +390,26 @@ async def get_sala(token: str):
         raise HTTPException(status_code=404, detail="Profilo non trovato")
 
     profile = res.data[0]
-    profile_id = profile["id"]
 
+    # Ricalcola sempre il tema al volo dai dati di nascita (fonte di verità)
     try:
-        chart_res = sb.table("natal_charts").select("*").eq("profile_id", profile_id).order("computed_at", desc=True).limit(1).execute()
+        tema = calcola_tema_completo(
+            str(profile["birth_date"]),
+            str(profile["birth_time"])[:5],
+            float(profile["birth_lat"]),
+            float(profile["birth_lon"]),
+            1.0,
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Errore lettura tema: {e}")
+        print("=== SALA: errore ricalcolo ===")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Errore calcolo tema: {e}")
 
-    if not chart_res.data:
-        raise HTTPException(status_code=404, detail="Tema natale non trovato")
-
-    chart = chart_res.data[0]
-
-    # Transiti di oggi
+    # Transiti oggi
     try:
         today = datetime.utcnow().strftime("%Y-%m-%d")
         transits_req = TransitRequest(
-            date=profile["birth_date"],
+            date=str(profile["birth_date"]),
             time=str(profile["birth_time"])[:5],
             lat=float(profile["birth_lat"]),
             lon=float(profile["birth_lon"]),
@@ -388,20 +420,11 @@ async def get_sala(token: str):
     except Exception:
         transits_data = {"transits": {}, "aspects_to_natal": []}
 
-    # Ricalcola pianeti nelle case (non salvato in DB)
-    planets_in_houses = {}
-    try:
-        houses_list = chart["houses_json"]
-        planets_dict = chart["planets_json"]
-        planets_in_houses = calcola_pianeti_in_case(planets_dict, houses_list)
-    except Exception:
-        planets_in_houses = {}
-
     return {
         "profile": {
             "nome": profile.get("nome"),
             "email": profile.get("email"),
-            "birth_date": profile.get("birth_date"),
+            "birth_date": str(profile.get("birth_date")),
             "birth_time": str(profile.get("birth_time"))[:5] if profile.get("birth_time") else None,
             "birth_city": profile.get("birth_city"),
             "chat_questions_used": profile.get("chat_questions_used", 0),
@@ -409,12 +432,12 @@ async def get_sala(token: str):
             "is_paying": profile.get("is_paying", False),
         },
         "chart": {
-            "planets": chart["planets_json"],
-            "planets_in_houses": planets_in_houses,
-            "houses": chart["houses_json"],
-            "aspects": chart["aspects_json"],
-            "ascendant": {"longitude": float(chart["ascendant"])} if chart.get("ascendant") else None,
-            "mc": {"longitude": float(chart["mc"])} if chart.get("mc") else None,
+            "planets": tema["planets"],
+            "planets_in_houses": tema["planets_in_houses"],
+            "houses": tema["houses"],
+            "aspects": tema["aspects"],
+            "ascendant": {"longitude": tema["ascendant"]},
+            "mc": {"longitude": tema["mc"]},
         },
         "transits": transits_data,
     }
