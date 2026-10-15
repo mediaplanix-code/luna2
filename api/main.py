@@ -5,7 +5,7 @@
 import os
 import traceback
 from datetime import datetime, timezone, timedelta
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, BackgroundTasks, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import swisseph as swe
@@ -16,7 +16,7 @@ from transiti import calcola_transiti_lenti
 from report import assembla_report
 from ai import genera_oroscopo_settimanale, rispondi_chat, genera_copione_voce
 
-app = FastAPI(title="Luna2 Astro API", version="0.12.0")
+app = FastAPI(title="Luna2 Astro API", version="0.13.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -33,6 +33,7 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_API = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}" if TELEGRAM_TOKEN else None
+CRON_SECRET = os.getenv("CRON_SECRET", "")
 
 SITE_URL = "https://luna2-2hw.pages.dev"
 
@@ -218,10 +219,11 @@ def root():
     return {
         "status": "ok",
         "service": "Luna2 Astro API",
-        "version": "0.12.0",
+        "version": "0.13.0",
         "supabase_configured": bool(SUPABASE_URL and SUPABASE_KEY),
         "telegram_configured": bool(TELEGRAM_TOKEN),
         "gemini_configured": bool(os.getenv("GEMINI_API_KEY")),
+        "cron_configured": bool(CRON_SECRET),
     }
 
 
@@ -231,7 +233,7 @@ async def geocode(q: str = ""):
         return {"features": []}
     url = "https://photon.komoot.io/api/"
     params = {"q": q, "limit": 5, "lang": "default"}
-    headers = {"User-Agent": "Luna2/0.12", "Accept": "application/json"}
+    headers = {"User-Agent": "Luna2/0.13", "Accept": "application/json"}
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.get(url, params=params, headers=headers)
@@ -325,7 +327,6 @@ async def onboarding(req: OnboardingRequest):
 
 @app.post("/recupera-token")
 async def recupera_token(req: RecuperoRequest):
-    """Restituisce l'access_token dato un'email già registrata."""
     if not SUPABASE_URL or not SUPABASE_KEY:
         raise HTTPException(status_code=500, detail="Supabase non configurato")
     email = (req.email or "").strip().lower()
@@ -426,7 +427,6 @@ async def get_report(token: str):
 
 @app.get("/oroscopo/{token}")
 async def get_oroscopo(token: str):
-    """Genera l'oroscopo settimanale con l'AI."""
     sb = create_client(SUPABASE_URL, SUPABASE_KEY)
     res = sb.table("profiles").select("*").eq("access_token", token).execute()
     if not res.data:
@@ -445,7 +445,6 @@ async def get_oroscopo(token: str):
 
 @app.post("/chat/{token}")
 async def chat_endpoint(token: str, req: ChatRequest):
-    """Chat con l'AI, con limite di domande gratuite."""
     sb = create_client(SUPABASE_URL, SUPABASE_KEY)
     res = sb.table("profiles").select("*").eq("access_token", token).execute()
     if not res.data:
@@ -453,7 +452,7 @@ async def chat_endpoint(token: str, req: ChatRequest):
     profile = res.data[0]
 
     usate = profile.get("chat_questions_used", 0)
-    limite = 3  # forzato: 3 domande gratuite
+    limite = 3
     is_paying = profile.get("is_paying", False)
 
     if not is_paying and usate >= limite:
@@ -491,7 +490,6 @@ async def chat_endpoint(token: str, req: ChatRequest):
 
 @app.get("/copione-voce/{token}")
 async def get_copione_voce(token: str):
-    """Genera il copione di apertura per la sessione vocale."""
     sb = create_client(SUPABASE_URL, SUPABASE_KEY)
     res = sb.table("profiles").select("*").eq("access_token", token).execute()
     if not res.data:
@@ -571,6 +569,71 @@ async def telegram_webhook(request: Request):
 
     await send_telegram(chat_id, "Comando non riconosciuto.")
     return {"ok": True}
+
+
+# =========================================================
+# CRON — Oroscopo settimanale (chiamato da GitHub Actions)
+# =========================================================
+
+@app.post("/cron/oroscopo-settimanale")
+async def cron_oroscopo_settimanale(
+    background: BackgroundTasks,
+    x_cron_secret: str = Header(default=""),
+):
+    """Genera e invia l'oroscopo settimanale a tutti gli utenti con Telegram collegato."""
+    if not CRON_SECRET:
+        raise HTTPException(status_code=500, detail="CRON_SECRET non configurato su Render.")
+    if x_cron_secret != CRON_SECRET:
+        raise HTTPException(status_code=403, detail="Non autorizzato.")
+
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        raise HTTPException(status_code=500, detail="Supabase non configurato.")
+
+    sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+    res = sb.table("profiles").select("*").not_.is_("telegram_id", "null").execute()
+    utenti = res.data or []
+
+    background.add_task(_invia_oroscopi_a_tutti, utenti)
+    return {"status": "ok", "utenti_in_coda": len(utenti)}
+
+
+async def _invia_oroscopi_a_tutti(utenti: list):
+    """Genera e invia l'oroscopo a ogni utente (in sequenza, per non stressare Gemini)."""
+    sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+    inviati = 0
+    errori = 0
+
+    for u in utenti:
+        try:
+            tema = calcola_tema_completo(
+                str(u["birth_date"]), str(u["birth_time"])[:5],
+                float(u["birth_lat"]), float(u["birth_lon"]), 1.0,
+            )
+            report = genera_report_interno(u, tema, sb)
+            oroscopo = await genera_oroscopo_settimanale(report)
+
+            # Se Gemini ha risposto con un errore testuale, salta l'invio
+            if oroscopo.startswith("ERRORE") or "sovraccarico" in oroscopo or "Riprova" in oroscopo:
+                errori += 1
+                print(f"Oroscopo non valido per {u.get('nome')}: {oroscopo[:120]}")
+                continue
+
+            nome = u.get("nome", "")
+            testo = f"<b>Ciao {nome}</b> 🌙\n\n{oroscopo}\n\n🌐 {SITE_URL}/sala"
+
+            try:
+                chat_id = int(u["telegram_id"])
+                await send_telegram(chat_id, testo)
+                inviati += 1
+            except Exception as e:
+                errori += 1
+                print(f"Errore invio Telegram a {u.get('nome')}: {e}")
+
+        except Exception as e:
+            errori += 1
+            print(f"Errore generazione oroscopo per {u.get('nome')}: {e}")
+
+    print(f"=== Cron oroscopo settimanale: inviati {inviati}, errori {errori} ===")
 
 
 async def send_telegram(chat_id, text):
