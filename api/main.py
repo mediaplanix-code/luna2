@@ -150,7 +150,8 @@ def calcola_tema_completo(date_str: str, time_str: str, lat: float, lon: float, 
     planets = {}
     for nome, pid in PIANETI.items():
         try:
-            xx, _ = swe.calc_ut(jd, pid)
+            res = swe.calc_ut(jd, pid)
+xx = res[0]
             planets[nome] = lon_to_sign(xx[0])
         except Exception as e:
             print(f"Errore calcolo {nome}: {e}")
