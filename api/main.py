@@ -12,7 +12,7 @@ import swisseph as swe
 import httpx
 from supabase import create_client
 
-app = FastAPI(title="Luna2 Astro API", version="0.9.0")
+app = FastAPI(title="Luna2 Astro API", version="0.9.1")
 
 app.add_middleware(
     CORSMiddleware,
@@ -144,15 +144,35 @@ def calcola_pianeti_in_case(planets: dict, houses: list) -> dict:
     return out
 
 
+def calc_ut_safe(jd: float, planet_id) -> float:
+    """
+    Wrapper sicuro per swe.calc_ut.
+    Restituisce la longitudine eclittica in gradi.
+    Gestisce le diverse firme di pysweph / pyswisseph.
+    """
+    result = swe.calc_ut(jd, planet_id)
+    # pysweph può restituire:
+    #   - (xx, retflag) → tupla di 2
+    #   - (xx, retflag, errmsg) → tupla di 3
+    #   - solo xx (array) → nel qual caso result[0] è l'array
+    if isinstance(result, tuple):
+        xx = result[0]
+    else:
+        xx = result
+    if isinstance(xx, tuple) or isinstance(xx, list):
+        return float(xx[0])
+    # Se xx è un singolo valore
+    return float(xx)
+
+
 def calcola_tema_completo(date_str: str, time_str: str, lat: float, lon: float, tz_offset: float = 1.0) -> dict:
     jd = julian_day_from_local(date_str, time_str, tz_offset)
 
     planets = {}
     for nome, pid in PIANETI.items():
         try:
-            res = swe.calc_ut(jd, pid)
-xx = res[0]
-            planets[nome] = lon_to_sign(xx[0])
+            longit = calc_ut_safe(jd, pid)
+            planets[nome] = lon_to_sign(longit)
         except Exception as e:
             print(f"Errore calcolo {nome}: {e}")
             continue
@@ -185,7 +205,7 @@ def root():
     return {
         "status": "ok",
         "service": "Luna2 Astro API",
-        "version": "0.9.0",
+        "version": "0.9.1",
         "supabase_configured": bool(SUPABASE_URL and SUPABASE_KEY),
         "telegram_configured": bool(TELEGRAM_TOKEN),
     }
@@ -203,13 +223,17 @@ def debug_ephe():
     test_result = {}
     try:
         jd = swe.julday(1961, 7, 7, 9.5)
-        res = swe.calc_ut(jd, swe.SUN)
-xx = res[0]
-retflag = res[1] if len(res) > 1 else 0
+        raw = swe.calc_ut(jd, swe.SUN)
         test_result = {
-            "sole_longitude": xx[0],
-            "retflag": retflag,
+            "tipo_ritorno": str(type(raw)),
+            "len_ritorno": len(raw) if hasattr(raw, "__len__") else "no_len",
+            "raw_repr": str(raw)[:300],
         }
+        try:
+            longit = calc_ut_safe(jd, swe.SUN)
+            test_result["longitudine_sole"] = longit
+        except Exception as e:
+            test_result["errore_calc_safe"] = str(e)
     except Exception as e:
         test_result = {"errore": str(e)}
 
@@ -273,9 +297,8 @@ def transits(req: TransitRequest):
     transits_now = {}
     for nome, pid in PIANETI.items():
         try:
-            res = swe.calc_ut(jd, pid)
-xx = res[0]
-            transits_now[nome] = lon_to_sign(xx[0])
+            longit = calc_ut_safe(jd_today, pid)
+            transits_now[nome] = lon_to_sign(longit)
         except Exception:
             continue
 
