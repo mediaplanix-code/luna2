@@ -13,8 +13,9 @@ import httpx
 from supabase import create_client
 
 from transiti import calcola_transiti_lenti
+from report import assembla_report
 
-app = FastAPI(title="Luna2 Astro API", version="0.10.0")
+app = FastAPI(title="Luna2 Astro API", version="0.11.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -191,14 +192,14 @@ def calcola_tema_completo(date_str: str, time_str: str, lat: float, lon: float, 
 @app.on_event("startup")
 async def on_startup():
     if not TELEGRAM_TOKEN or not TELEGRAM_API:
-        print("=== Telegram non configurato: salto auto-webhook ===")
+        print("=== Telegram non configurato ===")
         return
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.post(f"{TELEGRAM_API}/setWebhook", json={
                 "url": "https://luna2-api.onrender.com/telegram/webhook"
             })
-            print(f"=== Auto-webhook Telegram: {r.json()} ===")
+            print(f"=== Auto-webhook: {r.json()} ===")
     except Exception as e:
         print(f"=== Errore auto-webhook: {e} ===")
 
@@ -208,7 +209,7 @@ def root():
     return {
         "status": "ok",
         "service": "Luna2 Astro API",
-        "version": "0.10.0",
+        "version": "0.11.0",
         "supabase_configured": bool(SUPABASE_URL and SUPABASE_KEY),
         "telegram_configured": bool(TELEGRAM_TOKEN),
     }
@@ -221,24 +222,14 @@ def debug_ephe():
         if os.path.isdir(EPHE_PATH):
             files = os.listdir(EPHE_PATH)
     except Exception as e:
-        files = [f"ERRORE listdir: {e}"]
-
+        files = [f"ERRORE: {e}"]
     test_result = {}
     try:
         jd = swe.julday(1961, 7, 7, 9.5)
-        raw = swe.calc_ut(jd, swe.SUN)
-        test_result = {
-            "tipo_ritorno": str(type(raw)),
-            "len_ritorno": len(raw) if hasattr(raw, "__len__") else "no_len",
-        }
-        try:
-            longit = calc_ut_safe(jd, swe.SUN)
-            test_result["longitudine_sole"] = longit
-        except Exception as e:
-            test_result["errore_calc_safe"] = str(e)
+        longit = calc_ut_safe(jd, swe.SUN)
+        test_result = {"longitudine_sole": longit}
     except Exception as e:
         test_result = {"errore": str(e)}
-
     return {
         "ephe_path": EPHE_PATH,
         "path_exists": os.path.isdir(EPHE_PATH),
@@ -253,10 +244,7 @@ async def geocode(q: str = ""):
         return {"features": []}
     url = "https://photon.komoot.io/api/"
     params = {"q": q, "limit": 5, "lang": "default"}
-    headers = {
-        "User-Agent": "Luna2/0.10 (contatti@luna2.app)",
-        "Accept": "application/json",
-    }
+    headers = {"User-Agent": "Luna2/0.11", "Accept": "application/json"}
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.get(url, params=params, headers=headers)
@@ -273,7 +261,6 @@ def natal_chart(data: BirthData):
         tema = calcola_tema_completo(data.date, data.time, data.lat, data.lon, data.tz_offset)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Errore calcolo: {e}")
-
     return {
         "input": data.model_dump(),
         "julian_day": tema["julian_day"],
@@ -289,7 +276,6 @@ def natal_chart(data: BirthData):
 @app.post("/transits")
 def transits(req: TransitRequest):
     tema = calcola_tema_completo(req.date, req.time, req.lat, req.lon, req.tz_offset)
-
     if req.target_date:
         tgt = datetime.strptime(req.target_date, "%Y-%m-%d")
     else:
@@ -329,23 +315,13 @@ async def onboarding(req: OnboardingRequest):
     try:
         if not SUPABASE_URL or not SUPABASE_KEY:
             raise HTTPException(status_code=500, detail="Supabase non configurato")
-
         if not req.birth_lat or not req.birth_lon:
-            raise HTTPException(
-                status_code=400,
-                detail="Coordinate di nascita mancanti. Seleziona la città dai suggerimenti."
-            )
+            raise HTTPException(status_code=400, detail="Coordinate di nascita mancanti.")
 
-        lat = req.birth_lat
-        lon = req.birth_lon
+        lat, lon = req.birth_lat, req.birth_lon
         full_name = req.birth_city
 
-        try:
-            tema = calcola_tema_completo(req.birth_date, req.birth_time, lat, lon, 1.0)
-        except Exception as e:
-            print("=== ERRORE CALCOLO TEMA ===")
-            print(traceback.format_exc())
-            raise HTTPException(status_code=500, detail=f"Errore calcolo tema: {e}")
+        tema = calcola_tema_completo(req.birth_date, req.birth_time, lat, lon, 1.0)
 
         sb = create_client(SUPABASE_URL, SUPABASE_KEY)
 
@@ -381,34 +357,27 @@ async def onboarding(req: OnboardingRequest):
             profile_id = prof_res.data[0]["id"]
             access_token = prof_res.data[0]["access_token"]
 
-        insert_payload = {
+        sb.table("natal_charts").insert({
             "profile_id": profile_id,
             "planets_json": tema["planets"],
             "houses_json": tema["houses"],
             "aspects_json": tema["aspects"],
             "ascendant": tema["ascendant"],
             "mc": tema["mc"],
-        }
-        chart_res = sb.table("natal_charts").insert(insert_payload).execute()
-        if not chart_res.data:
-            raise HTTPException(status_code=500, detail="Tema natale non salvato")
+        }).execute()
 
         try:
-            chat_id = None
             refreshed = sb.table("profiles").select("telegram_id").eq("id", profile_id).execute()
-            if refreshed.data:
-                chat_id = refreshed.data[0].get("telegram_id")
-
+            chat_id = refreshed.data[0].get("telegram_id") if refreshed.data else None
             if chat_id:
                 await send_telegram(
                     int(chat_id),
                     f"Ciao <b>{req.nome}</b>! 🌙\n\n"
                     f"Il tuo tema natale è pronto.\n\n"
-                    f"🌐 Torna qui quando vuoi per vedere tutto, parlare con l'AI e prenotare il consulto:\n"
-                    f"{SITE_URL}/sala"
+                    f"🌐 Torna qui: {SITE_URL}/sala"
                 )
         except Exception as e:
-            print(f"Errore invio Telegram post-onboarding: {e}")
+            print(f"Errore Telegram post-onboarding: {e}")
 
         return {
             "status": "ok",
@@ -421,13 +390,11 @@ async def onboarding(req: OnboardingRequest):
                 "ascendente": lon_to_sign(tema["ascendant"]),
             },
         }
-
     except HTTPException:
         raise
     except Exception as e:
         print("=== ONBOARDING ERROR ===")
         print(traceback.format_exc())
-        print("========================")
         raise HTTPException(status_code=500, detail=f"Errore interno: {type(e).__name__}: {e}")
 
 
@@ -437,41 +404,29 @@ async def get_sala(token: str):
         raise HTTPException(status_code=500, detail="Supabase non configurato")
 
     sb = create_client(SUPABASE_URL, SUPABASE_KEY)
-
-    try:
-        res = sb.table("profiles").select("*").eq("access_token", token).execute()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Errore lettura profilo: {e}")
-
+    res = sb.table("profiles").select("*").eq("access_token", token).execute()
     if not res.data:
         raise HTTPException(status_code=404, detail="Profilo non trovato")
-
     profile = res.data[0]
 
-    try:
-        tema = calcola_tema_completo(
-            str(profile["birth_date"]),
-            str(profile["birth_time"])[:5],
-            float(profile["birth_lat"]),
-            float(profile["birth_lon"]),
-            1.0,
-        )
-    except Exception as e:
-        print("=== SALA: errore ricalcolo ===")
-        print(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"Errore calcolo tema: {e}")
+    tema = calcola_tema_completo(
+        str(profile["birth_date"]),
+        str(profile["birth_time"])[:5],
+        float(profile["birth_lat"]),
+        float(profile["birth_lon"]),
+        1.0,
+    )
 
     try:
         today = datetime.utcnow().strftime("%Y-%m-%d")
-        transits_req = TransitRequest(
+        transits_data = transits(TransitRequest(
             date=str(profile["birth_date"]),
             time=str(profile["birth_time"])[:5],
             lat=float(profile["birth_lat"]),
             lon=float(profile["birth_lon"]),
             tz_offset=1.0,
             target_date=today,
-        )
-        transits_data = transits(transits_req)
+        ))
     except Exception:
         transits_data = {"transits": {}, "aspects_to_natal": []}
 
@@ -505,48 +460,30 @@ async def get_segnali(token: str):
         raise HTTPException(status_code=500, detail="Supabase non configurato")
 
     sb = create_client(SUPABASE_URL, SUPABASE_KEY)
-
-    try:
-        res = sb.table("profiles").select("*").eq("access_token", token).execute()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Errore lettura profilo: {e}")
-
+    res = sb.table("profiles").select("*").eq("access_token", token).execute()
     if not res.data:
         raise HTTPException(status_code=404, detail="Profilo non trovato")
-
     profile = res.data[0]
 
-    try:
-        tema = calcola_tema_completo(
-            str(profile["birth_date"]),
-            str(profile["birth_time"])[:5],
-            float(profile["birth_lat"]),
-            float(profile["birth_lon"]),
-            1.0,
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Errore calcolo tema: {e}")
+    tema = calcola_tema_completo(
+        str(profile["birth_date"]),
+        str(profile["birth_time"])[:5],
+        float(profile["birth_lat"]),
+        float(profile["birth_lon"]),
+        1.0,
+    )
 
-    data_iscrizione = profile.get("created_at")
-    if data_iscrizione:
-        data_start = str(data_iscrizione)[:10]
-    else:
-        data_start = datetime.utcnow().strftime("%Y-%m-%d")
+    data_start = str(profile.get("created_at", ""))[:10] or datetime.utcnow().strftime("%Y-%m-%d")
 
-    try:
-        transiti = calcola_transiti_lenti(
-            data_inizio=data_start,
-            planets=tema["planets"],
-            houses=tema["houses"],
-            ascendant=tema["ascendant"],
-            mc=tema["mc"],
-            planets_in_houses=tema["planets_in_houses"],
-            mesi_finestra=12,
-        )
-    except Exception as e:
-        print("=== ERRORE CALCOLO TRANSITI LENTI ===")
-        print(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"Errore calcolo transiti: {e}")
+    transiti = calcola_transiti_lenti(
+        data_inizio=data_start,
+        planets=tema["planets"],
+        houses=tema["houses"],
+        ascendant=tema["ascendant"],
+        mc=tema["mc"],
+        planets_in_houses=tema["planets_in_houses"],
+        mesi_finestra=12,
+    )
 
     oggi = datetime.utcnow()
     tra_6_mesi = oggi + timedelta(days=180)
@@ -569,17 +506,82 @@ async def get_segnali(token: str):
     }
 
 
+# =========================================================
+# REPORT INTERNO — assembla tema + significati + transiti
+# =========================================================
+@app.get("/report/{token}")
+async def get_report(token: str):
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        raise HTTPException(status_code=500, detail="Supabase non configurato")
+
+    sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+    # 1. Profilo
+    res = sb.table("profiles").select("*").eq("access_token", token).execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Profilo non trovato")
+    profile = res.data[0]
+
+    # 2. Tema natale
+    tema = calcola_tema_completo(
+        str(profile["birth_date"]),
+        str(profile["birth_time"])[:5],
+        float(profile["birth_lat"]),
+        float(profile["birth_lon"]),
+        1.0,
+    )
+
+    # 3. Significati
+    try:
+        ps_res = sb.table("significati_pianeti_segni").select("*").execute()
+        significati_ps = ps_res.data or []
+    except Exception:
+        significati_ps = []
+
+    try:
+        pc_res = sb.table("significati_pianeti_case").select("*").execute()
+        significati_pc = pc_res.data or []
+    except Exception:
+        significati_pc = []
+
+    try:
+        tr_res = sb.table("significati_transiti").select("*").execute()
+        significati_tr = tr_res.data or []
+    except Exception:
+        significati_tr = []
+
+    # 4. Assembla
+    try:
+        report = assembla_report(
+            profile=profile,
+            tema=tema,
+            significati_ps=significati_ps,
+            significati_pc=significati_pc,
+            significati_tr=significati_tr,
+        )
+    except Exception as e:
+        print("=== ERRORE ASSEMBLAGGIO REPORT ===")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Errore assemblaggio report: {e}")
+
+    # 5. Salva in internal_reports (sovrascrivi se esiste)
+    try:
+        sb.table("internal_reports").delete().eq("profile_id", profile["id"]).execute()
+        sb.table("internal_reports").insert({
+            "profile_id": profile["id"],
+            "interpretation": report["riepilogo_testuale"],
+            "talking_points": report["settori"],
+        }).execute()
+    except Exception as e:
+        print(f"Errore salvataggio internal_reports: {e}")
+
+    return report
+
+
 @app.post("/telegram/webhook")
 async def telegram_webhook(request: Request):
-    print("=== WEBHOOK TELEGRAM CHIAMATO ===")
-    try:
-        raw = await request.body()
-        print(f"=== BODY: {raw.decode('utf-8')[:500]} ===")
-    except Exception as e:
-        print(f"=== Errore lettura body: {e} ===")
-
+    print("=== WEBHOOK TELEGRAM ===")
     if not TELEGRAM_TOKEN or not TELEGRAM_API:
-        print("=== TELEGRAM_TOKEN mancante ===")
         return {"ok": True}
 
     try:
@@ -590,7 +592,6 @@ async def telegram_webhook(request: Request):
 
     message = update.get("message") or update.get("edited_message")
     if not message:
-        print("=== Nessun message nell'update ===")
         return {"ok": True}
 
     chat_id = message["chat"]["id"]
@@ -600,36 +601,24 @@ async def telegram_webhook(request: Request):
     if text.startswith("/start"):
         parts = text.split(maxsplit=1)
         if len(parts) < 2:
-            print("=== /start senza token ===")
-            result = await send_telegram(
-                chat_id,
-                "Ciao! Per attivare il tuo oroscopo, apri il link dal sito Luna2."
-            )
-            print(f"=== Risultato: {result} ===")
+            await send_telegram(chat_id, "Ciao! Per attivare il tuo oroscopo, apri il link dal sito Luna2.")
             return {"ok": True}
 
         token = parts[1].strip()
-        print(f"=== /start con token: {token} ===")
         nome = await link_telegram_account(chat_id, token)
-        print(f"=== Nome trovato: {nome} ===")
 
         if nome:
-            result = await send_telegram(
+            await send_telegram(
                 chat_id,
                 f"Benvenuto <b>{nome}</b>! 🌙\n\n"
                 f"Il tuo profilo è collegato correttamente.\n"
                 f"Da ora riceverai qui il tuo oroscopo.\n\n"
                 f"🌐 Sito: {SITE_URL}/sala\n\n"
-                f"Comandi disponibili:\n"
+                f"Comandi:\n"
                 f"/stop — disattiva le notifiche"
             )
-            print(f"=== Risultato: {result} ===")
         else:
-            result = await send_telegram(
-                chat_id,
-                "Non ho trovato il tuo profilo. Apri di nuovo il sito Luna2 e rifai l'iscrizione."
-            )
-            print(f"=== Risultato: {result} ===")
+            await send_telegram(chat_id, "Non ho trovato il tuo profilo. Apri di nuovo il sito Luna2.")
         return {"ok": True}
 
     if text == "/stop":
@@ -643,7 +632,6 @@ async def telegram_webhook(request: Request):
 
 async def send_telegram(chat_id, text):
     if not TELEGRAM_API:
-        print("=== send_telegram: TELEGRAM_API mancante ===")
         return {"ok": False, "error": "TELEGRAM_API mancante"}
     url = f"{TELEGRAM_API}/sendMessage"
     try:
@@ -653,11 +641,9 @@ async def send_telegram(chat_id, text):
                 "text": text,
                 "parse_mode": "HTML",
             })
-            data = r.json()
-            print(f"=== Telegram risposta: status={r.status_code}, data={data} ===")
-            return data
+            return r.json()
     except Exception as e:
-        print(f"=== Errore chiamata Telegram: {e} ===")
+        print(f"=== Errore Telegram: {e} ===")
         return {"ok": False, "error": str(e)}
 
 
@@ -689,7 +675,7 @@ async def unlink_telegram_account(chat_id):
 @app.get("/telegram/set-webhook")
 async def set_telegram_webhook():
     if not TELEGRAM_TOKEN or not TELEGRAM_API:
-        return {"ok": False, "error": "TELEGRAM_BOT_TOKEN non configurato su Render"}
+        return {"ok": False, "error": "TELEGRAM_BOT_TOKEN non configurato"}
     async with httpx.AsyncClient(timeout=10) as client:
         r = await client.post(f"{TELEGRAM_API}/setWebhook", json={
             "url": "https://luna2-api.onrender.com/telegram/webhook"
