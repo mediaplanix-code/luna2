@@ -26,7 +26,6 @@ export default function Home() {
 
   const update = (k: string, v: any) => setForm({ ...form, [k]: v });
 
-  // Chiudi i suggerimenti cliccando fuori
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
@@ -37,7 +36,6 @@ export default function Home() {
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
-  // Autocomplete Photon (debounced)
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (cityQuery.length < 3) {
@@ -46,7 +44,7 @@ export default function Home() {
     }
     debounceRef.current = setTimeout(async () => {
       try {
-        const url = `https://photon.komoot.io/?q=${encodeURIComponent(cityQuery)}&limit=5&lang=it`;
+        const url = `https://luna2-api.onrender.com/geocode?q=${encodeURIComponent(cityQuery)}`;
         const res = await fetch(url);
         const data = await res.json();
         const items = (data.features || []).map((f: any) => ({
