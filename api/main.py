@@ -203,7 +203,9 @@ def debug_ephe():
     test_result = {}
     try:
         jd = swe.julday(1961, 7, 7, 9.5)
-        xx, retflag = swe.calc_ut(jd, swe.SUN)
+        res = swe.calc_ut(jd, swe.SUN)
+xx = res[0]
+retflag = res[1] if len(res) > 1 else 0
         test_result = {
             "sole_longitude": xx[0],
             "retflag": retflag,
