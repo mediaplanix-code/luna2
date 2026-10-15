@@ -540,6 +540,7 @@ async def get_segnali(token: str):
             houses=tema["houses"],
             ascendant=tema["ascendant"],
             mc=tema["mc"],
+            planets_in_houses=tema["planets_in_houses"],
             mesi_finestra=12,
         )
     except Exception as e:
