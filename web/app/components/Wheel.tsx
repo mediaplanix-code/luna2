@@ -41,18 +41,18 @@ export default function Wheel({
   aspects = [],
   ascendant = 0,
   houses = [],
-  size = 500,
+  size = 560,
 }: Props) {
   const cx = size / 2;
   const cy = size / 2;
 
   const r_out       = size / 2 - 2;
   const r_zod_out   = r_out - 2;
-  const r_zod_in    = r_zod_out - 46;
+  const r_zod_in    = r_zod_out - 58;
   const r_case_out  = r_zod_in - 2;
-  const r_case_in   = r_case_out - 30;
-  const r_plan      = r_case_in - 46;
-  const r_asp       = r_plan - 12;
+  const r_case_in   = r_case_out - 34;
+  const r_plan      = r_case_in - 58;
+  const r_asp       = r_plan - 14;
 
   const offset = 180 - ascendant;
 
@@ -85,7 +85,7 @@ export default function Wheel({
     .sort((a, b) => a.longitude - b.longitude);
 
   const pianetiSpostati: Array<{ nome: string; longitude: number; grado: number; origLon: number }> = [];
-  const MIN_DIST = 9;
+  const MIN_DIST = 10;
   for (const p of pianetiOrdinati) {
     let lon = p.longitude;
     for (const prev of pianetiSpostati) {
@@ -118,8 +118,8 @@ export default function Wheel({
         const start = i * 30;
         const end = start + 30;
         const colore = COLORI_SPICCHI[i];
-        const centro = pos(start + 15, (r_zod_out + r_zod_in) / 2);
-        const nomePos = pos(start + 15, r_zod_in + 9);
+        const centro = pos(start + 15, (r_zod_out + r_zod_in) / 2 + 6);
+        const nomePos = pos(start + 15, r_zod_in + 14);
         return (
           <g key={s}>
             <path
@@ -130,26 +130,28 @@ export default function Wheel({
               strokeWidth="0.6"
               strokeOpacity="0.3"
             />
+            {/* Simbolo zodiacale — raddoppiato */}
             <text
               x={centro.x}
               y={centro.y}
               fill="#FFFFFF"
-              fontSize="24"
+              fontSize="40"
               textAnchor="middle"
               dominantBaseline="middle"
               fontWeight="700"
             >
               {SIMBOLI[s]}
             </text>
+            {/* Nome segno — raddoppiato */}
             <text
               x={nomePos.x}
               y={nomePos.y}
               fill="#F5F0E6"
-              fontSize="7"
+              fontSize="13"
               textAnchor="middle"
               dominantBaseline="middle"
               fontWeight="700"
-              letterSpacing="0.5"
+              letterSpacing="1"
             >
               {s.toUpperCase()}
             </text>
@@ -179,11 +181,12 @@ export default function Wheel({
               strokeWidth="1"
               strokeOpacity="0.8"
             />
+            {/* Numero casa — raddoppiato */}
             <text
               x={numPos.x}
               y={numPos.y}
-              fill="#8A94B0"
-              fontSize="11"
+              fill="#B0B8D0"
+              fontSize="20"
               textAnchor="middle"
               dominantBaseline="middle"
               fontWeight="700"
@@ -194,7 +197,7 @@ export default function Wheel({
         );
       })}
 
-      <circle cx={cx} cy={cy} r={r_asp - 10} fill="#0A0E1A" stroke="#2A3450" strokeWidth="0.6" />
+      <circle cx={cx} cy={cy} r={r_asp - 12} fill="#0A0E1A" stroke="#2A3450" strokeWidth="0.6" />
 
       {aspects
         .filter(a => a.orb < 6)
@@ -204,16 +207,16 @@ export default function Wheel({
           const p2 = planets[a.pianeta2];
           if (!p1 || !p2) return null;
           const colore = COLORI_ASPETTI[a.tipo] || '#5A6072';
-          const c1 = pos(p1.longitude, r_asp - 10);
-          const c2 = pos(p2.longitude, r_asp - 10);
+          const c1 = pos(p1.longitude, r_asp - 12);
+          const c2 = pos(p2.longitude, r_asp - 12);
           return (
             <line
               key={i}
               x1={c1.x} y1={c1.y}
               x2={c2.x} y2={c2.y}
               stroke={colore}
-              strokeWidth="1"
-              opacity="0.5"
+              strokeWidth="1.2"
+              opacity="0.55"
             />
           );
         })}
@@ -221,18 +224,19 @@ export default function Wheel({
       {(() => {
         const ascOut = pos(ascendant, r_out - 4);
         const ascIn = pos(ascendant, r_plan - 4);
-        const label = pos(ascendant, r_out + 12);
+        const label = pos(ascendant, r_out + 16);
         return (
           <g>
             <line
               x1={ascOut.x} y1={ascOut.y}
               x2={ascIn.x} y2={ascIn.y}
               stroke="#F5A623"
-              strokeWidth="2.5"
+              strokeWidth="3"
             />
+            {/* ASC — raddoppiato */}
             <text
               x={label.x} y={label.y}
-              fill="#F5A623" fontSize="10" fontWeight="700"
+              fill="#F5A623" fontSize="18" fontWeight="700"
               textAnchor="middle" dominantBaseline="middle"
             >
               ASC
@@ -244,8 +248,8 @@ export default function Wheel({
       {pianetiSpostati.map((p) => {
         const coords = pos(p.longitude, r_plan);
         const orig = pos(p.origLon, r_plan);
-        const tick1 = pos(p.origLon, r_plan + 16);
-        const tick2 = pos(p.origLon, r_plan - 16);
+        const tick1 = pos(p.origLon, r_plan + 20);
+        const tick2 = pos(p.origLon, r_plan - 20);
         const simb = PIANETI_SIMB[p.nome] || p.nome[0];
         return (
           <g key={p.nome}>
@@ -265,23 +269,26 @@ export default function Wheel({
                 opacity="0.6"
               />
             )}
-            <circle cx={coords.x} cy={coords.y} r="13" fill="#0A0E1A" stroke="#F5A623" strokeWidth="0.8" />
+            {/* Cerchio dietro pianeta — più grande */}
+            <circle cx={coords.x} cy={coords.y} r="22" fill="#0A0E1A" stroke="#F5A623" strokeWidth="1.2" />
+            {/* Glifo pianeta — raddoppiato */}
             <text
               x={coords.x}
-              y={coords.y - 1}
+              y={coords.y - 2}
               fill="#F5F0E6"
-              fontSize="15"
+              fontSize="26"
               textAnchor="middle"
               dominantBaseline="middle"
               fontWeight="700"
             >
               {simb}
             </text>
+            {/* Grado sotto — raddoppiato */}
             <text
               x={coords.x}
-              y={coords.y + 22}
+              y={coords.y + 34}
               fill="#F5A623"
-              fontSize="8"
+              fontSize="14"
               textAnchor="middle"
               dominantBaseline="middle"
               fontWeight="700"
@@ -292,11 +299,12 @@ export default function Wheel({
         );
       })}
 
-      <g transform={`translate(14, ${size - 70})`}>
+      {/* Legenda aspetti — più leggibile */}
+      <g transform={`translate(14, ${size - 96})`}>
         {Object.entries(COLORI_ASPETTI).map(([tipo, col], i) => (
-          <g key={tipo} transform={`translate(0, ${i * 12})`}>
-            <line x1="0" y1="4" x2="14" y2="4" stroke={col} strokeWidth="2" />
-            <text x="18" y="4" fill="#8A94B0" fontSize="8" dominantBaseline="middle">
+          <g key={tipo} transform={`translate(0, ${i * 18})`}>
+            <line x1="0" y1="5" x2="22" y2="5" stroke={col} strokeWidth="3" />
+            <text x="28" y="5" fill="#B0B8D0" fontSize="13" dominantBaseline="middle">
               {tipo}
             </text>
           </g>
