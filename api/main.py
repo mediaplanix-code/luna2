@@ -380,7 +380,7 @@ async def get_sala(token: str):
             "birth_time": str(profile.get("birth_time"))[:5] if profile.get("birth_time") else None,
             "birth_city": profile.get("birth_city"),
             "chat_questions_used": profile.get("chat_questions_used", 0),
-            "chat_questions_limit": profile.get("chat_questions_limit", 5),
+            "chat_questions_limit": 3,
             "is_paying": profile.get("is_paying", False),
             "telegram_id": profile.get("telegram_id"),
         },
