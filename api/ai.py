@@ -4,6 +4,7 @@
 # =========================================================
 
 import os
+import asyncio
 import httpx
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -12,7 +13,7 @@ GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{MODELLO}
 
 
 async def _chiama_gemini(prompt: str, max_tokens: int = 800) -> str:
-    """Chiama Gemini Flash e restituisce il testo."""
+    """Chiama Gemini Flash con retry automatico su 503 / 429 / 500."""
     if not GEMINI_API_KEY:
         return "ERRORE: GEMINI_API_KEY non configurata"
 
@@ -29,33 +30,54 @@ async def _chiama_gemini(prompt: str, max_tokens: int = 800) -> str:
         }
     }
 
-    try:
-        async with httpx.AsyncClient(timeout=120) as client:
-            r = await client.post(url, json=body)
-            try:
-                data = r.json()
-            except Exception:
-                return f"ERRORE Gemini ({r.status_code}): risposta non JSON: {r.text[:300]}"
+    tentativi = 3
+    attesa = [1, 3, 6]  # secondi tra i tentativi
 
-            if r.status_code != 200:
-                return f"ERRORE Gemini ({r.status_code}): {data}"
+    for i in range(tentativi):
+        try:
+            async with httpx.AsyncClient(timeout=120) as client:
+                r = await client.post(url, json=body)
 
-            candidates = data.get("candidates", [])
-            if not candidates:
-                return f"ERRORE: nessuna risposta da Gemini. Dettagli: {data}"
+                # Retry su errori temporanei
+                if r.status_code in (429, 500, 503):
+                    if i < tentativi - 1:
+                        await asyncio.sleep(attesa[i])
+                        continue
+                    return "Il servizio è momentaneamente sovraccarico. Riprova tra qualche minuto."
 
-            parts = candidates[0].get("content", {}).get("parts", [])
-            if not parts:
-                finish = candidates[0].get("finishReason", "sconosciuto")
-                return f"ERRORE: risposta vuota (finishReason={finish})"
+                try:
+                    data = r.json()
+                except Exception:
+                    return f"ERRORE Gemini ({r.status_code}): risposta non JSON"
 
-            return parts[0].get("text", "")
-    except httpx.TimeoutException:
-        return "ERRORE chiamata Gemini: timeout (120s)"
-    except httpx.ConnectError as e:
-        return f"ERRORE chiamata Gemini: connessione fallita ({e})"
-    except Exception as e:
-        return f"ERRORE chiamata Gemini: {type(e).__name__}: {e}"
+                if r.status_code != 200:
+                    return f"ERRORE Gemini ({r.status_code}): {data}"
+
+                candidates = data.get("candidates", [])
+                if not candidates:
+                    return "Nessuna risposta generata. Riprova."
+
+                parts = candidates[0].get("content", {}).get("parts", [])
+                if not parts:
+                    finish = candidates[0].get("finishReason", "sconosciuto")
+                    return f"Risposta vuota (motivo: {finish}). Riprova."
+
+                return parts[0].get("text", "")
+
+        except httpx.TimeoutException:
+            if i < tentativi - 1:
+                await asyncio.sleep(attesa[i])
+                continue
+            return "Il servizio sta impiegando troppo tempo. Riprova tra poco."
+        except httpx.ConnectError:
+            if i < tentativi - 1:
+                await asyncio.sleep(attesa[i])
+                continue
+            return "Problema di connessione al servizio. Riprova tra poco."
+        except Exception as e:
+            return f"ERRORE: {type(e).__name__}"
+
+    return "Servizio momentaneamente non disponibile. Riprova tra qualche minuto."
 
 
 async def genera_oroscopo_settimanale(report: dict) -> str:
