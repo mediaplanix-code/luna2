@@ -44,7 +44,7 @@ export default function Home() {
     }
     debounceRef.current = setTimeout(async () => {
       try {
-        const url = `https://luna2-api.onrender.com/geocode?q=${encodeURIComponent(cityQuery)}`;
+        const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(cityQuery)}&limit=5&lang=default`;
         const res = await fetch(url);
         const data = await res.json();
         const items = (data.features || []).map((f: any) => ({
