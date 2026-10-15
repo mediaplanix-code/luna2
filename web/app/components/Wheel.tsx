@@ -14,7 +14,6 @@ const PIANETI_SIMB: Record<string,string> = {
   NodoNord:'☊', Chirone:'⚷',
 };
 
-// Colori degli spicchi zodiacali: alternati in modo leggibile
 const COLORI_SPICCHI: string[] = [
   '#8B2E3F', '#2E5C8B', '#8B6F2E', '#2E8B6F',
   '#6F2E8B', '#8B4A2E', '#2E8B4A', '#8B2E6F',
@@ -47,14 +46,13 @@ export default function Wheel({
   const cx = size / 2;
   const cy = size / 2;
 
-  // Raggi
   const r_out       = size / 2 - 2;
   const r_zod_out   = r_out - 2;
-  const r_zod_in    = r_zod_out - 46;   // fascia zodiacale
+  const r_zod_in    = r_zod_out - 46;
   const r_case_out  = r_zod_in - 2;
-  const r_case_in   = r_case_out - 30;  // fascia case
-  const r_plan      = r_case_in - 46;   // fascia pianeti
-  const r_asp       = r_plan - 12;      // raggio linee aspetti
+  const r_case_in   = r_case_out - 30;
+  const r_plan      = r_case_in - 46;
+  const r_asp       = r_plan - 12;
 
   const offset = 180 - ascendant;
 
@@ -82,7 +80,6 @@ export default function Wheel({
     ].join(' ');
   }
 
-  // Anticollisione pianeti (min 8° di distanza visiva)
   const pianetiOrdinati = Object.entries(planets)
     .map(([nome, p]) => ({ nome, ...p }))
     .sort((a, b) => a.longitude - b.longitude);
@@ -114,11 +111,9 @@ export default function Wheel({
         </radialGradient>
       </defs>
 
-      {/* Sfondo */}
       <circle cx={cx} cy={cy} r={r_out} fill="url(#fondoRuota)" />
       <circle cx={cx} cy={cy} r={r_out} fill="none" stroke="#F5A623" strokeWidth="2" />
 
-      {/* Spicchi zodiacali */}
       {SEGNI.map((s, i) => {
         const start = i * 30;
         const end = start + 30;
@@ -135,7 +130,6 @@ export default function Wheel({
               strokeWidth="0.6"
               strokeOpacity="0.3"
             />
-            {/* Simbolo zodiacale */}
             <text
               x={centro.x}
               y={centro.y}
@@ -147,7 +141,6 @@ export default function Wheel({
             >
               {SIMBOLI[s]}
             </text>
-            {/* Nome segno (piccolo) */}
             <text
               x={nomePos.x}
               y={nomePos.y}
@@ -164,18 +157,15 @@ export default function Wheel({
         );
       })}
 
-      {/* Anelli guida */}
       <circle cx={cx} cy={cy} r={r_zod_out} fill="none" stroke="#F5A623" strokeWidth="1" strokeOpacity="0.6" />
       <circle cx={cx} cy={cy} r={r_zod_in} fill="none" stroke="#F5A623" strokeWidth="1" strokeOpacity="0.6" />
       <circle cx={cx} cy={cy} r={r_case_out} fill="none" stroke="#2A3450" strokeWidth="1" />
       <circle cx={cx} cy={cy} r={r_case_in} fill="none" stroke="#2A3450" strokeWidth="1" />
       <circle cx={cx} cy={cy} r={r_plan} fill="none" stroke="#2A3450" strokeWidth="0.6" strokeDasharray="2 4" />
 
-      {/* Cuspidi delle case reali */}
       {houses.length === 12 && houses.map((cusp, i) => {
         const p1 = pos(cusp, r_case_out);
         const p2 = pos(cusp, r_case_in);
-        // Numero della casa al centro tra questa cuspide e la successiva
         const next = houses[(i + 1) % 12];
         let midLon = cusp + ((next - cusp + 360) % 360) / 2;
         midLon = midLon % 360;
@@ -204,10 +194,8 @@ export default function Wheel({
         );
       })}
 
-      {/* Cerchio centrale */}
       <circle cx={cx} cy={cy} r={r_asp - 10} fill="#0A0E1A" stroke="#2A3450" strokeWidth="0.6" />
 
-      {/* Linee aspetti (solo principali) */}
       {aspects
         .filter(a => a.orb < 6)
         .slice(0, 18)
@@ -230,7 +218,6 @@ export default function Wheel({
           );
         })}
 
-      {/* ASC */}
       {(() => {
         const ascOut = pos(ascendant, r_out - 4);
         const ascIn = pos(ascendant, r_plan - 4);
@@ -254,7 +241,6 @@ export default function Wheel({
         );
       })()}
 
-      {/* Pianeti */}
       {pianetiSpostati.map((p) => {
         const coords = pos(p.longitude, r_plan);
         const orig = pos(p.origLon, r_plan);
@@ -263,7 +249,6 @@ export default function Wheel({
         const simb = PIANETI_SIMB[p.nome] || p.nome[0];
         return (
           <g key={p.nome}>
-            {/* Tacca sul grado reale */}
             <line
               x1={tick1.x} y1={tick1.y}
               x2={tick2.x} y2={tick2.y}
@@ -271,7 +256,6 @@ export default function Wheel({
               strokeWidth="1"
               opacity="0.6"
             />
-            {/* Linea di collegamento se spostato */}
             {Math.abs(p.longitude - p.origLon) > 0.5 && (
               <line
                 x1={orig.x} y1={orig.y}
@@ -281,9 +265,7 @@ export default function Wheel({
                 opacity="0.6"
               />
             )}
-            {/* Cerchietto scuro dietro il glifo */}
             <circle cx={coords.x} cy={coords.y} r="13" fill="#0A0E1A" stroke="#F5A623" strokeWidth="0.8" />
-            {/* Glifo pianeta */}
             <text
               x={coords.x}
               y={coords.y - 1}
@@ -295,7 +277,6 @@ export default function Wheel({
             >
               {simb}
             </text>
-            {/* Grado sotto il pianeta */}
             <text
               x={coords.x}
               y={coords.y + 22}
@@ -311,7 +292,6 @@ export default function Wheel({
         );
       })}
 
-      {/* Legenda aspetti in basso a sinistra */}
       <g transform={`translate(14, ${size - 70})`}>
         {Object.entries(COLORI_ASPETTI).map(([tipo, col], i) => (
           <g key={tipo} transform={`translate(0, ${i * 12})`}>
