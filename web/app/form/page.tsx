@@ -22,11 +22,15 @@ export default function FormPage() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   const [message, setMessage] = useState('');
+
   const debounceRef = useRef<any>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const skipFetchRef = useRef(false); // blocca la fetch dopo la selezione
+  const selectedRef = useRef(false);   // blocca la tendina dopo la selezione
 
   const update = (k: string, v: any) => setForm({ ...form, [k]: v });
 
+  // Chiude la tendina cliccando fuori
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
@@ -37,12 +41,27 @@ export default function FormPage() {
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
+  // Autocomplete
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (cityQuery.length < 2) {
-      setSuggestions([]);
+
+    // Se l'utente ha appena selezionato una città, salta la fetch
+    if (skipFetchRef.current) {
+      skipFetchRef.current = false;
       return;
     }
+
+    // Se la città è già stata selezionata, non ricercare
+    if (selectedRef.current && cityQuery === form.birth_city) {
+      return;
+    }
+
+    if (cityQuery.length < 2) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
     debounceRef.current = setTimeout(async () => {
       try {
         const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(cityQuery)}&limit=5&lang=default`;
@@ -63,10 +82,13 @@ export default function FormPage() {
         setSuggestions([]);
       }
     }, 150);
+
     return () => clearTimeout(debounceRef.current);
-  }, [cityQuery]);
+  }, [cityQuery, form.birth_city]);
 
   function pickCity(s: any) {
+    skipFetchRef.current = true;
+    selectedRef.current = true;
     setForm({
       ...form,
       birth_city: s.label,
@@ -75,7 +97,19 @@ export default function FormPage() {
       birth_lon: s.lon,
     });
     setCityQuery(s.label);
+    setSuggestions([]);
     setShowSuggestions(false);
+  }
+
+  function handleCityChange(v: string) {
+    setCityQuery(v);
+    // Se l'utente modifica dopo aver scelto, azzera la selezione
+    if (v !== form.birth_city) {
+      selectedRef.current = false;
+      update('birth_city', '');
+      update('birth_lat', 0);
+      update('birth_lon', 0);
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -96,7 +130,6 @@ export default function FormPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Errore');
 
-      // Salva il token per la sala
       if (data.access_token) {
         localStorage.setItem('luna2_token', data.access_token);
         localStorage.setItem('luna2_nome', form.nome);
@@ -161,14 +194,7 @@ export default function FormPage() {
           <div ref={wrapperRef} className="city-wrap">
             <input
               value={cityQuery}
-              onChange={(e) => {
-                setCityQuery(e.target.value);
-                if (e.target.value !== form.birth_city) {
-                  update('birth_city', '');
-                  update('birth_lat', 0);
-                  update('birth_lon', 0);
-                }
-              }}
+              onChange={(e) => handleCityChange(e.target.value)}
               placeholder="es. Roma"
               autoComplete="off"
               required
@@ -176,7 +202,9 @@ export default function FormPage() {
             {showSuggestions && suggestions.length > 0 && (
               <ul className="city-suggestions">
                 {suggestions.map((s, i) => (
-                  <li key={i} onClick={() => pickCity(s)}>{s.label}</li>
+                  <li key={i} onMouseDown={(e) => { e.preventDefault(); pickCity(s); }}>
+                    {s.label}
+                  </li>
                 ))}
               </ul>
             )}
