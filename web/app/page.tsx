@@ -1,36 +1,7 @@
-'use client';
-
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Accordion from './components/Accordion';
 
 export default function Landing() {
-  const router = useRouter();
-  const [checking, setChecking] = useState(true);
-
-  useEffect(() => {
-    const t = localStorage.getItem('luna2_token');
-    if (t) {
-      router.push('/sala');
-    } else {
-      setChecking(false);
-    }
-  }, [router]);
-
-  if (checking) {
-    return (
-      <div className="canvas">
-        <div className="topbar">
-          <div className="brand">✦ Luna Astrologica</div>
-        </div>
-        <p style={{ textAlign: 'center', marginTop: '40px', color: 'var(--text-dim)' }}>
-          Un attimo...
-        </p>
-      </div>
-    );
-  }
-
   return (
     <div className="canvas">
       <div className="topbar">
