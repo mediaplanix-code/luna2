@@ -193,9 +193,10 @@ export default function SalaPage() {
       <div className="wheel-wrap">
         <Wheel
           planets={planets}
-          aspects={aspects}
-          ascendant={ascLon || 0}
-          size={460}
+  aspects={aspects}
+  ascendant={ascLon || 0}
+  houses={houses}
+  size={500}
         />
       </div>
 
