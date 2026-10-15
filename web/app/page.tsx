@@ -6,7 +6,7 @@ export default function Landing() {
     <div className="canvas">
       <div className="topbar">
         <div className="brand">✦ Luna Astrologica</div>
-        <Link href="/form" className="login">Accedi</Link>
+        <Link href="/accedi" className="login">Accedi</Link>
       </div>
 
       <div className="hero">
