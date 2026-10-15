@@ -306,4 +306,84 @@ export default function SalaPage() {
           <div className="price"><strong>€19</strong> · 15 min</div>
         </Accordion>
 
-        <Accordion title
+        <Accordion title="Transiti">
+          <table className="data">
+            <thead>
+              <tr><th>Transito</th><th>Aspetto</th><th>Al tuo</th><th>Orbe</th></tr>
+            </thead>
+            <tbody>
+              {transitiList.length === 0 ? (
+                <tr><td colSpan={4} style={{ textAlign: 'center', color: 'var(--text-dim)' }}>
+                  Nessun transito rilevante oggi
+                </td></tr>
+              ) : transitiList.map((t: any, i: number) => (
+                <tr key={i}>
+                  <td>{t.transito}</td>
+                  <td>{t.tipo}</td>
+                  <td>{t.natale}</td>
+                  <td>{t.orb}°</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="what">Cosa vuol dire?</div>
+          <div className="icon-row">
+            <button className="icon-btn" title="Chat" onClick={() => router.push('/chat')}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+              </svg>
+            </button>
+            <button className="icon-btn accent" title="Voce" onClick={() => router.push('/consulenza')}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" y1="19" x2="12" y2="23"/>
+                <line x1="8" y1="23" x2="16" y2="23"/>
+              </svg>
+            </button>
+          </div>
+          <div className="price"><strong>€19</strong> · 15 min</div>
+        </Accordion>
+
+      </div>
+
+      <div className="section-label">Confronto con un&apos;altra persona</div>
+      <div className="confronto">
+        <div className="info">2 confronti gratuiti · poi su prenotazione</div>
+        <Link href="/compatibilita" className="btn-line">Compatibilità</Link>
+      </div>
+
+      <button className="cta-voice" onClick={() => router.push('/consulenza')}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+          <line x1="12" y1="19" x2="12" y2="23"/>
+          <line x1="8" y1="23" x2="16" y2="23"/>
+        </svg>
+        <div className="text">
+          <div className="title">Prenota il tuo consulto</div>
+          <div className="desc">15 minuti · €19</div>
+        </div>
+      </button>
+
+      <button className="cta-chat" onClick={() => router.push('/chat')}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+        <div className="text">
+          <div className="title">Apri la chat</div>
+          <div className="desc">
+            Hai {data.profile.chat_questions_limit - data.profile.chat_questions_used} domande disponibili
+          </div>
+        </div>
+      </button>
+
+      <div className="footer">
+        <Link href="/privacy">Privacy</Link>·
+        <Link href="/disclaimer">Disclaimer</Link>·
+        <Link href="/faq">?</Link>
+      </div>
+
+    </div>
+  );
+}
