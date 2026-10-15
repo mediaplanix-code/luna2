@@ -4,18 +4,15 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
-type Messaggio = { role: 'user' | 'assistant'; content: string };
-
 export default function ChatPage() {
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
-  const [nome, setNome] = useState('');
-  const [messaggi, setMessaggi] = useState<Messaggio[]>([]);
-  const [input, setInput] = useState('');
+  const [domanda, setDomanda] = useState('');
+  const [risposta, setRisposta] = useState('');
   const [invio, setInvio] = useState(false);
   const [errore, setErrore] = useState('');
   const [domandeUsate, setDomandeUsate] = useState(0);
-  const [domandeLimite, setDomandeLimite] = useState(5);
+  const [domandeLimite, setDomandeLimite] = useState(3);
   const [bloccato, setBloccato] = useState(false);
 
   const fondoRef = useRef<HTMLDivElement>(null);
@@ -27,17 +24,15 @@ export default function ChatPage() {
       return;
     }
     setToken(t);
-    const n = localStorage.getItem('luna2_nome') || '';
-    setNome(n);
 
-    // Carica il profilo per sapere quante domande sono rimaste
     fetch(`https://luna2-api.onrender.com/sala/${t}`)
       .then(r => r.json())
       .then(d => {
         if (d.profile) {
-          setDomandeUsate(d.profile.chat_questions_used || 0);
-          setDomandeLimite(d.profile.chat_questions_limit || 5);
-          if (d.profile.nome) setNome(d.profile.nome);
+          const usate = d.profile.chat_questions_used || 0;
+          setDomandeUsate(usate);
+          setDomandeLimite(3);
+          if (usate >= 3) setBloccato(true);
         }
       })
       .catch(() => {});
@@ -45,26 +40,24 @@ export default function ChatPage() {
 
   useEffect(() => {
     fondoRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messaggi]);
+  }, [risposta]);
 
   async function invia(e: React.FormEvent) {
     e.preventDefault();
-    if (!token || !input.trim() || invio || bloccato) return;
+    if (!token || !domanda.trim() || invio || bloccato) return;
 
-    const domanda = input.trim();
-    setInput('');
-    setErrore('');
-    const nuoviMessaggi: Messaggio[] = [...messaggi, { role: 'user', content: domanda }];
-    setMessaggi(nuoviMessaggi);
+    const testo = domanda.trim();
     setInvio(true);
+    setErrore('');
+    setRisposta('');
 
     try {
       const res = await fetch(`https://luna2-api.onrender.com/chat/${token}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          domanda,
-          storico: nuoviMessaggi.map(m => ({ role: m.role, content: m.content })),
+          domanda: testo,
+          storico: [],
         }),
       });
 
@@ -72,28 +65,27 @@ export default function ChatPage() {
 
       if (res.status === 402) {
         setBloccato(true);
-        setErrore(data.detail || 'Hai esaurito le domande gratuite.');
-        setMessaggi([...nuoviMessaggi, {
-          role: 'assistant',
-          content: 'Hai esaurito le domande gratuite. Per continuare, prenota un consulto vocale di 15 minuti (€19).',
-        }]);
+        setErrore('Hai esaurito le domande gratuite.');
         return;
       }
 
       if (!res.ok) throw new Error(data.detail || `Errore ${res.status}`);
 
-      setMessaggi([...nuoviMessaggi, { role: 'assistant', content: data.risposta }]);
-      if (typeof data.domande_usate === 'number') setDomandeUsate(data.domande_usate);
-      if (typeof data.domande_limite === 'number') setDomandeLimite(data.domande_limite);
+      setRisposta(data.risposta || '');
+      const nuoveUsate = (domandeUsate || 0) + 1;
+      setDomandeUsate(nuoveUsate);
+      if (nuoveUsate >= 3) setBloccato(true);
     } catch (err: any) {
       setErrore(err.message || 'Errore di rete');
-      setMessaggi([...nuoviMessaggi, {
-        role: 'assistant',
-        content: 'Scusa, c\'è stato un problema. Riprova tra poco.',
-      }]);
     } finally {
       setInvio(false);
     }
+  }
+
+  function nuovaDomanda() {
+    setDomanda('');
+    setRisposta('');
+    setErrore('');
   }
 
   const rimaste = Math.max(0, domandeLimite - domandeUsate);
@@ -118,131 +110,97 @@ export default function ChatPage() {
         textAlign: 'center',
         fontSize: '12px',
         color: 'var(--text-dim)',
-        marginBottom: '18px'
+        marginBottom: '22px'
       }}>
         {bloccato
           ? 'Hai esaurito le domande gratuite.'
           : `Ti restano ${rimaste} domande gratuite.`}
       </p>
 
-      <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '12px',
-        padding: '16px',
-        minHeight: '340px',
-        maxHeight: '60vh',
-        overflowY: 'auto',
-        background: 'rgba(255,255,255,0.02)',
-        border: '1px solid rgba(245,166,35,0.15)',
-        borderRadius: '10px',
-      }}>
-        {messaggi.length === 0 && (
-          <div style={{
-            color: 'var(--text-dim)',
-            fontSize: '13px',
-            textAlign: 'center',
-            padding: '30px 10px',
-            fontStyle: 'italic',
-          }}>
-            Fai la tua prima domanda. Puoi chiedere del tuo tema natale, dei transiti,
-            delle tue relazioni, del lavoro — quello che ti sta a cuore.
-          </div>
-        )}
-
-        {messaggi.map((m, i) => (
-          <div
-            key={i}
-            style={{
-              alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
-              maxWidth: '85%',
-              padding: '10px 14px',
-              borderRadius: '12px',
-              background: m.role === 'user'
-                ? 'rgba(245,166,35,0.15)'
-                : 'rgba(255,255,255,0.05)',
-              border: m.role === 'user'
-                ? '1px solid rgba(245,166,35,0.35)'
-                : '1px solid rgba(255,255,255,0.08)',
-              color: 'var(--text)',
-              fontSize: '14px',
-              lineHeight: '1.5',
-              whiteSpace: 'pre-wrap',
-            }}
-          >
-            {m.content}
-          </div>
-        ))}
-
-        {invio && (
-          <div style={{
-            alignSelf: 'flex-start',
-            padding: '10px 14px',
-            color: 'var(--text-dim)',
-            fontSize: '13px',
-            fontStyle: 'italic',
-          }}>
-            La tua astrologa sta scrivendo…
-          </div>
-        )}
-
-        <div ref={fondoRef} />
-      </div>
-
-      {errore && !bloccato && (
-        <div className="error" style={{ marginTop: '12px' }}>
-          {errore}
-        </div>
-      )}
-
-      {!bloccato ? (
-        <form onSubmit={invia} style={{ marginTop: '16px' }}>
-          <div style={{
-            display: 'flex',
-            gap: '8px',
-            alignItems: 'flex-end',
-          }}>
+      {!bloccato && !risposta && (
+        <form onSubmit={invia}>
+          <div className="field">
+            <label>La tua domanda</label>
             <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  invia(e as any);
-                }
-              }}
-              placeholder="Scrivi la tua domanda…"
-              rows={2}
+              value={domanda}
+              onChange={(e) => setDomanda(e.target.value)}
+              placeholder="Scrivi qui la tua domanda…"
+              rows={4}
               disabled={invio}
               style={{
-                flex: 1,
-                padding: '10px 12px',
+                width: '100%',
+                padding: '12px',
                 borderRadius: '8px',
                 border: '1px solid rgba(245,166,35,0.25)',
                 background: 'rgba(255,255,255,0.03)',
                 color: 'var(--text)',
                 fontSize: '14px',
                 fontFamily: 'inherit',
-                resize: 'none',
+                resize: 'vertical',
               }}
             />
-            <button
-              type="submit"
-              disabled={invio || !input.trim()}
-              className="cta"
-              style={{ minWidth: '90px', marginTop: 0 }}
-            >
-              {invio ? '…' : 'Invia'}
-            </button>
           </div>
+
+          <button
+            type="submit"
+            disabled={invio || !domanda.trim()}
+            className="cta"
+            style={{ marginTop: '14px' }}
+          >
+            {invio ? 'Sto consultando il tuo cielo…' : 'Chiedi'}
+          </button>
+
+          {errore && (
+            <div className="error" style={{ marginTop: '14px' }}>
+              {errore}
+            </div>
+          )}
         </form>
-      ) : (
+      )}
+
+      {risposta && (
+        <div>
+          <div style={{
+            padding: '16px',
+            background: 'rgba(255,255,255,0.03)',
+            border: '1px solid rgba(245,166,35,0.2)',
+            borderRadius: '10px',
+            color: 'var(--text)',
+            fontSize: '14px',
+            lineHeight: '1.6',
+            whiteSpace: 'pre-wrap',
+          }}>
+            {risposta}
+          </div>
+
+          {!bloccato ? (
+            <button
+              type="button"
+              onClick={nuovaDomanda}
+              className="cta"
+              style={{ marginTop: '14px' }}
+            >
+              Fai un&apos;altra domanda
+            </button>
+          ) : (
+            <div style={{ marginTop: '16px', textAlign: 'center' }}>
+              <Link href="/consulenza" className="cta" style={{ display: 'inline-block' }}>
+                Prenota un consulto · €19
+              </Link>
+            </div>
+          )}
+        </div>
+      )}
+
+      {bloccato && !risposta && (
         <div style={{ marginTop: '16px', textAlign: 'center' }}>
           <Link href="/consulenza" className="cta" style={{ display: 'inline-block' }}>
             Prenota un consulto · €19
           </Link>
         </div>
       )}
+
+      <div ref={fondoRef} />
 
       <div className="footer">
         <Link href="/privacy">Privacy</Link>·
