@@ -12,7 +12,7 @@ import swisseph as swe
 import httpx
 from supabase import create_client
 
-app = FastAPI(title="Luna2 Astro API", version="0.9.1")
+app = FastAPI(title="Luna2 Astro API", version="0.9.2")
 
 app.add_middleware(
     CORSMiddleware,
@@ -145,23 +145,13 @@ def calcola_pianeti_in_case(planets: dict, houses: list) -> dict:
 
 
 def calc_ut_safe(jd: float, planet_id) -> float:
-    """
-    Wrapper sicuro per swe.calc_ut.
-    Restituisce la longitudine eclittica in gradi.
-    Gestisce le diverse firme di pysweph / pyswisseph.
-    """
     result = swe.calc_ut(jd, planet_id)
-    # pysweph può restituire:
-    #   - (xx, retflag) → tupla di 2
-    #   - (xx, retflag, errmsg) → tupla di 3
-    #   - solo xx (array) → nel qual caso result[0] è l'array
     if isinstance(result, tuple):
         xx = result[0]
     else:
         xx = result
     if isinstance(xx, tuple) or isinstance(xx, list):
         return float(xx[0])
-    # Se xx è un singolo valore
     return float(xx)
 
 
@@ -176,10 +166,6 @@ def calcola_tema_completo(date_str: str, time_str: str, lat: float, lon: float, 
         except Exception as e:
             print(f"Errore calcolo {nome}: {e}")
             continue
-
-    print(f"=== Pianeti calcolati: {len(planets)} ===")
-    for k, v in planets.items():
-        print(f"  {k}: {v['segno']} {v['grado']}°")
 
     cusps, ascmc = swe.houses(jd, lat, lon, b'P')
     houses = [round(c, 4) for c in cusps[:12]]
@@ -205,7 +191,7 @@ def root():
     return {
         "status": "ok",
         "service": "Luna2 Astro API",
-        "version": "0.9.1",
+        "version": "0.9.2",
         "supabase_configured": bool(SUPABASE_URL and SUPABASE_KEY),
         "telegram_configured": bool(TELEGRAM_TOKEN),
     }
@@ -391,6 +377,29 @@ async def onboarding(req: OnboardingRequest):
         if not chart_res.data:
             raise HTTPException(status_code=500, detail="Tema natale non salvato")
 
+        # =====================================================
+        # INVIO TELEGRAM IMMEDIATO (se l'utente ha già collegato il bot)
+        # =====================================================
+        try:
+            chat_id = None
+            refreshed = sb.table("profiles").select("telegram_id").eq("id", profile_id).execute()
+            if refreshed.data:
+                chat_id = refreshed.data[0].get("telegram_id")
+
+            if chat_id:
+                await send_telegram(
+                    int(chat_id),
+                    f"Ciao <b>{req.nome}</b>! 🌙\n\n"
+                    f"Il tuo tema natale è pronto.\n\n"
+                    f"🌐 Torna qui quando vuoi per vedere tutto, parlare con l'AI e prenotare il consulto:\n"
+                    f"{SITE_URL}/sala"
+                )
+                print(f"=== Telegram post-onboarding inviato a chat_id {chat_id} ===")
+            else:
+                print("=== Nessun telegram_id collegato: nessun messaggio inviato ===")
+        except Exception as e:
+            print(f"Errore invio Telegram post-onboarding: {e}")
+
         return {
             "status": "ok",
             "message": f"Tema natale calcolato per {req.nome}.",
@@ -510,7 +519,8 @@ async def telegram_webhook(request: Request):
                 f"Benvenuto <b>{nome}</b>! 🌙\n\n"
                 f"Il tuo profilo è collegato correttamente.\n"
                 f"Da ora riceverai qui il tuo oroscopo.\n\n"
-                f"🌐 Sito: {SITE_URL}\n\n"
+                f"🌐 Torna sul sito quando vuoi per vedere tutto, parlare con l'AI e prenotare il consulto:\n"
+                f"{SITE_URL}/sala\n\n"
                 f"Comandi disponibili:\n"
                 f"/stop — disattiva le notifiche"
             )
