@@ -453,7 +453,7 @@ async def chat_endpoint(token: str, req: ChatRequest):
     profile = res.data[0]
 
     usate = profile.get("chat_questions_used", 0)
-    limite = profile.get("chat_questions_limit", 5)
+    limite = 3  # forzato: 3 domande gratuite
     is_paying = profile.get("is_paying", False)
 
     if not is_paying and usate >= limite:
