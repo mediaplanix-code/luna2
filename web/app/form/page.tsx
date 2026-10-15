@@ -4,6 +4,33 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
+const CACHE_KEY = 'luna2_city_cache';
+const CACHE_MAX = 60;
+
+type CacheEntry = { label: string; name: string; country: string; lat: number; lon: number };
+
+function caricaCache(): Record<string, CacheEntry[]> {
+  if (typeof window === 'undefined') return {};
+  try {
+    return JSON.parse(localStorage.getItem(CACHE_KEY) || '{}');
+  } catch {
+    return {};
+  }
+}
+
+function salvaCache(cache: Record<string, CacheEntry[]>) {
+  try {
+    const keys = Object.keys(cache);
+    if (keys.length > CACHE_MAX) {
+      const ridotte: Record<string, CacheEntry[]> = {};
+      keys.slice(-CACHE_MAX).forEach(k => { ridotte[k] = cache[k]; });
+      localStorage.setItem(CACHE_KEY, JSON.stringify(ridotte));
+    } else {
+      localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
+    }
+  } catch {}
+}
+
 export default function FormPage() {
   const router = useRouter();
   const [form, setForm] = useState({
@@ -18,13 +45,20 @@ export default function FormPage() {
     wants_telegram: false,
   });
   const [cityQuery, setCityQuery] = useState('');
-  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [suggestions, setSuggestions] = useState<CacheEntry[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [loadingCity, setLoadingCity] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   const debounceRef = useRef<any>(null);
+  const abortRef = useRef<AbortController | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const cacheRef = useRef<Record<string, CacheEntry[]>>({});
+
+  useEffect(() => {
+    cacheRef.current = caricaCache();
+  }, []);
 
   const update = (k: string, v: any) => setForm({ ...form, [k]: v });
 
@@ -40,39 +74,65 @@ export default function FormPage() {
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (cityQuery.length < 2) {
+    if (abortRef.current) abortRef.current.abort();
+
+    const q = cityQuery.trim().toLowerCase();
+    if (q.length < 2) {
       setSuggestions([]);
       setShowSuggestions(false);
+      setLoadingCity(false);
       return;
     }
+
+    // Se in cache, mostra subito
+    if (cacheRef.current[q]) {
+      setSuggestions(cacheRef.current[q]);
+      setShowSuggestions(true);
+      setLoadingCity(false);
+    } else {
+      setLoadingCity(true);
+    }
+
     debounceRef.current = setTimeout(async () => {
+      const ctrl = new AbortController();
+      abortRef.current = ctrl;
       try {
         const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(cityQuery)}&limit=6&lang=default`;
-        const res = await fetch(url);
+        const res = await fetch(url, { signal: ctrl.signal });
         const data = await res.json();
-        const items = (data.features || []).map((f: any) => ({
+        const items: CacheEntry[] = (data.features || []).map((f: any) => ({
           label: [f.properties.name, f.properties.state, f.properties.country]
             .filter(Boolean)
             .join(', '),
           name: f.properties.name,
-          country: f.properties.country,
+          country: f.properties.country || '',
           lat: f.geometry.coordinates[1],
           lon: f.geometry.coordinates[0],
         }));
+        // Salva in cache
+        cacheRef.current[q] = items;
+        salvaCache(cacheRef.current);
         setSuggestions(items);
         setShowSuggestions(items.length > 0);
-      } catch {
-        setSuggestions([]);
+      } catch (e: any) {
+        if (e?.name !== 'AbortError') {
+          setSuggestions([]);
+        }
+      } finally {
+        setLoadingCity(false);
       }
-    }, 100);
-    return () => clearTimeout(debounceRef.current);
+    }, 350);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
   }, [cityQuery]);
 
-  function pickCity(s: any) {
+  function pickCity(s: CacheEntry) {
     setForm({
       ...form,
       birth_city: s.label,
-      birth_country: s.country || '',
+      birth_country: s.country,
       birth_lat: s.lat,
       birth_lon: s.lon,
     });
@@ -85,7 +145,15 @@ export default function FormPage() {
     if (form.birth_lat && form.birth_lon && form.birth_city) {
       return { lat: form.birth_lat, lon: form.birth_lon, label: form.birth_city };
     }
-    if (!cityQuery || cityQuery.length < 2) return null;
+    const q = cityQuery.trim().toLowerCase();
+    if (q.length < 2) return null;
+
+    // Prova dalla cache
+    if (cacheRef.current[q] && cacheRef.current[q][0]) {
+      const c = cacheRef.current[q][0];
+      return { lat: c.lat, lon: c.lon, label: c.label };
+    }
+
     try {
       const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(cityQuery)}&limit=1&lang=default`;
       const res = await fetch(url);
@@ -113,7 +181,7 @@ export default function FormPage() {
       setLoading(true);
       const resolved = await resolveCityIfNeeded();
       if (!resolved) {
-        setError('Città non trovata. Scrivi il nome della città.');
+        setError('Città non trovata. Scrivi il nome della città e scegli dalla lista.');
         setLoading(false);
         return;
       }
@@ -199,6 +267,9 @@ export default function FormPage() {
               autoComplete="off"
               required
             />
+            {loadingCity && (
+              <div className="city-loading">Cerco…</div>
+            )}
             {showSuggestions && suggestions.length > 0 && (
               <ul className="city-suggestions">
                 {suggestions.map((s, i) => (
