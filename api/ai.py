@@ -11,19 +11,19 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 AI_PROVIDER = os.getenv("AI_PROVIDER", "groq")
 
-# Provider primario: Groq (velocissimo, gratuito per il tuo volume)
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 GROQ_MODELLO = "llama-3.3-70b-versatile"
 
-# Provider di riserva: DeepSeek (economico, affidabile)
 DEEPSEEK_URL = "https://api.deepseek.com/chat/completions"
-DEEPSEEK_MODELLO = "deepseek-flash"
+DEEPSEEK_MODELLO = "deepseek-chat"
 
 
-async def _chiama_provider(url: str, api_key: str, modello: str, prompt: str, max_tokens: int) -> str:
-    """Chiama un provider OpenAI-compatibile e restituisce il testo."""
+async def _chiama_provider(nome: str, url: str, api_key: str, modello: str, prompt: str, max_tokens: int) -> str:
+    """Chiama un provider OpenAI-compatibile. Logga SEMPRE l'esito nei log di Render."""
     if not api_key:
+        print(f"=== AI {nome}: API key mancante ===")
         return ""
+
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
@@ -34,33 +34,60 @@ async def _chiama_provider(url: str, api_key: str, modello: str, prompt: str, ma
         "max_tokens": max_tokens,
         "temperature": 0.7,
     }
+
     try:
         async with httpx.AsyncClient(timeout=60) as client:
             r = await client.post(url, headers=headers, json=body)
+            print(f"=== AI {nome}: HTTP {r.status_code} (modello: {modello}) ===")
+
             if r.status_code != 200:
+                try:
+                    print(f"=== AI {nome} errore: {r.text[:500]} ===")
+                except Exception:
+                    pass
                 return ""
+
             data = r.json()
             choices = data.get("choices", [])
             if not choices:
+                print(f"=== AI {nome}: nessuna scelta nella risposta ===")
                 return ""
-            return choices[0].get("message", {}).get("content", "")
-    except Exception:
+
+            testo = choices[0].get("message", {}).get("content", "")
+            if not testo:
+                print(f"=== AI {nome}: contenuto vuoto ===")
+                return ""
+
+            print(f"=== AI {nome}: OK, {len(testo)} caratteri ===")
+            return testo
+
+    except httpx.TimeoutException:
+        print(f"=== AI {nome}: timeout (60s) ===")
+        return ""
+    except httpx.ConnectError as e:
+        print(f"=== AI {nome}: errore connessione: {e} ===")
+        return ""
+    except Exception as e:
+        print(f"=== AI {nome}: eccezione {type(e).__name__}: {e} ===")
         return ""
 
 
 async def _chiama_ai(prompt: str, max_tokens: int = 800) -> str:
-    """Prova Groq, poi DeepSeek. Se entrambi falliscono, stringa vuota."""
-    # Tentativo 1: Groq
-    risposta = await _chiama_provider(GROQ_URL, GROQ_API_KEY, GROQ_MODELLO, prompt, max_tokens)
+    """Prova Groq, poi DeepSeek. Log dettagliato di ogni tentativo."""
+
+    risposta = await _chiama_provider(
+        "GROQ", GROQ_URL, GROQ_API_KEY, GROQ_MODELLO, prompt, max_tokens
+    )
     if risposta:
         return risposta
 
-    # Tentativo 2: DeepSeek
-    risposta = await _chiama_provider(DEEPSEEK_URL, DEEPSEEK_API_KEY, DEEPSEEK_MODELLO, prompt, max_tokens)
+    risposta = await _chiama_provider(
+        "DEEPSEEK", DEEPSEEK_URL, DEEPSEEK_API_KEY, DEEPSEEK_MODELLO, prompt, max_tokens
+    )
     if risposta:
         return risposta
 
-    # Entrambi falliti: stringa vuota (il chiamante deciderà cosa fare)
+    print("=== AI: entrambi i provider hanno fallito ===")
     return ""
 
 
