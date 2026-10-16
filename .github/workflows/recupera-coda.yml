@@ -1,0 +1,18 @@
+name: Recupera coda invii
+
+on:
+  schedule:
+    # Ogni 10 minuti
+    - cron: '*/10 * * * *'
+  workflow_dispatch: {}
+
+jobs:
+  recupera:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Chiama endpoint recupera coda
+        run: |
+          curl -sS -X POST "https://luna2-api.onrender.com/cron/recupera-coda" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            --max-time 300
