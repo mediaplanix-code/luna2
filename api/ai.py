@@ -12,7 +12,7 @@ DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 AI_PROVIDER = os.getenv("AI_PROVIDER", "groq")
 
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
-GROQ_MODELLO = "llama-3.3-70b-versatile"
+GROQ_MODELLO = "openai/gpt-oss-120b"
 
 DEEPSEEK_URL = "https://api.deepseek.com/chat/completions"
 DEEPSEEK_MODELLO = "deepseek-chat"
