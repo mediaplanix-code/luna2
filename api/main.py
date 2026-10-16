@@ -5,7 +5,7 @@
 import os
 import traceback
 from datetime import datetime, timezone, timedelta
-from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import swisseph as swe
@@ -16,7 +16,7 @@ from transiti import calcola_transiti_lenti
 from report import assembla_report
 from ai import genera_oroscopo_settimanale, rispondi_chat, genera_copione_voce
 
-app = FastAPI(title="Luna2 Astro API", version="0.13.1")
+app = FastAPI(title="Luna2 Astro API", version="0.14.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -219,10 +219,12 @@ def root():
     return {
         "status": "ok",
         "service": "Luna2 Astro API",
-        "version": "0.13.1",
+        "version": "0.14.0",
         "supabase_configured": bool(SUPABASE_URL and SUPABASE_KEY),
         "telegram_configured": bool(TELEGRAM_TOKEN),
-        "gemini_configured": bool(os.getenv("GEMINI_API_KEY")),
+        "ai_provider": os.getenv("AI_PROVIDER", "groq"),
+        "groq_configured": bool(os.getenv("GROQ_API_KEY")),
+        "deepseek_configured": bool(os.getenv("DEEPSEEK_API_KEY")),
         "cron_configured": bool(CRON_SECRET),
     }
 
@@ -233,7 +235,7 @@ async def geocode(q: str = ""):
         return {"features": []}
     url = "https://photon.komoot.io/api/"
     params = {"q": q, "limit": 5, "lang": "default"}
-    headers = {"User-Agent": "Luna2/0.13", "Accept": "application/json"}
+    headers = {"User-Agent": "Luna2/0.14", "Accept": "application/json"}
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.get(url, params=params, headers=headers)
@@ -440,6 +442,8 @@ async def get_oroscopo(token: str):
     report = genera_report_interno(profile, tema, sb)
 
     oroscopo = await genera_oroscopo_settimanale(report)
+    if not oroscopo:
+        raise HTTPException(status_code=503, detail="Il consulto non è disponibile in questo momento. Riprova più tardi.")
     return {"oroscopo": oroscopo, "nome": profile.get("nome")}
 
 
@@ -468,6 +472,8 @@ async def chat_endpoint(token: str, req: ChatRequest):
     report = genera_report_interno(profile, tema, sb)
 
     risposta = await rispondi_chat(report, req.domanda, req.storico)
+    if not risposta:
+        raise HTTPException(status_code=503, detail="Il consulto non è disponibile in questo momento. Riprova più tardi.")
 
     if not is_paying:
         sb.table("profiles").update({"chat_questions_used": usate + 1}).eq("id", profile["id"]).execute()
@@ -503,6 +509,8 @@ async def get_copione_voce(token: str):
     report = genera_report_interno(profile, tema, sb)
 
     copione = await genera_copione_voce(report)
+    if not copione:
+        raise HTTPException(status_code=503, detail="Il consulto non è disponibile in questo momento. Riprova più tardi.")
     return {"copione": copione}
 
 
@@ -572,24 +580,18 @@ async def telegram_webhook(request: Request):
 
 
 # =========================================================
-# CRON — Oroscopo settimanale (chiamato da GitHub Actions)
+# CRON — Oroscopo settimanale
 # =========================================================
 
 @app.post("/cron/oroscopo-settimanale")
-async def cron_oroscopo_settimanale(request: Request, background: BackgroundTasks):
-    """
-    Genera e invia l'oroscopo settimanale a tutti gli utenti con Telegram collegato.
-    Protetto da header x-cron-secret.
-    """
+async def cron_oroscopo_settimanale(request: Request):
     try:
         if not CRON_SECRET:
-            print("=== CRON: CRON_SECRET non configurato su Render ===")
+            print("=== CRON: CRON_SECRET non configurato ===")
             raise HTTPException(status_code=500, detail="CRON_SECRET non configurato.")
 
-        # Legge header in modo esplicito
         secret_ricevuto = request.headers.get("x-cron-secret", "")
         if secret_ricevuto != CRON_SECRET:
-            print(f"=== CRON: secret non valido (ricevuto: {secret_ricevuto[:6]}...) ===")
             raise HTTPException(status_code=403, detail="Non autorizzato.")
 
         if not SUPABASE_URL or not SUPABASE_KEY:
@@ -598,13 +600,51 @@ async def cron_oroscopo_settimanale(request: Request, background: BackgroundTask
         sb = create_client(SUPABASE_URL, SUPABASE_KEY)
         res = sb.table("profiles").select("*").execute()
         tutti = res.data or []
-        # Filtra in Python: solo chi ha telegram_id non nullo e non vuoto
         utenti = [u for u in tutti if u.get("telegram_id")]
 
         print(f"=== CRON: trovati {len(utenti)} utenti con Telegram (su {len(tutti)} totali) ===")
 
-        background.add_task(_invia_oroscopi_a_tutti, utenti)
-        return {"status": "ok", "utenti_in_coda": len(utenti)}
+        inviati = 0
+        in_coda = 0
+        errori = 0
+
+        for u in utenti:
+            nome = u.get("nome", "?")
+            try:
+                tema = calcola_tema_completo(
+                    str(u["birth_date"]), str(u["birth_time"])[:5],
+                    float(u["birth_lat"]), float(u["birth_lon"]), 1.0,
+                )
+                report = genera_report_interno(u, tema, sb)
+                oroscopo = await genera_oroscopo_settimanale(report)
+
+                if not oroscopo:
+                    sb.table("coda_invii").insert({
+                        "profile_id": u["id"],
+                        "tipo": "oroscopo",
+                        "contenuto": "",
+                        "tentativi": 0,
+                    }).execute()
+                    in_coda += 1
+                    print(f"=== CRON: {nome} messo in coda ===")
+                    continue
+
+                try:
+                    chat_id = int(u["telegram_id"])
+                    await send_telegram(chat_id, f"<b>Ciao {nome}</b> 🌙\n\n{oroscopo}\n\n🌐 {SITE_URL}/sala")
+                    inviati += 1
+                    print(f"=== CRON: inviato a {nome} ===")
+                except Exception as e:
+                    errori += 1
+                    print(f"=== CRON: errore invio Telegram a {nome}: {e} ===")
+
+            except Exception as e:
+                errori += 1
+                print(f"=== CRON: errore generazione per {nome}: {e} ===")
+
+        print(f"=== CRON oroscopo settimanale: inviati {inviati}, in coda {in_coda}, errori {errori} ===")
+
+        return {"status": "ok", "inviati": inviati, "in_coda": in_coda, "errori": errori}
 
     except HTTPException:
         raise
@@ -614,45 +654,75 @@ async def cron_oroscopo_settimanale(request: Request, background: BackgroundTask
         raise HTTPException(status_code=500, detail=f"Errore cron: {type(e).__name__}: {e}")
 
 
-async def _invia_oroscopi_a_tutti(utenti: list):
-    """Genera e invia l'oroscopo a ogni utente (sequenziale)."""
+# =========================================================
+# CRON — Recupero coda invii
+# =========================================================
+
+@app.post("/cron/recupera-coda")
+async def cron_recupera_coda(request: Request):
     try:
+        if not CRON_SECRET:
+            raise HTTPException(status_code=500, detail="CRON_SECRET non configurato.")
+        secret_ricevuto = request.headers.get("x-cron-secret", "")
+        if secret_ricevuto != CRON_SECRET:
+            raise HTTPException(status_code=403, detail="Non autorizzato.")
+
         sb = create_client(SUPABASE_URL, SUPABASE_KEY)
-    except Exception as e:
-        print(f"=== CRON: errore creazione client Supabase: {e} ===")
-        return
 
-    inviati = 0
-    errori = 0
+        res = sb.table("coda_invii").select("*").lt("tentativi", 20).order("creato_il").limit(10).execute()
+        elementi = res.data or []
 
-    for u in utenti:
-        nome = u.get("nome", "?")
-        try:
-            tema = calcola_tema_completo(
-                str(u["birth_date"]), str(u["birth_time"])[:5],
-                float(u["birth_lat"]), float(u["birth_lon"]), 1.0,
-            )
-            report = genera_report_interno(u, tema, sb)
-            oroscopo = await genera_oroscopo_settimanale(report)
+        if not elementi:
+            return {"status": "ok", "recuperati": 0, "in_coda": 0}
 
-            if oroscopo.startswith("ERRORE") or "sovraccarico" in oroscopo or "Riprova" in oroscopo:
-                errori += 1
-                print(f"=== CRON: oroscopo non valido per {nome}: {oroscopo[:120]} ===")
-                continue
+        print(f"=== CRON CODA: trovati {len(elementi)} elementi da riprovare ===")
 
+        recuperati = 0
+        falliti = 0
+
+        for el in elementi:
             try:
+                prof_res = sb.table("profiles").select("*").eq("id", el["profile_id"]).execute()
+                if not prof_res.data:
+                    sb.table("coda_invii").delete().eq("id", el["id"]).execute()
+                    continue
+                u = prof_res.data[0]
+
+                tema = calcola_tema_completo(
+                    str(u["birth_date"]), str(u["birth_time"])[:5],
+                    float(u["birth_lat"]), float(u["birth_lon"]), 1.0,
+                )
+                report = genera_report_interno(u, tema, sb)
+                oroscopo = await genera_oroscopo_settimanale(report)
+
+                if not oroscopo:
+                    sb.table("coda_invii").update({
+                        "tentativi": (el.get("tentativi", 0) + 1),
+                        "ultimo_tentativo": datetime.now(timezone.utc).isoformat(),
+                    }).eq("id", el["id"]).execute()
+                    falliti += 1
+                    continue
+
+                nome = u.get("nome", "")
                 chat_id = int(u["telegram_id"])
                 await send_telegram(chat_id, f"<b>Ciao {nome}</b> 🌙\n\n{oroscopo}\n\n🌐 {SITE_URL}/sala")
-                inviati += 1
+                sb.table("coda_invii").delete().eq("id", el["id"]).execute()
+                recuperati += 1
+                print(f"=== CRON CODA: recuperato e inviato a {nome} ===")
+
             except Exception as e:
-                errori += 1
-                print(f"=== CRON: errore invio Telegram a {nome}: {e} ===")
+                falliti += 1
+                print(f"=== CRON CODA: errore su elemento {el['id']}: {e} ===")
 
-        except Exception as e:
-            errori += 1
-            print(f"=== CRON: errore generazione per {nome}: {e} ===")
+        print(f"=== CRON CODA: recuperati {recuperati}, falliti {falliti} ===")
+        return {"status": "ok", "recuperati": recuperati, "falliti": falliti}
 
-    print(f"=== CRON oroscopo settimanale: inviati {inviati}, errori {errori} ===")
+    except HTTPException:
+        raise
+    except Exception as e:
+        print("=== ERRORE CRON CODA ===")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Errore coda: {type(e).__name__}: {e}")
 
 
 async def send_telegram(chat_id, text):
