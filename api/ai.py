@@ -1,5 +1,5 @@
 # =========================================================
-# LUNA2 — Integrazione AI (Google Gemini Flash)
+# LUNA2 — Integrazione AI (Groq + DeepSeek con fallback)
 # Genera oroscopo settimanale, risposte chat, copione voce
 # =========================================================
 
@@ -7,81 +7,64 @@ import os
 import asyncio
 import httpx
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-MODELLO = "gemini-3.8-flash"
-GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{MODELLO}:generateContent"
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
+AI_PROVIDER = os.getenv("AI_PROVIDER", "groq")
+
+# Provider primario: Groq (velocissimo, gratuito per il tuo volume)
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+GROQ_MODELLO = "llama-3.3-70b-versatile"
+
+# Provider di riserva: DeepSeek (economico, affidabile)
+DEEPSEEK_URL = "https://api.deepseek.com/chat/completions"
+DEEPSEEK_MODELLO = "deepseek-flash"
 
 
-async def _chiama_gemini(prompt: str, max_tokens: int = 800) -> str:
-    """Chiama Gemini Flash con retry automatico su 503 / 429 / 500."""
-    if not GEMINI_API_KEY:
-        return "ERRORE: GEMINI_API_KEY non configurata"
-
-    url = f"{GEMINI_URL}?key={GEMINI_API_KEY}"
-    body = {
-        "contents": [{
-            "parts": [{"text": prompt}]
-        }],
-        "generationConfig": {
-            "thinkingConfig": {
-                "thinkingLevel": "low"
-            },
-            "maxOutputTokens": max_tokens,
-        }
+async def _chiama_provider(url: str, api_key: str, modello: str, prompt: str, max_tokens: int) -> str:
+    """Chiama un provider OpenAI-compatibile e restituisce il testo."""
+    if not api_key:
+        return ""
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
     }
+    body = {
+        "model": modello,
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": max_tokens,
+        "temperature": 0.7,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=60) as client:
+            r = await client.post(url, headers=headers, json=body)
+            if r.status_code != 200:
+                return ""
+            data = r.json()
+            choices = data.get("choices", [])
+            if not choices:
+                return ""
+            return choices[0].get("message", {}).get("content", "")
+    except Exception:
+        return ""
 
-    tentativi = 3
-    attesa = [1, 3, 6]  # secondi tra i tentativi
 
-    for i in range(tentativi):
-        try:
-            async with httpx.AsyncClient(timeout=120) as client:
-                r = await client.post(url, json=body)
+async def _chiama_ai(prompt: str, max_tokens: int = 800) -> str:
+    """Prova Groq, poi DeepSeek. Se entrambi falliscono, stringa vuota."""
+    # Tentativo 1: Groq
+    risposta = await _chiama_provider(GROQ_URL, GROQ_API_KEY, GROQ_MODELLO, prompt, max_tokens)
+    if risposta:
+        return risposta
 
-                # Retry su errori temporanei
-                if r.status_code in (429, 500, 503):
-                    if i < tentativi - 1:
-                        await asyncio.sleep(attesa[i])
-                        continue
-                    return "Il servizio è momentaneamente sovraccarico. Riprova tra qualche minuto."
+    # Tentativo 2: DeepSeek
+    risposta = await _chiama_provider(DEEPSEEK_URL, DEEPSEEK_API_KEY, DEEPSEEK_MODELLO, prompt, max_tokens)
+    if risposta:
+        return risposta
 
-                try:
-                    data = r.json()
-                except Exception:
-                    return f"ERRORE Gemini ({r.status_code}): risposta non JSON"
-
-                if r.status_code != 200:
-                    return f"ERRORE Gemini ({r.status_code}): {data}"
-
-                candidates = data.get("candidates", [])
-                if not candidates:
-                    return "Nessuna risposta generata. Riprova."
-
-                parts = candidates[0].get("content", {}).get("parts", [])
-                if not parts:
-                    finish = candidates[0].get("finishReason", "sconosciuto")
-                    return f"Risposta vuota (motivo: {finish}). Riprova."
-
-                return parts[0].get("text", "")
-
-        except httpx.TimeoutException:
-            if i < tentativi - 1:
-                await asyncio.sleep(attesa[i])
-                continue
-            return "Il servizio sta impiegando troppo tempo. Riprova tra poco."
-        except httpx.ConnectError:
-            if i < tentativi - 1:
-                await asyncio.sleep(attesa[i])
-                continue
-            return "Problema di connessione al servizio. Riprova tra poco."
-        except Exception as e:
-            return f"ERRORE: {type(e).__name__}"
-
-    return "Servizio momentaneamente non disponibile. Riprova tra qualche minuto."
+    # Entrambi falliti: stringa vuota (il chiamante deciderà cosa fare)
+    return ""
 
 
 async def genera_oroscopo_settimanale(report: dict) -> str:
-    """Genera l'oroscopo settimanale partendo dal report interno."""
     riepilogo = report.get("riepilogo_testuale", "")
     nome = report.get("profile", {}).get("nome", "utente")
 
@@ -92,11 +75,10 @@ REPORT INTERNO:
 
 Scrivi l'oroscopo settimanale. Inizia con una frase di saluto personalizzata. Poi 3-4 frasi sul tema principale della settimana, basandoti sui transiti attivi e sui settori toccati. Chiudi con una breve indicazione pratica."""
 
-    return await _chiama_gemini(prompt, max_tokens=800)
+    return await _chiama_ai(prompt, max_tokens=800)
 
 
 async def rispondi_chat(report: dict, domanda: str, storico: list) -> str:
-    """Risponde a una domanda dell'utente nella chat."""
     riepilogo = report.get("riepilogo_testuale", "")
     nome = report.get("profile", {}).get("nome", "utente")
 
@@ -118,11 +100,10 @@ DOMANDA DI {nome}:
 
 Rispondi come astrologa."""
 
-    return await _chiama_gemini(prompt, max_tokens=600)
+    return await _chiama_ai(prompt, max_tokens=600)
 
 
 async def genera_copione_voce(report: dict) -> str:
-    """Genera un copione che l'AI vocale leggerà nella sessione telefonica."""
     riepilogo = report.get("riepilogo_testuale", "")
     nome = report.get("profile", {}).get("nome", "utente")
 
@@ -137,4 +118,4 @@ REPORT INTERNO:
 {riepilogo}
 
 Scrivi il copione di apertura."""
-    return await _chiama_gemini(prompt, max_tokens=900)
+    return await _chiama_ai(prompt, max_tokens=900)
