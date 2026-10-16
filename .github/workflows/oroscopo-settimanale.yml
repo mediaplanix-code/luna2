@@ -2,9 +2,8 @@ name: Oroscopo settimanale
 
 on:
   schedule:
-    # Ogni domenica alle 5:00 UTC = 7:00 ora italiana (CET)
     - cron: '0 5 * * 0'
-  workflow_dispatch: {}   # permette di lanciarlo a mano da GitHub
+  workflow_dispatch: {}
 
 jobs:
   invia:
@@ -15,4 +14,4 @@ jobs:
           curl -sS -X POST "https://luna2-api.onrender.com/cron/oroscopo-settimanale" \
             -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
             -H "Content-Type: application/json" \
-            --max-time 30
+            --max-time 600
