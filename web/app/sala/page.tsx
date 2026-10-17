@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Accordion from '../components/Accordion';
@@ -41,7 +41,7 @@ function formatGrado(lon: number): string {
   return `${g}°${String(m).padStart(2, '0')}'`;
 }
 
-export default function SalaPage() {
+function SalaContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [data, setData] = useState<any>(null);
@@ -50,13 +50,10 @@ export default function SalaPage() {
   const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
-    // 1. Prima controlla se c'è un token nell'URL (es. da link Telegram)
     const tokenDaUrl = searchParams.get('token');
     if (tokenDaUrl) {
       localStorage.setItem('luna2_token', tokenDaUrl);
     }
-
-    // 2. Poi recupera il token dal localStorage
     const t = tokenDaUrl || localStorage.getItem('luna2_token');
     if (!t) {
       router.push('/form');
@@ -393,5 +390,22 @@ export default function SalaPage() {
       </div>
 
     </div>
+  );
+}
+
+export default function SalaPage() {
+  return (
+    <Suspense fallback={
+      <div className="canvas">
+        <div className="topbar">
+          <div className="brand">✦ Luna Astrologica</div>
+        </div>
+        <p style={{ textAlign: 'center', marginTop: '40px', color: 'var(--text-dim)' }}>
+          Caricamento...
+        </p>
+      </div>
+    }>
+      <SalaContent />
+    </Suspense>
   );
 }
