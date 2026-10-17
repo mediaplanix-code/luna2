@@ -1,17 +1,10 @@
-name: Oroscopo settimanale
-
-on:
-  schedule:
-    - cron: '0 5 * * 0'
-  workflow_dispatch: {}
-
+name: Test Oroscopo (Manuale)
+on: workflow_dispatch
 jobs:
-  invia:
+  test:
     runs-on: ubuntu-latest
     steps:
-      - name: Chiama endpoint oroscopo settimanale
+      - name: Invia oroscopo
         run: |
           curl -sS -X POST "https://luna2-api.onrender.com/cron/oroscopo-settimanale" \
-            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
-            -H "Content-Type: application/json" \
-            --max-time 600
+          -H "x-cron-secret: ${{ secrets.CRON_SECRET }}"
