@@ -1,6 +1,5 @@
 # =========================================================
 # LUNA2 — Integrazione AI (Groq + DeepSeek con fallback)
-# Genera oroscopo settimanale, risposte chat, copione voce
 # =========================================================
 
 import os
@@ -19,7 +18,6 @@ DEEPSEEK_MODELLO = "deepseek-chat"
 
 
 async def _chiama_provider(nome: str, url: str, api_key: str, modello: str, prompt: str, max_tokens: int) -> str:
-    """Chiama un provider OpenAI-compatibile. Logga SEMPRE l'esito nei log di Render."""
     if not api_key:
         print(f"=== AI {nome}: API key mancante ===")
         return ""
@@ -50,44 +48,28 @@ async def _chiama_provider(nome: str, url: str, api_key: str, modello: str, prom
             data = r.json()
             choices = data.get("choices", [])
             if not choices:
-                print(f"=== AI {nome}: nessuna scelta nella risposta ===")
                 return ""
 
             testo = choices[0].get("message", {}).get("content", "")
             if not testo:
-                print(f"=== AI {nome}: contenuto vuoto ===")
                 return ""
 
-            print(f"=== AI {nome}: OK, {len(testo)} caratteri ===")
             return testo
 
-    except httpx.TimeoutException:
-        print(f"=== AI {nome}: timeout (60s) ===")
-        return ""
-    except httpx.ConnectError as e:
-        print(f"=== AI {nome}: errore connessione: {e} ===")
-        return ""
     except Exception as e:
         print(f"=== AI {nome}: eccezione {type(e).__name__}: {e} ===")
         return ""
 
 
 async def _chiama_ai(prompt: str, max_tokens: int = 800) -> str:
-    """Prova Groq, poi DeepSeek. Log dettagliato di ogni tentativo."""
-
-    risposta = await _chiama_provider(
-        "GROQ", GROQ_URL, GROQ_API_KEY, GROQ_MODELLO, prompt, max_tokens
-    )
+    risposta = await _chiama_provider("GROQ", GROQ_URL, GROQ_API_KEY, GROQ_MODELLO, prompt, max_tokens)
     if risposta:
         return risposta
 
-    risposta = await _chiama_provider(
-        "DEEPSEEK", DEEPSEEK_URL, DEEPSEEK_API_KEY, DEEPSEEK_MODELLO, prompt, max_tokens
-    )
+    risposta = await _chiama_provider("DEEPSEEK", DEEPSEEK_URL, DEEPSEEK_API_KEY, DEEPSEEK_MODELLO, prompt, max_tokens)
     if risposta:
         return risposta
 
-    print("=== AI: entrambi i provider hanno fallito ===")
     return ""
 
 
@@ -95,14 +77,19 @@ async def genera_oroscopo_settimanale(report: dict) -> str:
     riepilogo = report.get("riepilogo_testuale", "")
     nome = report.get("profile", {}).get("nome", "utente")
 
-    prompt = f"""Sei un'astrologa italiana esperta. Scrivi l'oroscopo settimanale per {nome}, basandoti ESCLUSIVAMENTE sul report qui sotto. Non inventare nulla che non sia nel report. Tono: caldo, diretto, professionale, come se parlassi a tu per tu. Massimo 200 parole.
+    prompt = f"""Sei un'astrologa italiana esperta. Scrivi un biglietto di auguri astrologico per {nome}.
+REGOLE TASSATIVE:
+- Massimo 80 parole.
+- Tono: caldo, diretto, come se fossi una cara amica che ne sa di stelle.
+- NON usare MAI asterischi, markdown o elenchi puntati. Scrivi solo testo fluido.
+- Non dare spiegazioni tecniche, usa un linguaggio semplice.
+- Parla dell'energia della settimana basandoti ESCLUSIVAMENTE su questo report:
 
-REPORT INTERNO:
 {riepilogo}
 
-Scrivi l'oroscopo settimanale. Inizia con una frase di saluto personalizzata. Poi 3-4 frasi sul tema principale della settimana, basandoti sui transiti attivi e sui settori toccati. Chiudi con una breve indicazione pratica."""
+Scrivi il testo. Inizia con "Ciao {nome}," e poi 2-3 frasi."""
 
-    return await _chiama_ai(prompt, max_tokens=800)
+    return await _chiama_ai(prompt, max_tokens=200)
 
 
 async def rispondi_chat(report: dict, domanda: str, storico: list) -> str:
@@ -114,7 +101,7 @@ async def rispondi_chat(report: dict, domanda: str, storico: list) -> str:
         ruolo = "Utente" if m.get("role") == "user" else "Astrologa"
         storico_testo += f"{ruolo}: {m.get('content', '')}\n"
 
-    prompt = f"""Sei un'astrologa italiana esperta, stai parlando con {nome}. Rispondi alla sua domanda basandoti ESCLUSIVAMENTE sul report interno qui sotto. Non inventare nulla. Se la domanda esce dal tema natale e dai transiti, riportala con gentilezza ai dati che hai. Tono: caldo, diretto, professionale. Massimo 150 parole.
+    prompt = f"""Sei un'astrologa italiana esperta, stai parlando con {nome}. Rispondi alla sua domanda basandoti ESCLUSIVAMENTE sul report interno qui sotto. Non inventare nulla. Se la domanda esce dal tema natale e dai transiti, riportala con gentilezza ai dati che hai. Tono: caldo, diretto, professionale. Massimo 150 parole. NON usare mai asterischi o markdown, solo testo fluido.
 
 REPORT INTERNO:
 {riepilogo}
@@ -134,7 +121,7 @@ async def genera_copione_voce(report: dict) -> str:
     riepilogo = report.get("riepilogo_testuale", "")
     nome = report.get("profile", {}).get("nome", "utente")
 
-    prompt = f"""Sei un'astrologa italiana. Stai per parlare al telefono con {nome} per 15 minuti. Basandoti ESCLUSIVAMENTE sul report qui sotto, scrivi un copione di apertura che duri circa 2 minuti. Tono: caldo, diretto, mistico ma professionale. Non inventare nulla. Struttura:
+    prompt = f"""Sei un'astrologa italiana. Stai per parlare al telefono con {nome} per 15 minuti. Basandoti ESCLUSIVAMENTE sul report qui sotto, scrivi un copione di apertura che duri circa 2 minuti. Tono: caldo, diretto, mistico ma professionale. Non inventare nulla. Non usare asterischi o markdown. Struttura:
 
 1. Saluto personalizzato con il nome
 2. I 3 pilastri del tema natale (Sole, Luna, Ascendente) in 2-3 frasi
