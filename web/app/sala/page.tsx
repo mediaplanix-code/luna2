@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Accordion from '../components/Accordion';
 import Wheel from '../components/Wheel';
@@ -43,19 +43,27 @@ function formatGrado(lon: number): string {
 
 export default function SalaPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [data, setData] = useState<any>(null);
   const [status, setStatus] = useState<'loading' | 'ok' | 'error'>('loading');
   const [message, setMessage] = useState('');
   const [token, setToken] = useState<string | null>(null);
-  const [oroscopo, setOroscopo] = useState<string>('');
 
   useEffect(() => {
-    const t = localStorage.getItem('luna2_token');
+    // 1. Prima controlla se c'è un token nell'URL (es. da link Telegram)
+    const tokenDaUrl = searchParams.get('token');
+    if (tokenDaUrl) {
+      localStorage.setItem('luna2_token', tokenDaUrl);
+    }
+
+    // 2. Poi recupera il token dal localStorage
+    const t = tokenDaUrl || localStorage.getItem('luna2_token');
     if (!t) {
       router.push('/form');
       return;
     }
     setToken(t);
+
     fetch(`https://luna2-api.onrender.com/sala/${t}`)
       .then((r) => r.json())
       .then((d) => {
@@ -67,7 +75,7 @@ export default function SalaPage() {
         setStatus('error');
         setMessage(e.message);
       });
-  }, [router]);
+  }, [router, searchParams]);
 
   if (status === 'loading') {
     return (
