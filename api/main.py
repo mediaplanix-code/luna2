@@ -4,6 +4,8 @@
 
 import os
 import traceback
+import random
+import string
 from datetime import datetime, timezone, timedelta
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,7 +18,7 @@ from transiti import calcola_transiti_lenti
 from report import assembla_report
 from ai import genera_oroscopo_settimanale, rispondi_chat, genera_copione_voce
 
-app = FastAPI(title="Luna2 Astro API", version="0.15.1")
+app = FastAPI(title="Luna2 Astro API", version="0.17.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -35,7 +37,19 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_API = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}" if TELEGRAM_TOKEN else None
 CRON_SECRET = os.getenv("CRON_SECRET", "")
 
+BREVO_API_KEY = os.getenv("BREVO_API_KEY")
+BREVO_SENDER_EMAIL = os.getenv("BREVO_SENDER_EMAIL", "noreply@lunaastrologica.it")
+BREVO_SENDER_NAME = os.getenv("BREVO_SENDER_NAME", "Luna Astrologica")
+
 SITE_URL = "https://luna2-2hw.pages.dev"
+
+# Lista nera di domini email temporanei (i più comuni)
+DOMINI_TEMPORANEI = {
+    "mailinator.com", "yopmail.com", "10minutemail.com", "guerrillamail.com",
+    "tempmail.com", "temp-mail.org", "throwawaymail.com", "sharklasers.com",
+    "getnada.com", "maildrop.cc", "dispostable.com", "mytemp.email",
+    "trashmail.com", "fakeinbox.com", "mailnesia.com"
+}
 
 PIANETI = {
     "Sole": swe.SUN, "Luna": swe.MOON, "Mercurio": swe.MERCURY,
@@ -177,6 +191,51 @@ def genera_report_interno(profile: dict, tema: dict, sb):
         significati_tr=tr,
     )
 
+def genera_codice_verifica() -> str:
+    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=32))
+
+async def invia_email_verifica(email_destinatario: str, nome: str, codice: str):
+    if not BREVO_API_KEY:
+        print("=== EMAIL: BREVO_API_KEY non configurata ===")
+        return False
+    link = f"{SITE_URL}/verifica?codice={codice}"
+    html = f"""
+    <div style="font-family: Georgia, serif; color: #333; max-width: 500px; margin: 0 auto;">
+      <h2 style="color: #F5A623;">Ciao {nome} 🌙</h2>
+      <p>Grazie per esserti iscritto a Luna Astrologica.</p>
+      <p>Per attivare il tuo profilo, clicca qui:</p>
+      <p style="text-align: center; margin: 30px 0;">
+        <a href="{link}" style="background: #F5A623; color: #000; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Attiva il mio profilo</a>
+      </p>
+      <p style="font-size: 12px; color: #888;">Se non hai richiesto tu questa iscrizione, ignora questa email.</p>
+      <p style="font-size: 12px; color: #888;">A presto,<br>Luna Astrologica</p>
+    </div>
+    """
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.post(
+                "https://api.brevo.com/v3/smtp/email",
+                headers={
+                    "accept": "application/json",
+                    "api-key": BREVO_API_KEY,
+                    "content-type": "application/json",
+                },
+                json={
+                    "sender": {"name": BREVO_SENDER_NAME, "email": BREVO_SENDER_EMAIL},
+                    "to": [{"email": email_destinatario, "name": nome}],
+                    "subject": "Attiva il tuo profilo Luna Astrologica",
+                    "htmlContent": html,
+                },
+            )
+            if r.status_code in (200, 201, 202):
+                print(f"=== EMAIL: inviata a {email_destinatario} ===")
+                return True
+            else:
+                print(f"=== EMAIL: errore {r.status_code}: {r.text[:300]} ===")
+                return False
+    except Exception as e:
+        print(f"=== EMAIL: eccezione {type(e).__name__}: {e} ===")
+        return False
 
 @app.on_event("startup")
 async def on_startup():
@@ -190,15 +249,15 @@ async def on_startup():
     except Exception as e:
         print(f"=== Errore auto-webhook: {e} ===")
 
-
 @app.get("/")
 def root():
     return {
         "status": "ok",
         "service": "Luna2 Astro API",
-        "version": "0.15.1",
+        "version": "0.17.0",
         "supabase_configured": bool(SUPABASE_URL and SUPABASE_KEY),
         "telegram_configured": bool(TELEGRAM_TOKEN),
+        "brevo_configured": bool(BREVO_API_KEY),
         "ai_provider": os.getenv("AI_PROVIDER", "groq"),
         "cron_configured": bool(CRON_SECRET),
     }
@@ -208,7 +267,7 @@ async def geocode(q: str = ""):
     if len(q) < 3: return {"features": []}
     url = "https://photon.komoot.io/api/"
     params = {"q": q, "limit": 5, "lang": "default"}
-    headers = {"User-Agent": "Luna2/0.15", "Accept": "application/json"}
+    headers = {"User-Agent": "Luna2/0.17", "Accept": "application/json"}
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.get(url, params=params, headers=headers)
@@ -225,30 +284,44 @@ async def onboarding(req: OnboardingRequest):
         if not req.birth_lat or not req.birth_lon:
             raise HTTPException(status_code=400, detail="Coordinate di nascita mancanti.")
 
+        email_lower = req.email.strip().lower()
+        dominio = email_lower.split("@")[-1]
+        if dominio in DOMINI_TEMPORANEI:
+            raise HTTPException(status_code=400, detail="Le email temporanee non sono accettate.")
+
         lat, lon = req.birth_lat, req.birth_lon
         tema = calcola_tema_completo(req.birth_date, req.birth_time, lat, lon, 1.0)
         sb = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-        existing = sb.table("profiles").select("*").eq("email", req.email).execute()
+        existing = sb.table("profiles").select("*").eq("email", email_lower).execute()
+        codice_verifica = genera_codice_verifica()
+        
         if existing.data:
             profile_id = existing.data[0]["id"]
             access_token = existing.data[0]["access_token"]
+            era_verificata = existing.data[0].get("email_verificata", False)
             sb.table("profiles").update({
                 "nome": req.nome, "birth_date": req.birth_date, "birth_time": req.birth_time,
                 "birth_lat": lat, "birth_lon": lon, "birth_city": req.birth_city,
+                "codice_verifica": codice_verifica,
             }).eq("id", profile_id).execute()
             sb.table("natal_charts").delete().eq("profile_id", profile_id).execute()
+            
+            if not era_verificata:
+                await invia_email_verifica(email_lower, req.nome, codice_verifica)
         else:
             prof_res = sb.table("profiles").insert({
-                "email": req.email, "nome": req.nome, "telegram_id": None,
+                "email": email_lower, "nome": req.nome, "telegram_id": None,
                 "birth_date": req.birth_date, "birth_time": req.birth_time,
                 "birth_lat": lat, "birth_lon": lon, "birth_city": req.birth_city,
                 "timezone": "Europe/Rome", "consent_gdpr": True,
+                "email_verificata": False, "codice_verifica": codice_verifica,
             }).execute()
             if not prof_res.data:
                 raise HTTPException(status_code=500, detail="Profilo non creato")
             profile_id = prof_res.data[0]["id"]
             access_token = prof_res.data[0]["access_token"]
+            await invia_email_verifica(email_lower, req.nome, codice_verifica)
 
         sb.table("natal_charts").insert({
             "profile_id": profile_id, "planets_json": tema["planets"],
@@ -268,19 +341,12 @@ async def onboarding(req: OnboardingRequest):
         except Exception as e:
             print(f"Errore generazione report post-onboarding: {e}")
 
-        try:
-            refreshed = sb.table("profiles").select("telegram_id").eq("id", profile_id).execute()
-            chat_id = refreshed.data[0].get("telegram_id") if refreshed.data else None
-            if chat_id:
-                await send_telegram(int(chat_id),
-                    f"Ciao <b>{req.nome}</b>! 🌙\n\nIl tuo tema natale è pronto.\n🌐 {SITE_URL}/sala?token={access_token}")
-        except Exception: pass
-
         return {
             "status": "ok",
             "message": f"Tema natale calcolato per {req.nome}.",
             "profile_id": profile_id,
             "access_token": access_token,
+            "email_verificata": False,
             "chart_preview": {
                 "sole": tema["planets"].get("Sole"),
                 "luna": tema["planets"].get("Luna"),
@@ -292,6 +358,62 @@ async def onboarding(req: OnboardingRequest):
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Errore: {type(e).__name__}: {e}")
 
+@app.get("/verifica/{codice}")
+async def verifica_email(codice: str):
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        raise HTTPException(status_code=500, detail="Supabase non configurato")
+    sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+    
+    res = sb.table("profiles").select("*").eq("codice_verifica", codice).execute()
+    if not res.data:
+        raise HTTPException(status_code=400, detail="Codice non valido o già usato.")
+    
+    profile = res.data[0]
+    sb.table("profiles").update({
+        "email_verificata": True,
+        "codice_verifica": None
+    }).eq("id", profile["id"]).execute()
+
+    tema = calcola_tema_completo(
+        str(profile["birth_date"]), str(profile["birth_time"])[:5],
+        float(profile["birth_lat"]), float(profile["birth_lon"]), 1.0,
+    )
+    report = genera_report_interno(profile, tema, sb)
+
+    try:
+        refreshed = sb.table("profiles").select("*").eq("id", profile["id"]).execute()
+        prof_data = refreshed.data[0]
+        chat_id = prof_data.get("telegram_id")
+        ultimo = prof_data.get("ultimo_oroscopo_inviato")
+        
+        invia_subito = False
+        if chat_id:
+            invia_subito = True
+            if ultimo:
+                dt_ultimo = datetime.fromisoformat(ultimo.replace("Z", "+00:00"))
+                adesso = datetime.now(timezone.utc)
+                if (adesso - dt_ultimo).days < 7:
+                    invia_subito = False
+        
+        if invia_subito:
+            oroscopo_benvenuto = await genera_oroscopo_settimanale(report)
+            if oroscopo_benvenuto:
+                adesso = datetime.now(timezone.utc)
+                data_inizio = adesso.strftime("%d/%m")
+                data_fine = (adesso + timedelta(days=6)).strftime("%d/%m")
+                testo = f"<b>Oroscopo settimanale dal {data_inizio} al {data_fine}</b>\n\n{oroscopo_benvenuto}\n\n🌐 <a href='{SITE_URL}/sala?token={profile['access_token']}'>Approfondisci nella tua sala</a>"
+                await send_telegram(int(chat_id), testo)
+                sb.table("profiles").update({"ultimo_oroscopo_inviato": adesso.isoformat()}).eq("id", profile["id"]).execute()
+    except Exception as e:
+        print(f"Errore invio oroscopo post-verifica: {e}")
+
+    return {
+        "status": "ok",
+        "message": "Email verificata.",
+        "access_token": profile["access_token"],
+        "nome": profile.get("nome", ""),
+    }
+
 @app.post("/recupera-token")
 async def recupera_token(req: RecuperoRequest):
     if not SUPABASE_URL or not SUPABASE_KEY: raise HTTPException(status_code=500, detail="Supabase non configurato")
@@ -299,9 +421,17 @@ async def recupera_token(req: RecuperoRequest):
     if not email: raise HTTPException(status_code=400, detail="Email mancante.")
     try:
         sb = create_client(SUPABASE_URL, SUPABASE_KEY)
-        res = sb.table("profiles").select("id, nome, access_token").eq("email", email).execute()
+        res = sb.table("profiles").select("id, nome, access_token, email_verificata").eq("email", email).execute()
         if not res.data: raise HTTPException(status_code=404, detail="Nessun profilo trovato.")
         prof = res.data[0]
+        
+        if not prof.get("email_verificata"):
+            # Rigenera codice e reinvia
+            codice_verifica = genera_codice_verifica()
+            sb.table("profiles").update({"codice_verifica": codice_verifica}).eq("id", prof["id"]).execute()
+            await invia_email_verifica(email, prof.get("nome", "utente"), codice_verifica)
+            raise HTTPException(status_code=403, detail="Devi prima verificare la tua email. Ti abbiamo inviato un nuovo link.")
+            
         return {"status": "ok", "access_token": prof["access_token"], "nome": prof.get("nome", "")}
     except HTTPException: raise
     except Exception as e: raise HTTPException(status_code=500, detail=str(e))
@@ -312,6 +442,10 @@ async def get_sala(token: str):
     res = sb.table("profiles").select("*").eq("access_token", token).execute()
     if not res.data: raise HTTPException(status_code=404, detail="Profilo non trovato")
     profile = res.data[0]
+    
+    if not profile.get("email_verificata", False):
+        raise HTTPException(status_code=403, detail="Email non verificata. Controlla la tua casella di posta.")
+        
     tema = calcola_tema_completo(
         str(profile["birth_date"]), str(profile["birth_time"])[:5],
         float(profile["birth_lat"]), float(profile["birth_lon"]), 1.0,
@@ -351,6 +485,8 @@ async def get_report(token: str):
     res = sb.table("profiles").select("*").eq("access_token", token).execute()
     if not res.data: raise HTTPException(status_code=404, detail="Profilo non trovato")
     profile = res.data[0]
+    if not profile.get("email_verificata"): raise HTTPException(status_code=403, detail="Email non verificata.")
+    
     tema = calcola_tema_completo(str(profile["birth_date"]), str(profile["birth_time"])[:5], float(profile["birth_lat"]), float(profile["birth_lon"]), 1.0)
     report = genera_report_interno(profile, tema, sb)
     try:
@@ -367,6 +503,8 @@ async def get_oroscopo(token: str):
     res = sb.table("profiles").select("*").eq("access_token", token).execute()
     if not res.data: raise HTTPException(status_code=404, detail="Profilo non trovato")
     profile = res.data[0]
+    if not profile.get("email_verificata"): raise HTTPException(status_code=403, detail="Email non verificata.")
+    
     tema = calcola_tema_completo(str(profile["birth_date"]), str(profile["birth_time"])[:5], float(profile["birth_lat"]), float(profile["birth_lon"]), 1.0)
     report = genera_report_interno(profile, tema, sb)
     oroscopo = await genera_oroscopo_settimanale(report)
@@ -379,6 +517,8 @@ async def chat_endpoint(token: str, req: ChatRequest):
     res = sb.table("profiles").select("*").eq("access_token", token).execute()
     if not res.data: raise HTTPException(status_code=404, detail="Profilo non trovato")
     profile = res.data[0]
+    if not profile.get("email_verificata"): raise HTTPException(status_code=403, detail="Email non verificata.")
+    
     usate = profile.get("chat_questions_used", 0)
     limite = 3
     is_paying = profile.get("is_paying", False)
@@ -404,6 +544,8 @@ async def get_copione_voce(token: str):
     res = sb.table("profiles").select("*").eq("access_token", token).execute()
     if not res.data: raise HTTPException(status_code=404, detail="Profilo non trovato")
     profile = res.data[0]
+    if not profile.get("email_verificata"): raise HTTPException(status_code=403, detail="Email non verificata.")
+    
     tema = calcola_tema_completo(str(profile["birth_date"]), str(profile["birth_time"])[:5], float(profile["birth_lat"]), float(profile["birth_lon"]), 1.0)
     report = genera_report_interno(profile, tema, sb)
     copione = await genera_copione_voce(report)
@@ -446,163 +588,29 @@ async def telegram_webhook(request: Request):
             await send_telegram(chat_id, "Ciao! Per attivare il tuo oroscopo, apri il link dal sito Luna2.")
             return {"ok": True}
         token = parts[1].strip()
-        nome = await link_telegram_account(chat_id, token)
-        if nome:
-            await send_telegram(chat_id, f"Benvenuto <b>{nome}</b>! 🌙\n\nQuesto è il tuo contatto con le stelle. Profilo collegato correttamente.\n🌐 {SITE_URL}/sala?token={token}")
-        else:
+        sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+        res = sb.table("profiles").select("id, nome, email_verificata, access_token").eq("access_token", token).execute()
+        if not res.data:
             await send_telegram(chat_id, "Non ho trovato il tuo profilo. Rifai l'iscrizione.")
-        return {"ok": True}
-    if text == "/stop":
-        await unlink_telegram_account(chat_id)
-        await send_telegram(chat_id, "Va bene. Usa /start TOKEN per riattivare.")
-        return {"ok": True}
-    await send_telegram(chat_id, "Comando non riconosciuto.")
-    return {"ok": True}
-
-# =========================================================
-# CRON
-# =========================================================
-
-@app.post("/cron/oroscopo-settimanale")
-async def cron_oroscopo_settimanale(request: Request):
-    try:
-        if not CRON_SECRET: raise HTTPException(status_code=500, detail="CRON_SECRET non configurato.")
-        if request.headers.get("x-cron-secret", "") != CRON_SECRET: raise HTTPException(status_code=403, detail="Non autorizzato.")
-        if not SUPABASE_URL or not SUPABASE_KEY: raise HTTPException(status_code=500, detail="Supabase non configurato.")
-
-        sb = create_client(SUPABASE_URL, SUPABASE_KEY)
-        res = sb.table("profiles").select("*").execute()
-        utenti = [u for u in (res.data or []) if u.get("telegram_id")]
+            return {"ok": True}
         
-        adesso = datetime.now(timezone.utc)
-        inizio_settimana = adesso - timedelta(days=adesso.weekday(), hours=adesso.hour, minutes=adesso.minute, seconds=adesso.second)
-
-        inviati = 0
-        in_coda = 0
-        errori = 0
-
-        for u in utenti:
-            nome = u.get("nome", "?")
-            ultimo = u.get("ultimo_oroscopo_inviato")
-            if ultimo:
-                dt_ultimo = datetime.fromisoformat(ultimo.replace("Z", "+00:00"))
-                if dt_ultimo >= inizio_settimana:
-                    print(f"=== CRON: {nome} ha già ricevuto l'oroscopo questa settimana, salto. ===")
-                    continue
-
-            try:
-                tema = calcola_tema_completo(str(u["birth_date"]), str(u["birth_time"])[:5], float(u["birth_lat"]), float(u["birth_lon"]), 1.0)
-                report = genera_report_interno(u, tema, sb)
-                oroscopo = await genera_oroscopo_settimanale(report)
-
-                if not oroscopo:
-                    sb.table("coda_invii").insert({"profile_id": u["id"], "tipo": "oroscopo", "contenuto": "", "tentativi": 0}).execute()
-                    in_coda += 1
-                    continue
-
-                data_inizio = adesso.strftime("%d/%m")
-                data_fine = (adesso + timedelta(days=6)).strftime("%d/%m")
-                
-                testo = f"<b>Oroscopo settimanale dal {data_inizio} al {data_fine}</b>\n\n{oroscopo}\n\n🌐 <a href='{SITE_URL}/sala?token={u['access_token']}'>Approfondisci nella tua sala</a>"
-                
-                chat_id = int(u["telegram_id"])
-                await send_telegram(chat_id, testo)
-                
-                sb.table("profiles").update({"ultimo_oroscopo_inviato": adesso.isoformat()}).eq("id", u["id"]).execute()
-                inviati += 1
-                print(f"=== CRON: inviato a {nome} ===")
-            except Exception as e:
-                errori += 1
-                print(f"=== CRON: errore per {nome}: {e} ===")
-
-        return {"status": "ok", "inviati": inviati, "in_coda": in_coda, "errori": errori}
-    except HTTPException: raise
-    except Exception as e:
-        print(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"Errore: {e}")
-
-@app.post("/cron/recupera-coda")
-async def cron_recupera_coda(request: Request):
-    try:
-        if not CRON_SECRET: raise HTTPException(status_code=500, detail="CRON_SECRET non configurato.")
-        if request.headers.get("x-cron-secret", "") != CRON_SECRET: raise HTTPException(status_code=403, detail="Non autorizzato.")
-
-        sb = create_client(SUPABASE_URL, SUPABASE_KEY)
-        res = sb.table("coda_invii").select("*").lt("tentativi", 20).order("creato_il").limit(10).execute()
-        elementi = res.data or []
-
-        if not elementi: return {"status": "ok", "recuperati": 0}
-        recuperati = 0
-        falliti = 0
-
-        for el in elementi:
-            try:
-                prof_res = sb.table("profiles").select("*").eq("id", el["profile_id"]).execute()
-                if not prof_res.data:
-                    sb.table("coda_invii").delete().eq("id", el["id"]).execute()
-                    continue
-                u = prof_res.data[0]
-                
-                ultimo = u.get("ultimo_oroscopo_inviato")
-                if ultimo:
-                    dt_ultimo = datetime.fromisoformat(ultimo.replace("Z", "+00:00"))
-                    adesso = datetime.now(timezone.utc)
-                    inizio_settimana = adesso - timedelta(days=adesso.weekday(), hours=adesso.hour, minutes=adesso.minute, seconds=adesso.second)
-                    if dt_ultimo >= inizio_settimana:
-                        sb.table("coda_invii").delete().eq("id", el["id"]).execute()
-                        continue
-
-                tema = calcola_tema_completo(str(u["birth_date"]), str(u["birth_time"])[:5], float(u["birth_lat"]), float(u["birth_lon"]), 1.0)
-                report = genera_report_interno(u, tema, sb)
-                oroscopo = await genera_oroscopo_settimanale(report)
-
-                if not oroscopo:
-                    sb.table("coda_invii").update({"tentativi": (el.get("tentativi", 0) + 1), "ultimo_tentativo": datetime.now(timezone.utc).isoformat()}).eq("id", el["id"]).execute()
-                    falliti += 1
-                    continue
-
-                nome = u.get("nome", "")
+        prof = res.data[0]
+        if not prof.get("email_verificata"):
+            await send_telegram(chat_id, "Prima di collegare Telegram, devi verificare la tua email. Controlla la casella di posta.")
+            return {"ok": True}
+            
+        nome = prof["nome"]
+        sb.table("profiles").update({"telegram_id": str(chat_id)}).eq("access_token", token).execute()
+        await send_telegram(chat_id, f"Benvenuto <b>{nome}</b>! 🌙\n\nQuesto è il tuo contatto con le stelle. Profilo collegato correttamente.\n🌐 {SITE_URL}/sala?token={token}")
+        
+        # Se l'utente non ha mai ricevuto un oroscopo, glielo mandiamo ora
+        refreshed = sb.table("profiles").select("ultimo_oroscopo_inviato").eq("id", prof["id"]).execute().data[0]
+        if not refreshed.get("ultimo_oroscopo_inviato"):
+            tema = calcola_tema_completo(str(prof["birth_date"]), str(prof["birth_time"])[:5], float(prof["birth_lat"]), float(prof["birth_lon"]), 1.0)
+            report = genera_report_interno(prof, tema, sb)
+            oroscopo = await genera_oroscopo_settimanale(report)
+            if oroscopo:
                 adesso = datetime.now(timezone.utc)
                 data_inizio = adesso.strftime("%d/%m")
                 data_fine = (adesso + timedelta(days=6)).strftime("%d/%m")
-                testo = f"<b>Oroscopo settimanale dal {data_inizio} al {data_fine}</b>\n\n{oroscopo}\n\n🌐 <a href='{SITE_URL}/sala?token={u['access_token']}'>Approfondisci nella tua sala</a>"
-                
-                chat_id = int(u["telegram_id"])
-                await send_telegram(chat_id, testo)
-                
-                sb.table("profiles").update({"ultimo_oroscopo_inviato": adesso.isoformat()}).eq("id", u["id"]).execute()
-                sb.table("coda_invii").delete().eq("id", el["id"]).execute()
-                recuperati += 1
-            except Exception as e:
-                falliti += 1
-                print(f"=== CRON CODA: errore: {e} ===")
-
-        return {"status": "ok", "recuperati": recuperati, "falliti": falliti}
-    except HTTPException: raise
-    except Exception as e:
-        print(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"Errore: {e}")
-
-async def send_telegram(chat_id, text):
-    if not TELEGRAM_API: return
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            await client.post(f"{TELEGRAM_API}/sendMessage", json={"chat_id": chat_id, "text": text, "parse_mode": "HTML", "disable_web_page_preview": True})
-    except Exception as e:
-        print(f"Errore Telegram: {e}")
-
-async def link_telegram_account(chat_id, token):
-    sb = create_client(SUPABASE_URL, SUPABASE_KEY)
-    try:
-        res = sb.table("profiles").select("id, nome").eq("access_token", token).execute()
-        if not res.data: return None
-        nome = res.data[0]["nome"]
-        sb.table("profiles").update({"telegram_id": str(chat_id)}).eq("access_token", token).execute()
-        return nome
-    except Exception: return None
-
-async def unlink_telegram_account(chat_id):
-    sb = create_client(SUPABASE_URL, SUPABASE_KEY)
-    try:
-        sb.table("profiles").update({"telegram_id": None}).eq("telegram_id", str(chat_id)).execute()
-    except Exception: pass
+                testo = f"<b>Oroscopo settimanale dal {data_inizio} al {data_fine}</b>\n\n{oroscopo}\n\n🌐 <a href
