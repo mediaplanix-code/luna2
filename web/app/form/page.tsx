@@ -138,8 +138,11 @@ export default function FormPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || `Errore ${res.status}`);
       
-      localStorage.setItem('luna2_token_temp', data.access_token);
-      router.push('/verifica-inviata');
+      localStorage.setItem('luna2_token', data.access_token);
+      localStorage.setItem('luna2_nome', form.nome);
+      
+      // Vai direttamente in sala
+      router.push('/sala');
     } catch (err: any) {
       setError(err.message || 'Errore sconosciuto');
       setLoading(false);
