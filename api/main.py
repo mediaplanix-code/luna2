@@ -18,7 +18,7 @@ from transiti import calcola_transiti_lenti
 from report import assembla_report
 from ai import genera_oroscopo_settimanale, rispondi_chat, genera_copione_voce
 
-app = FastAPI(title="Luna2 Astro API", version="0.19.0")
+app = FastAPI(title="Luna2 Astro API", version="0.19.1")
 
 app.add_middleware(
     CORSMiddleware,
@@ -206,7 +206,7 @@ def root():
     return {
         "status": "ok",
         "service": "Luna2 Astro API",
-        "version": "0.19.0",
+        "version": "0.19.1",
         "supabase_configured": bool(SUPABASE_URL and SUPABASE_KEY),
         "telegram_configured": bool(TELEGRAM_TOKEN),
         "ai_provider": os.getenv("AI_PROVIDER", "groq"),
@@ -472,21 +472,34 @@ async def telegram_webhook(request: Request):
         prof = res.data[0]
         nome = prof["nome"]
         sb.table("profiles").update({"telegram_id": str(chat_id)}).eq("access_token", token).execute()
+        
+        # 1. Invia il saluto di benvenuto
         await send_telegram(chat_id, f"Benvenuto <b>{nome}</b>! 🌙\n\nQuesto è il tuo contatto con le stelle. Profilo collegato correttamente.\n🌐 {SITE_URL}/sala?token={token}")
         
-        # Invia l'oroscopo se non è mai stato inviato (controllo semplice: se il campo è vuoto)
-        refreshed = sb.table("profiles").select("*").eq("id", prof["id"]).execute().data[0]
-        if not refreshed.get("ultimo_oroscopo_inviato"):
+        # 2. Invia SEMPRE l'oroscopo al primo collegamento, senza controlli sul tempo
+        try:
+            # Ricarica i dati per essere sicuro di avere quelli freschi
+            refreshed = sb.table("profiles").select("*").eq("id", prof["id"]).execute().data[0]
+            
             tema = calcola_tema_completo(str(refreshed["birth_date"]), str(refreshed["birth_time"])[:5], float(refreshed["birth_lat"]), float(refreshed["birth_lon"]), 1.0)
             report = genera_report_interno(refreshed, tema, sb)
+            
+            # Genera l'oroscopo
             oroscopo = await genera_oroscopo_settimanale(report)
+            
             if oroscopo:
                 adesso = datetime.now(timezone.utc)
                 data_inizio = adesso.strftime("%d/%m")
                 data_fine = (adesso + timedelta(days=6)).strftime("%d/%m")
                 testo = f"<b>Oroscopo settimanale dal {data_inizio} al {data_fine}</b>\n\n{oroscopo}\n\n🌐 <a href='{SITE_URL}/sala?token={token}'>Approfondisci nella tua sala</a>"
                 await send_telegram(chat_id, testo)
+                
+                # Salva che l'oroscopo è stato inviato, così il cron non lo manderà di nuovo
                 sb.table("profiles").update({"ultimo_oroscopo_inviato": adesso.isoformat()}).eq("id", prof["id"]).execute()
+        except Exception as e:
+            print(f"Errore invio oroscopo in /start: {e}")
+            await send_telegram(chat_id, "C'è stato un piccolo problema con le stelle. Riprova più tardi o clicca /start di nuovo.")
+
         return {"ok": True}
         
     if text == "/stop":
