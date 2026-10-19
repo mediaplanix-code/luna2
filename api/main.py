@@ -18,7 +18,7 @@ from transiti import calcola_transiti_lenti
 from report import assembla_report
 from ai import genera_oroscopo_settimanale, rispondi_chat, genera_copione_voce
 
-app = FastAPI(title="Luna2 Astro API", version="0.18.1")
+app = FastAPI(title="Luna2 Astro API", version="0.19.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -95,6 +95,7 @@ class ChatRequest(BaseModel):
 
 class RecuperoRequest(BaseModel):
     email: str
+
 
 def lon_to_sign(lon: float) -> dict:
     lon = lon % 360
@@ -205,7 +206,7 @@ def root():
     return {
         "status": "ok",
         "service": "Luna2 Astro API",
-        "version": "0.18.1",
+        "version": "0.19.0",
         "supabase_configured": bool(SUPABASE_URL and SUPABASE_KEY),
         "telegram_configured": bool(TELEGRAM_TOKEN),
         "ai_provider": os.getenv("AI_PROVIDER", "groq"),
@@ -217,7 +218,7 @@ async def geocode(q: str = ""):
     if len(q) < 3: return {"features": []}
     url = "https://photon.komoot.io/api/"
     params = {"q": q, "limit": 5, "lang": "default"}
-    headers = {"User-Agent": "Luna2/0.18", "Accept": "application/json"}
+    headers = {"User-Agent": "Luna2/0.19", "Accept": "application/json"}
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.get(url, params=params, headers=headers)
@@ -473,7 +474,7 @@ async def telegram_webhook(request: Request):
         sb.table("profiles").update({"telegram_id": str(chat_id)}).eq("access_token", token).execute()
         await send_telegram(chat_id, f"Benvenuto <b>{nome}</b>! 🌙\n\nQuesto è il tuo contatto con le stelle. Profilo collegato correttamente.\n🌐 {SITE_URL}/sala?token={token}")
         
-        # Invia l'oroscopo se non è mai stato inviato
+        # Invia l'oroscopo se non è mai stato inviato (controllo semplice: se il campo è vuoto)
         refreshed = sb.table("profiles").select("*").eq("id", prof["id"]).execute().data[0]
         if not refreshed.get("ultimo_oroscopo_inviato"):
             tema = calcola_tema_completo(str(refreshed["birth_date"]), str(refreshed["birth_time"])[:5], float(refreshed["birth_lat"]), float(refreshed["birth_lon"]), 1.0)
@@ -625,7 +626,4 @@ async def send_telegram(chat_id, text):
         print(f"Errore Telegram: {e}")
 
 async def unlink_telegram_account(chat_id):
-    sb = create_client(SUPABASE_URL, SUPABASE_KEY)
-    try:
-        sb.table("profiles").update({"telegram_id": None}).eq("telegram_id", str(chat_id)).execute()
-    except Exception: pass
+    sb = create_client(
