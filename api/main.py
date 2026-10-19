@@ -626,4 +626,7 @@ async def send_telegram(chat_id, text):
         print(f"Errore Telegram: {e}")
 
 async def unlink_telegram_account(chat_id):
-    sb = create_client(
+    sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+    try:
+        sb.table("profiles").update({"telegram_id": None}).eq("telegram_id", str(chat_id)).execute()
+    except Exception: pass
