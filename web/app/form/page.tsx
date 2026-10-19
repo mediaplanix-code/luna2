@@ -57,7 +57,9 @@ export default function FormPage() {
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) setShowSuggestions(false);
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
     }
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
@@ -97,7 +99,7 @@ export default function FormPage() {
   }, [cityQuery]);
 
   function pickCity(s: CacheEntry) {
-    setForm({ ...form, birth_city: s.label, birth_country: s.country, birth_lat: s.lat, birth_lon: s.lon });
+    setForm(prev => ({ ...prev, birth_city: s.label, birth_country: s.country, birth_lat: s.lat, birth_lon: s.lon }));
     setCityQuery(s.label);
     setSuggestions([]);
     setShowSuggestions(false);
@@ -140,8 +142,6 @@ export default function FormPage() {
       
       localStorage.setItem('luna2_token', data.access_token);
       localStorage.setItem('luna2_nome', form.nome);
-      
-      // Vai direttamente in sala
       router.push('/sala');
     } catch (err: any) {
       setError(err.message || 'Errore sconosciuto');
