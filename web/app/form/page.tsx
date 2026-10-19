@@ -98,7 +98,9 @@ export default function FormPage() {
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [cityQuery]);
 
-  function pickCity(s: CacheEntry) {
+  // Funzione per selezionare la città (chiamata solo da onClick)
+  function pickCity(e: React.MouseEvent, s: CacheEntry) {
+    e.preventDefault(); // Evita che il focus chiuda la lista prima del tempo
     setForm(prev => ({ ...prev, birth_city: s.label, birth_country: s.country, birth_lat: s.lat, birth_lon: s.lon }));
     setCityQuery(s.label);
     setSuggestions([]);
@@ -170,7 +172,13 @@ export default function FormPage() {
             {showSuggestions && suggestions.length > 0 && (
               <ul className="city-suggestions">
                 {suggestions.map((s, i) => (
-                  <li key={i} onMouseDown={(e) => { e.preventDefault(); pickCity(s); }} onTouchStart={(e) => { e.preventDefault(); pickCity(s); }}>{s.label}</li>
+                  <li 
+                    key={i} 
+                    onClick={(e) => pickCity(e, s)}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    {s.label}
+                  </li>
                 ))}
               </ul>
             )}
