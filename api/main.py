@@ -19,7 +19,7 @@ from transiti import calcola_transiti_lenti
 from report import assembla_report
 from ai import genera_oroscopo_settimanale, rispondi_chat, genera_copione_voce
 
-app = FastAPI(title="Luna2 Astro API", version="0.21.1")
+app = FastAPI(title="Luna2 Astro API", version="0.22.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -196,7 +196,7 @@ def root():
     return {
         "status": "ok",
         "service": "Luna2 Astro API",
-        "version": "0.21.1",
+        "version": "0.22.0",
         "supabase_configured": bool(SUPABASE_URL and SUPABASE_KEY),
         "telegram_configured": bool(TELEGRAM_TOKEN),
         "ai_provider": os.getenv("AI_PROVIDER", "groq"),
@@ -208,7 +208,7 @@ async def geocode(q: str = ""):
     if len(q) < 3: return {"features": []}
     url = "https://photon.komoot.io/api/"
     params = {"q": q, "limit": 5, "lang": "default"}
-    headers = {"User-Agent": "Luna2/0.21", "Accept": "application/json"}
+    headers = {"User-Agent": "Luna2/0.22", "Accept": "application/json"}
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.get(url, params=params, headers=headers)
@@ -459,7 +459,7 @@ async def telegram_webhook(request: Request):
         # 1. Saluto
         await send_telegram(chat_id, f"Benvenuto <b>{nome}</b>! 🌙\n\nQuesto è il tuo contatto con le stelle. Profilo collegato correttamente.\n🌐 {SITE_URL}/sala?token={token}")
         
-        # 2. Pausa di 2 secondi per lasciare respirare Telegram e Groq
+        # 2. Pausa di 2 secondi
         await asyncio.sleep(2)
         
         # 3. Oroscopo immediato
@@ -491,6 +491,74 @@ async def telegram_webhook(request: Request):
         return {"ok": True}
     await send_telegram(chat_id, "Comando non riconosciuto.")
     return {"ok": True}
+
+# =========================================================
+# ENDPOINT PER LA CANCELLAZIONE
+# =========================================================
+
+@app.post("/disattiva-telegram/{token}")
+async def disattiva_telegram(token: str):
+    """Disattiva solo l'invio dei messaggi su Telegram, mantenendo il profilo."""
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        raise HTTPException(status_code=500, detail="Supabase non configurato")
+    try:
+        sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+        res = sb.table("profiles").select("id, telegram_id").eq("access_token", token).execute()
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Profilo non trovato")
+        profile = res.data[0]
+        
+        # Se ha Telegram, manda un ultimo saluto e scollega
+        if profile.get("telegram_id"):
+            try:
+                await send_telegram(int(profile["telegram_id"]), "Ciao! Come richiesto, non riceverai più messaggi su Telegram.\n\nSe cambi idea, torna nella tua sala per ricollegare il bot. 🌙")
+            except Exception:
+                pass
+            sb.table("profiles").update({"telegram_id": None}).eq("id", profile["id"]).execute()
+        
+        return {"status": "ok", "message": "Telegram disattivato."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/cancella-profilo/{token}")
+async def cancella_profilo(token: str):
+    """Cancella definitivamente il profilo e tutti i dati associati."""
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        raise HTTPException(status_code=500, detail="Supabase non configurato")
+    try:
+        sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+        res = sb.table("profiles").select("*").eq("access_token", token).execute()
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Profilo non trovato")
+        profile = res.data[0]
+        
+        # 1. Salva l'email in marketing_leads per future campagne (se non esiste già)
+        try:
+            sb.table("marketing_leads").upsert({
+                "email": profile.get("email"),
+                "nome": profile.get("nome"),
+                "cancellato_il": datetime.now(timezone.utc).isoformat(),
+            }).execute()
+        except Exception as e:
+            print(f"Errore salvataggio marketing_leads: {e}")
+        
+        # 2. Manda un ultimo messaggio su Telegram (se collegato)
+        if profile.get("telegram_id"):
+            try:
+                await send_telegram(int(profile["telegram_id"]), "Il tuo profilo su Luna Astrologica è stato cancellato. Grazie per aver viaggiato con noi. 🌙")
+            except Exception:
+                pass
+        
+        # 3. Cancella il profilo (le tabelle collegate vanno in cascata)
+        sb.table("profiles").delete().eq("id", profile["id"]).execute()
+        
+        return {"status": "ok", "message": "Profilo cancellato."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # =========================================================
 # CRON
@@ -577,52 +645,4 @@ async def cron_recupera_coda(request: Request):
                 if ultimo:
                     dt_ultimo = datetime.fromisoformat(ultimo.replace("Z", "+00:00"))
                     adesso = datetime.now(timezone.utc)
-                    inizio_settimana = adesso - timedelta(days=adesso.weekday(), hours=adesso.hour, minutes=adesso.minute, seconds=adesso.second)
-                    if dt_ultimo >= inizio_settimana:
-                        sb.table("coda_invii").delete().eq("id", el["id"]).execute()
-                        continue
-
-                tema = calcola_tema_completo(str(u["birth_date"]), str(u["birth_time"])[:5], float(u["birth_lat"]), float(u["birth_lon"]), 1.0)
-                report = genera_report_interno(u, tema, sb)
-                oroscopo = await genera_oroscopo_settimanale(report)
-
-                if not oroscopo:
-                    sb.table("coda_invii").update({"tentativi": (el.get("tentativi", 0) + 1), "ultimo_tentativo": datetime.now(timezone.utc).isoformat()}).eq("id", el["id"]).execute()
-                    falliti += 1
-                    continue
-
-                nome = u.get("nome", "")
-                adesso = datetime.now(timezone.utc)
-                data_inizio = adesso.strftime("%d/%m")
-                data_fine = (adesso + timedelta(days=6)).strftime("%d/%m")
-                testo = f"<b>Oroscopo settimanale dal {data_inizio} al {data_fine}</b>\n\n{oroscopo}\n\n🌐 <a href='{SITE_URL}/sala?token={u['access_token']}'>Approfondisci nella tua sala</a>"
-                
-                chat_id = int(u["telegram_id"])
-                await send_telegram(chat_id, testo)
-                
-                sb.table("profiles").update({"ultimo_oroscopo_inviato": adesso.isoformat()}).eq("id", u["id"]).execute()
-                sb.table("coda_invii").delete().eq("id", el["id"]).execute()
-                recuperati += 1
-            except Exception as e:
-                falliti += 1
-                print(f"=== CRON CODA: errore: {e} ===")
-
-        return {"status": "ok", "recuperati": recuperati, "falliti": falliti}
-    except HTTPException: raise
-    except Exception as e:
-        print(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"Errore: {e}")
-
-async def send_telegram(chat_id, text):
-    if not TELEGRAM_API: return
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            await client.post(f"{TELEGRAM_API}/sendMessage", json={"chat_id": chat_id, "text": text, "parse_mode": "HTML", "disable_web_page_preview": True})
-    except Exception as e:
-        print(f"Errore Telegram: {e}")
-
-async def unlink_telegram_account(chat_id):
-    sb = create_client(SUPABASE_URL, SUPABASE_KEY)
-    try:
-        sb.table("profiles").update({"telegram_id": None}).eq("telegram_id", str(chat_id)).execute()
-    except Exception: pass
+                    inizio_settimana = adesso - timedelta(days=adesso.weekday(), hours=
