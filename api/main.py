@@ -19,7 +19,7 @@ from transiti import calcola_transiti_lenti
 from report import assembla_report
 from ai import genera_oroscopo_settimanale, rispondi_chat, genera_copione_voce
 
-app = FastAPI(title="Luna2 Astro API", version="0.22.0")
+app = FastAPI(title="Luna2 Astro API", version="0.21.1")
 
 app.add_middleware(
     CORSMiddleware,
@@ -196,7 +196,7 @@ def root():
     return {
         "status": "ok",
         "service": "Luna2 Astro API",
-        "version": "0.22.0",
+        "version": "0.21.1",
         "supabase_configured": bool(SUPABASE_URL and SUPABASE_KEY),
         "telegram_configured": bool(TELEGRAM_TOKEN),
         "ai_provider": os.getenv("AI_PROVIDER", "groq"),
@@ -208,7 +208,7 @@ async def geocode(q: str = ""):
     if len(q) < 3: return {"features": []}
     url = "https://photon.komoot.io/api/"
     params = {"q": q, "limit": 5, "lang": "default"}
-    headers = {"User-Agent": "Luna2/0.22", "Accept": "application/json"}
+    headers = {"User-Agent": "Luna2/0.21", "Accept": "application/json"}
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.get(url, params=params, headers=headers)
@@ -491,70 +491,6 @@ async def telegram_webhook(request: Request):
         return {"ok": True}
     await send_telegram(chat_id, "Comando non riconosciuto.")
     return {"ok": True}
-
-# =========================================================
-# ENDPOINT PER LA CANCELLAZIONE
-# =========================================================
-
-@app.post("/disattiva-telegram/{token}")
-async def disattiva_telegram(token: str):
-    """Disattiva solo l'invio dei messaggi su Telegram, mantenendo il profilo."""
-    if not SUPABASE_URL or not SUPABASE_KEY:
-        raise HTTPException(status_code=500, detail="Supabase non configurato")
-    try:
-        sb = create_client(SUPABASE_URL, SUPABASE_KEY)
-        res = sb.table("profiles").select("id, telegram_id").eq("access_token", token).execute()
-        if not res.data:
-            raise HTTPException(status_code=404, detail="Profilo non trovato")
-        profile = res.data[0]
-        
-        if profile.get("telegram_id"):
-            try:
-                await send_telegram(int(profile["telegram_id"]), "Ciao! Come richiesto, non riceverai più messaggi su Telegram.\n\nSe cambi idea, torna nella tua sala per ricollegare il bot. 🌙")
-            except Exception:
-                pass
-            sb.table("profiles").update({"telegram_id": None}).eq("id", profile["id"]).execute()
-        
-        return {"status": "ok", "message": "Telegram disattivato."}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.delete("/cancella-profilo/{token}")
-async def cancella_profilo(token: str):
-    """Cancella definitivamente il profilo e tutti i dati associati."""
-    if not SUPABASE_URL or not SUPABASE_KEY:
-        raise HTTPException(status_code=500, detail="Supabase non configurato")
-    try:
-        sb = create_client(SUPABASE_URL, SUPABASE_KEY)
-        res = sb.table("profiles").select("*").eq("access_token", token).execute()
-        if not res.data:
-            raise HTTPException(status_code=404, detail="Profilo non trovato")
-        profile = res.data[0]
-        
-        try:
-            sb.table("marketing_leads").upsert({
-                "email": profile.get("email"),
-                "nome": profile.get("nome"),
-                "cancellato_il": datetime.now(timezone.utc).isoformat(),
-            }).execute()
-        except Exception as e:
-            print(f"Errore salvataggio marketing_leads: {e}")
-        
-        if profile.get("telegram_id"):
-            try:
-                await send_telegram(int(profile["telegram_id"]), "Il tuo profilo su Luna Astrologica è stato cancellato. Grazie per aver viaggiato con noi. 🌙")
-            except Exception:
-                pass
-        
-        sb.table("profiles").delete().eq("id", profile["id"]).execute()
-        
-        return {"status": "ok", "message": "Profilo cancellato."}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 # =========================================================
 # CRON
