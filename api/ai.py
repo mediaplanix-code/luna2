@@ -31,6 +31,7 @@ async def _chiama_provider(nome: str, url: str, api_key: str, modello: str, prom
         "messages": [{"role": "user", "content": prompt}],
         "max_tokens": max_tokens,
         "temperature": 0.7,
+        "reasoning_effort": "low",  # <--- FONDAMENTALE: riduce il "pensiero" interno
     }
 
     try:
@@ -73,21 +74,18 @@ async def _chiama_provider(nome: str, url: str, api_key: str, modello: str, prom
         return ""
 
 
-async def _chiama_ai(prompt: str, max_tokens: int = 1000) -> str:
+async def _chiama_ai(prompt: str, max_tokens: int = 800) -> str:
     """Prova Groq, poi DeepSeek. Se il primo tentativo restituisce vuoto, ritenta."""
     
-    # Tentativo 1: Groq
     risposta = await _chiama_provider("GROQ", GROQ_URL, GROQ_API_KEY, GROQ_MODELLO, prompt, max_tokens)
     if risposta:
         return risposta
 
-    # Tentativo 2: Groq di nuovo (a volte basta un secondo tentativo)
     print("=== AI: riprovo Groq una seconda volta ===")
     risposta = await _chiama_provider("GROQ", GROQ_URL, GROQ_API_KEY, GROQ_MODELLO, prompt, max_tokens)
     if risposta:
         return risposta
 
-    # Tentativo 3: DeepSeek
     risposta = await _chiama_provider("DEEPSEEK", DEEPSEEK_URL, DEEPSEEK_API_KEY, DEEPSEEK_MODELLO, prompt, max_tokens)
     if risposta:
         return risposta
@@ -112,7 +110,8 @@ REGOLE TASSATIVE:
 
 Scrivi il testo. Inizia con "Ciao {nome}," e poi 2-3 frasi."""
 
-    return await _chiama_ai(prompt, max_tokens=250)
+    # Aumentato a 800 per dare spazio al ragionamento + testo
+    return await _chiama_ai(prompt, max_tokens=800)
 
 
 async def rispondi_chat(report: dict, domanda: str, storico: list) -> str:
@@ -137,7 +136,7 @@ DOMANDA DI {nome}:
 
 Rispondi come astrologa."""
 
-    return await _chiama_ai(prompt, max_tokens=600)
+    return await _chiama_ai(prompt, max_tokens=800)
 
 
 async def genera_copione_voce(report: dict) -> str:
@@ -155,4 +154,4 @@ REPORT INTERNO:
 {riepilogo}
 
 Scrivi il copione di apertura."""
-    return await _chiama_ai(prompt, max_tokens=900)
+    return await _chiama_ai(prompt, max_tokens=1000)
