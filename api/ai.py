@@ -48,28 +48,51 @@ async def _chiama_provider(nome: str, url: str, api_key: str, modello: str, prom
             data = r.json()
             choices = data.get("choices", [])
             if not choices:
+                print(f"=== AI {nome}: nessuna scelta nella risposta ===")
                 return ""
 
-            testo = choices[0].get("message", {}).get("content", "")
+            choice = choices[0]
+            finish_reason = choice.get("finish_reason", "sconosciuto")
+            testo = choice.get("message", {}).get("content", "")
+            
             if not testo:
+                print(f"=== AI {nome}: contenuto vuoto. finish_reason: {finish_reason} ===")
                 return ""
 
+            print(f"=== AI {nome}: OK, {len(testo)} caratteri (finish_reason: {finish_reason}) ===")
             return testo
 
+    except httpx.TimeoutException:
+        print(f"=== AI {nome}: timeout (60s) ===")
+        return ""
+    except httpx.ConnectError as e:
+        print(f"=== AI {nome}: errore connessione: {e} ===")
+        return ""
     except Exception as e:
         print(f"=== AI {nome}: eccezione {type(e).__name__}: {e} ===")
         return ""
 
 
-async def _chiama_ai(prompt: str, max_tokens: int = 800) -> str:
+async def _chiama_ai(prompt: str, max_tokens: int = 1000) -> str:
+    """Prova Groq, poi DeepSeek. Se il primo tentativo restituisce vuoto, ritenta."""
+    
+    # Tentativo 1: Groq
     risposta = await _chiama_provider("GROQ", GROQ_URL, GROQ_API_KEY, GROQ_MODELLO, prompt, max_tokens)
     if risposta:
         return risposta
 
+    # Tentativo 2: Groq di nuovo (a volte basta un secondo tentativo)
+    print("=== AI: riprovo Groq una seconda volta ===")
+    risposta = await _chiama_provider("GROQ", GROQ_URL, GROQ_API_KEY, GROQ_MODELLO, prompt, max_tokens)
+    if risposta:
+        return risposta
+
+    # Tentativo 3: DeepSeek
     risposta = await _chiama_provider("DEEPSEEK", DEEPSEEK_URL, DEEPSEEK_API_KEY, DEEPSEEK_MODELLO, prompt, max_tokens)
     if risposta:
         return risposta
 
+    print("=== AI: tutti i tentativi falliti ===")
     return ""
 
 
@@ -89,7 +112,7 @@ REGOLE TASSATIVE:
 
 Scrivi il testo. Inizia con "Ciao {nome}," e poi 2-3 frasi."""
 
-    return await _chiama_ai(prompt, max_tokens=200)
+    return await _chiama_ai(prompt, max_tokens=250)
 
 
 async def rispondi_chat(report: dict, domanda: str, storico: list) -> str:
