@@ -659,4 +659,34 @@ async def cron_recupera_coda(request: Request):
                 adesso = datetime.now(timezone.utc)
                 data_inizio = adesso.strftime("%d/%m")
                 data_fine = (adesso + timedelta(days=6)).strftime("%d/%m")
-                testo = f"<b>Oroscopo settimanale dal {data_inizio} al {data_fine}</b>\n\n{oroscopo}\n
+                testo = f"<b>Oroscopo settimanale dal {data_inizio} al {data_fine}</b>\n\n{oroscopo}\n\n🌐 <a href='{SITE_URL}/sala?token={u['access_token']}'>Approfondisci nella tua sala</a>"
+                
+                chat_id = int(u["telegram_id"])
+                await send_telegram(chat_id, testo)
+                
+                sb.table("profiles").update({"ultimo_oroscopo_inviato": adesso.isoformat()}).eq("id", u["id"]).execute()
+                sb.table("coda_invii").delete().eq("id", el["id"]).execute()
+                recuperati += 1
+            except Exception as e:
+                falliti += 1
+                print(f"=== CRON CODA: errore: {e} ===")
+
+        return {"status": "ok", "recuperati": recuperati, "falliti": falliti}
+    except HTTPException: raise
+    except Exception as e:
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Errore: {e}")
+
+async def send_telegram(chat_id, text):
+    if not TELEGRAM_API: return
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            await client.post(f"{TELEGRAM_API}/sendMessage", json={"chat_id": chat_id, "text": text, "parse_mode": "HTML", "disable_web_page_preview": True})
+    except Exception as e:
+        print(f"Errore Telegram: {e}")
+
+async def unlink_telegram_account(chat_id):
+    sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+    try:
+        sb.table("profiles").update({"telegram_id": None}).eq("telegram_id", str(chat_id)).execute()
+    except Exception: pass
