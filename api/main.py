@@ -6,6 +6,7 @@ import os
 import traceback
 import random
 import string
+import asyncio
 from datetime import datetime, timezone, timedelta
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,7 +19,7 @@ from transiti import calcola_transiti_lenti
 from report import assembla_report
 from ai import genera_oroscopo_settimanale, rispondi_chat, genera_copione_voce
 
-app = FastAPI(title="Luna2 Astro API", version="0.21.0")
+app = FastAPI(title="Luna2 Astro API", version="0.21.1")
 
 app.add_middleware(
     CORSMiddleware,
@@ -195,7 +196,7 @@ def root():
     return {
         "status": "ok",
         "service": "Luna2 Astro API",
-        "version": "0.21.0",
+        "version": "0.21.1",
         "supabase_configured": bool(SUPABASE_URL and SUPABASE_KEY),
         "telegram_configured": bool(TELEGRAM_TOKEN),
         "ai_provider": os.getenv("AI_PROVIDER", "groq"),
@@ -225,8 +226,6 @@ async def onboarding(req: OnboardingRequest):
             raise HTTPException(status_code=400, detail="Coordinate di nascita mancanti.")
 
         email_lower = req.email.strip().lower()
-        dominio = email_lower.split("@")[-1]
-        # Il blocco delle email temporanee è stato rimosso per evitare blocchi indesiderati
         
         lat, lon = req.birth_lat, req.birth_lon
         tema = calcola_tema_completo(req.birth_date, req.birth_time, lat, lon, 1.0)
@@ -460,22 +459,29 @@ async def telegram_webhook(request: Request):
         # 1. Saluto
         await send_telegram(chat_id, f"Benvenuto <b>{nome}</b>! 🌙\n\nQuesto è il tuo contatto con le stelle. Profilo collegato correttamente.\n🌐 {SITE_URL}/sala?token={token}")
         
-        # 2. Oroscopo immediato
+        # 2. Pausa di 2 secondi per lasciare respirare Telegram e Groq
+        await asyncio.sleep(2)
+        
+        # 3. Oroscopo immediato
         try:
             tema = calcola_tema_completo(str(prof["birth_date"]), str(prof["birth_time"])[:5], float(prof["birth_lat"]), float(prof["birth_lon"]), 1.0)
             report = genera_report_interno(prof, tema, sb)
             
             oroscopo = await genera_oroscopo_settimanale(report)
             
-            if oroscopo:
+            if oroscopo and not oroscopo.startswith("ERRORE"):
                 adesso = datetime.now(timezone.utc)
                 data_inizio = adesso.strftime("%d/%m")
                 data_fine = (adesso + timedelta(days=6)).strftime("%d/%m")
                 testo = f"<b>Oroscopo settimanale dal {data_inizio} al {data_fine}</b>\n\n{oroscopo}\n\n🌐 <a href='{SITE_URL}/sala?token={token}'>Approfondisci nella tua sala</a>"
                 await send_telegram(chat_id, testo)
                 sb.table("profiles").update({"ultimo_oroscopo_inviato": adesso.isoformat()}).eq("id", prof["id"]).execute()
+            else:
+                print(f"=== ERRORE GENERAZIONE OROSCOPO: {oroscopo} ===")
+                await send_telegram(chat_id, "Le stelle sono un po' confuse in questo momento. Riprova più tardi.")
         except Exception as e:
-            print(f"Errore oroscopo: {e}")
+            print(f"=== ECCEZIONE OROSCOPO: {e} ===")
+            await send_telegram(chat_id, "C'è stato un problema con le stelle. Riprova più tardi.")
 
         return {"ok": True}
         
