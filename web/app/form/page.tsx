@@ -55,14 +55,15 @@ export default function FormPage() {
   useEffect(() => { cacheRef.current = caricaCache(); }, []);
   const update = (k: string, v: any) => setForm({ ...form, [k]: v });
 
+  // Chiude la tendina se si clicca fuori
   useEffect(() => {
-    function handleClick(e: MouseEvent) {
+    function handleClickOutside(e: MouseEvent) {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
         setShowSuggestions(false);
       }
     }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   useEffect(() => {
@@ -98,9 +99,10 @@ export default function FormPage() {
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [cityQuery]);
 
+  // Funzione per selezionare la città
   function pickCity(e: React.MouseEvent, s: CacheEntry) {
-    e.preventDefault(); 
-    e.stopPropagation(); 
+    e.preventDefault();
+    e.stopPropagation();
     setForm(prev => ({ ...prev, birth_city: s.label, birth_country: s.country, birth_lat: s.lat, birth_lon: s.lon }));
     setCityQuery(s.label);
     setSuggestions([]);
@@ -164,18 +166,33 @@ export default function FormPage() {
         <div className="field"><label>Email</label><input type="email" value={form.email} onChange={(e) => update('email', e.target.value)} required /></div>
         <div className="field"><label>Data di nascita</label><input type="date" value={form.birth_date} onChange={(e) => update('birth_date', e.target.value)} required /></div>
         <div className="field"><label>Ora di nascita (esatta)</label><input type="time" value={form.birth_time} onChange={(e) => update('birth_time', e.target.value)} required /><div className="hint">Serve per calcolare correttamente Ascendente e Case.</div></div>
+        
         <div className="field">
           <label>Città di nascita</label>
           <div ref={wrapperRef} className="city-wrap">
-            <input value={cityQuery} onChange={(e) => setCityQuery(e.target.value)} placeholder="es. Roma" autoComplete="off" required />
+            <input 
+              value={cityQuery} 
+              onChange={(e) => setCityQuery(e.target.value)} 
+              placeholder="es. Roma" 
+              autoComplete="off" 
+              required 
+              // Aggiungiamo un controllo: se clicchi fuori, non chiudere subito
+              onBlur={(e) => {
+                // Se il click non è sulla lista, chiudi
+                if (wrapperRef.current && !wrapperRef.current.contains(e.relatedTarget as Node)) {
+                   setShowSuggestions(false);
+                }
+              }}
+            />
             {loadingCity && <div className="city-loading">Cerco…</div>}
             {showSuggestions && suggestions.length > 0 && (
               <ul className="city-suggestions">
                 {suggestions.map((s, i) => (
                   <li 
                     key={i} 
-                    onMouseDown={(e) => pickCity(e, s)}
-                    style={{ cursor: 'pointer' }}
+                    // onMouseDown cattura il click prima che l'input perda il focus
+                    onMouseDown={(e) => pickCity(e, s)} 
+                    style={{ cursor: 'pointer', padding: '8px' }}
                   >
                     {s.label}
                   </li>
@@ -185,6 +202,7 @@ export default function FormPage() {
           </div>
           <div className="hint">Scrivi 2-3 lettere e scegli dalla lista.</div>
         </div>
+
         <button type="submit" className="cta" disabled={loading} style={{ marginTop: '22px' }}>{loading ? 'Calcolo in corso...' : 'Scopri il tuo tema natale'}</button>
         {error && <div className="error" style={{ marginTop: '14px' }}>{error}</div>}
       </form>
