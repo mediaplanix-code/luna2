@@ -17,10 +17,10 @@ from supabase import create_client
 
 from transiti import calcola_transiti_lenti
 from report import assembla_report
-from ai import genera_oroscopo_settimanale, rispondi_chat, genera_copione_voce, rispondi_chat_compatibilita, genera_copione_voce_compatibilita
+from ai import genera_oroscopo_settimanale, rispondi_chat, genera_copione_voce, rispondi_chat_compatibilita, genera_copione_voce_compatibilita, genera_settori_tema, rispondi_chat_tema, genera_copione_voce_tema
 from compatibilita import router as compatibilita_router
 
-app = FastAPI(title="Luna2 Astro API", version="0.24.0")
+app = FastAPI(title="Luna2 Astro API", version="0.25.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -199,7 +199,7 @@ def root():
     return {
         "status": "ok",
         "service": "Luna2 Astro API",
-        "version": "0.24.0",
+        "version": "0.25.0",
         "supabase_configured": bool(SUPABASE_URL and SUPABASE_KEY),
         "telegram_configured": bool(TELEGRAM_TOKEN),
         "ai_provider": os.getenv("AI_PROVIDER", "groq"),
@@ -212,7 +212,7 @@ async def geocode(q: str = ""):
     if len(q) < 3: return {"features": []}
     url = "https://photon.komoot.io/api/"
     params = {"q": q, "limit": 5, "lang": "default"}
-    headers = {"User-Agent": "Luna2/0.24", "Accept": "application/json"}
+    headers = {"User-Agent": "Luna2/0.25", "Accept": "application/json"}
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.get(url, params=params, headers=headers)
@@ -337,6 +337,7 @@ async def get_sala(token: str):
             "is_paying": profile.get("is_paying", False),
             "telegram_id": profile.get("telegram_id"),
             "compatibilita_usate": profile.get("compatibilita_usate", 0),
+            "ultima_compatibilita": profile.get("ultima_compatibilita"),
         },
         "chart": {
             "planets": tema["planets"], "planets_in_houses": tema["planets_in_houses"],
@@ -345,6 +346,22 @@ async def get_sala(token: str):
         },
         "transits": transits_data,
     }
+
+@app.get("/settori/{token}")
+async def get_settori(token: str):
+    sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+    res = sb.table("profiles").select("*").eq("access_token", token).execute()
+    if not res.data: raise HTTPException(status_code=404, detail="Profilo non trovato")
+    profile = res.data[0]
+    
+    tema = calcola_tema_completo(
+        str(profile["birth_date"]), str(profile["birth_time"])[:5],
+        float(profile["birth_lat"]), float(profile["birth_lon"]), 1.0,
+    )
+    report = genera_report_interno(profile, tema, sb)
+    
+    settori = await genera_settori_tema(report)
+    return settori
 
 @app.get("/report/{token}")
 async def get_report(token: str):
@@ -390,15 +407,18 @@ async def chat_endpoint(token: str, req: ChatRequest, focus: str = None):
         raise HTTPException(status_code=402, detail=f"Hai esaurito le {limite} domande gratuite.")
     
     if focus and focus.startswith("compatibilita"):
-        # Usa la chat specializzata nella compatibilità
         dati_comp = profile.get("ultima_compatibilita")
         if not dati_comp:
             raise HTTPException(status_code=400, detail="Nessun confronto recente trovato. Fai prima un confronto.")
         
         tipo_focus = focus.replace("compatibilita_", "") if focus != "compatibilita" else "generico"
         risposta = await rispondi_chat_compatibilita(dati_comp, tipo_focus, req.domanda, req.storico)
+    elif focus and focus.startswith("tema"):
+        tema = calcola_tema_completo(str(profile["birth_date"]), str(profile["birth_time"])[:5], float(profile["birth_lat"]), float(profile["birth_lon"]), 1.0)
+        report = genera_report_interno(profile, tema, sb)
+        tipo_focus = focus.replace("tema_", "")
+        risposta = await rispondi_chat_tema(report, tipo_focus, req.domanda, req.storico)
     else:
-        # Chat normale
         tema = calcola_tema_completo(str(profile["birth_date"]), str(profile["birth_time"])[:5], float(profile["birth_lat"]), float(profile["birth_lon"]), 1.0)
         report = genera_report_interno(profile, tema, sb)
         risposta = await rispondi_chat(report, req.domanda, req.storico)
@@ -423,10 +443,15 @@ async def get_copione_voce(token: str, focus: str = None):
     if focus and focus.startswith("compatibilita"):
         dati_comp = profile.get("ultima_compatibilita")
         if not dati_comp:
-            raise HTTPException(status_code=400, detail="Nessun confronto recente trovato. Fai prima un confronto.")
+            raise HTTPException(status_code=400, detail="Nessun confronto recente trovato.")
         
         tipo_focus = focus.replace("compatibilita_", "") if focus != "compatibilita" else "generico"
         copione = await genera_copione_voce_compatibilita(dati_comp, tipo_focus)
+    elif focus and focus.startswith("tema"):
+        tema = calcola_tema_completo(str(profile["birth_date"]), str(profile["birth_time"])[:5], float(profile["birth_lat"]), float(profile["birth_lon"]), 1.0)
+        report = genera_report_interno(profile, tema, sb)
+        tipo_focus = focus.replace("tema_", "")
+        copione = await genera_copione_voce_tema(report, tipo_focus)
     else:
         tema = calcola_tema_completo(str(profile["birth_date"]), str(profile["birth_time"])[:5], float(profile["birth_lat"]), float(profile["birth_lon"]), 1.0)
         report = genera_report_interno(profile, tema, sb)
@@ -588,60 +613,4 @@ async def cron_recupera_coda(request: Request):
             try:
                 prof_res = sb.table("profiles").select("*").eq("id", el["profile_id"]).execute()
                 if not prof_res.data:
-                    sb.table("coda_invii").delete().eq("id", el["id"]).execute()
-                    continue
-                u = prof_res.data[0]
-
-                ultimo = u.get("ultimo_oroscopo_inviato")
-                if ultimo:
-                    dt_ultimo = datetime.fromisoformat(ultimo.replace("Z", "+00:00"))
-                    adesso = datetime.now(timezone.utc)
-                    inizio_settimana = adesso - timedelta(days=adesso.weekday(), hours=adesso.hour, minutes=adesso.minute, seconds=adesso.second)
-                    if dt_ultimo >= inizio_settimana:
-                        sb.table("coda_invii").delete().eq("id", el["id"]).execute()
-                        continue
-
-                tema = calcola_tema_completo(str(u["birth_date"]), str(u["birth_time"])[:5], float(u["birth_lat"]), float(u["birth_lon"]), 1.0)
-                report = genera_report_interno(u, tema, sb)
-                oroscopo = await genera_oroscopo_settimanale(report)
-
-                if not oroscopo:
-                    sb.table("coda_invii").update({"tentativi": (el.get("tentativi", 0) + 1), "ultimo_tentativo": datetime.now(timezone.utc).isoformat()}).eq("id", el["id"]).execute()
-                    falliti += 1
-                    continue
-
-                nome = u.get("nome", "")
-                adesso = datetime.now(timezone.utc)
-                data_inizio = adesso.strftime("%d/%m")
-                data_fine = (adesso + timedelta(days=6)).strftime("%d/%m")
-                testo = f"<b>Oroscopo settimanale dal {data_inizio} al {data_fine}</b>\n\n{oroscopo}\n\n🌐 <a href='{SITE_URL}/sala?token={u['access_token']}'>Approfondisci nella tua sala</a>"
-                
-                chat_id = int(u["telegram_id"])
-                await send_telegram(chat_id, testo)
-                
-                sb.table("profiles").update({"ultimo_oroscopo_inviato": adesso.isoformat()}).eq("id", u["id"]).execute()
-                sb.table("coda_invii").delete().eq("id", el["id"]).execute()
-                recuperati += 1
-            except Exception as e:
-                falliti += 1
-                print(f"=== CRON CODA: errore: {e} ===")
-
-        return {"status": "ok", "recuperati": recuperati, "falliti": falliti}
-    except HTTPException: raise
-    except Exception as e:
-        print(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"Errore: {e}")
-
-async def send_telegram(chat_id, text):
-    if not TELEGRAM_API: return
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            await client.post(f"{TELEGRAM_API}/sendMessage", json={"chat_id": chat_id, "text": text, "parse_mode": "HTML", "disable_web_page_preview": True})
-    except Exception as e:
-        print(f"Errore Telegram: {e}")
-
-async def unlink_telegram_account(chat_id):
-    sb = create_client(SUPABASE_URL, SUPABASE_KEY)
-    try:
-        sb.table("profiles").update({"telegram_id": None}).eq("telegram_id", str(chat_id)).execute()
-    except Exception: pass
+                    sb.table("coda_invii").
