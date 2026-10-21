@@ -17,6 +17,9 @@ PIANETI = {
     "Plutone": swe.PLUTO, "NodoNord": swe.TRUE_NODE, "Chirone": swe.CHIRON,
 }
 
+SEGNI = ["Ariete", "Toro", "Gemelli", "Cancro", "Leone", "Vergine",
+         "Bilancia", "Scorpione", "Sagittario", "Capricorno", "Acquario", "Pesci"]
+
 ASPETTI = {"congiunzione": (0, 8), "sestile": (60, 4), "quadratura": (90, 6), "trigono": (120, 6), "opposizione": (180, 8)}
 
 class PersonaB(BaseModel):
@@ -65,39 +68,31 @@ async def calcola_compatibilita(token: str, persona_b: PersonaB):
     tema_a = calcola_pianeti(jd_a)
     tema_b = calcola_pianeti(jd_b)
 
+    # Calcola gli aspetti tra A e B
     aspetti = []
-    punteggio_totale = 0
-    num_aspetti = 0
-
-    for p_a, pos_a in tema_a.items():
-        for p_b, pos_b in tema_b.items():
-            diff = abs(pos_a - pos_b)
+    for p_a, lon_a in tema_a.items():
+        for p_b, lon_b in tema_b.items():
+            diff = abs(lon_a - lon_b)
             diff = min(diff, 360 - diff)
             
             for nome_asp, (ang, orb) in ASPETTI.items():
                 if abs(diff - ang) <= orb:
-                    punteggio = 0
-                    if nome_asp == "trigono": punteggio = 10
-                    elif nome_asp == "sestile": punteggio = 8
-                    elif nome_asp == "congiunzione": punteggio = 6
-                    elif nome_asp == "quadratura": punteggio = 3
-                    elif nome_asp == "opposizione": punteggio = 2
-                    
                     aspetti.append({
-                        "pianeta_a": p_a, "pianeta_b": p_b,
-                        "tipo": nome_asp, "orb": round(abs(diff - ang), 2),
-                        "punteggio": punteggio
+                        "pianeta_a": p_a,
+                        "pianeta_b": p_b,
+                        "tipo": nome_asp,
+                        "orb": round(abs(diff - ang), 2)
                     })
-                    punteggio_totale += punteggio
-                    num_aspetti += 1
 
-    if num_aspetti > 0:
-        media = punteggio_totale / num_aspetti
-        percentuale = min(100, int(50 + (media * 5)))
-    else:
-        percentuale = 50
-
-    aspetti.sort(key=lambda x: x["punteggio"], reverse=True)
+    # Pulisce i pianeti di B per il frontend
+    pianeti_b = {}
+    for nome, lon in tema_b.items():
+        segno_idx = int(lon // 30)
+        pianeti_b[nome] = {
+            "longitude": lon,
+            "segno": SEGNI[segno_idx],
+            "grado": round(lon % 30, 2)
+        }
 
     usate = persona_a.get("compatibilita_usate", 0) or 0
     sb.table("profiles").update({"compatibilita_usate": usate + 1}).eq("id", persona_a["id"]).execute()
@@ -105,7 +100,7 @@ async def calcola_compatibilita(token: str, persona_b: PersonaB):
     return {
         "persona_a": persona_a["nome"],
         "persona_b": persona_b.nome,
-        "percentuale": percentuale,
-        "aspetti": aspetti[:10],
-        "totale_aspetti_trovati": num_aspetti
+        "pianeti_b": pianeti_b,
+        "aspetti": aspetti[:15],
+        "totale_aspetti": len(aspetti)
     }
