@@ -113,7 +113,7 @@ REGOLE TASSATIVE:
 - Tono: caldo, diretto, professionale.
 - NON usare MAI asterischi o markdown, solo testo fluido.
 - Dai una risposta soddisfacente ma NON spiegare TUTTO. Lascia un velo di mistero.
-- Chiudi sempre con una frase che suggerisce che c'è un livello più profondo da scoprire, qualcosa che solo un consulto approfondito può svelare.
+- Chiudi sempre con una frase che suggerisce che c'è un livello più profondo da scoprire.
 
 REPORT INTERNO:
 {riepilogo}
@@ -130,8 +130,6 @@ Rispondi come astrologa."""
 
 
 async def rispondi_chat_compatibilita(dati_compatibilita: dict, focus: str, domanda: str, storico: list) -> str:
-    """Chat specializzata nella compatibilità, con focus specifico."""
-    
     nome_a = dati_compatibilita.get("persona_a", "Utente")
     nome_b = dati_compatibilita.get("persona_b", "l'altra persona")
     
@@ -140,13 +138,13 @@ async def rispondi_chat_compatibilita(dati_compatibilita: dict, focus: str, doma
         aspetti_testo += f"- {a['pianeta_a']} {a['tipo']} {a['pianeta_b']} (orbe {a['orb']}°)\n"
 
     if focus == "amore":
-        istruzione_focus = f"Stai parlando SOLO ed ESCLUSIVAMENTE della compatibilità AMOROSA tra {nome_a} e {nome_b}. Analizza gli aspetti tra Venere, Marte e Luna, e spiega cosa significano per la loro relazione sentimentale. Non parlare di lavoro, salute o altri argomenti."
+        istruzione_focus = f"Stai parlando SOLO ed ESCLUSIVAMENTE della compatibilità AMOROSA tra {nome_a} e {nome_b}. Analizza gli aspetti tra Venere, Marte e Luna. Non parlare di lavoro, salute o altri argomenti."
     elif focus == "lavoro":
-        istruzione_focus = f"Stai parlando SOLO ed ESCLUSIVAMENTE della compatibilità LAVORATIVA tra {nome_a} e {nome_b}. Analizza gli aspetti tra Sole, Saturno e Mercurio, e spiega come possono collaborare. Non parlare di amore, salute o altri argomenti."
+        istruzione_focus = f"Stai parlando SOLO ed ESCLUSIVAMENTE della compatibilità LAVORATIVA tra {nome_a} e {nome_b}. Analizza gli aspetti tra Sole, Saturno e Mercurio. Non parlare di amore, salute o altri argomenti."
     elif focus == "salute":
-        istruzione_focus = f"Stai parlando SOLO ed ESCLUSIVAMENTE della compatibilità relativa alla SALUTE e al BENESSERE tra {nome_a} e {nome_b}. Analizza gli aspetti tra Luna, Nettuno e gli altri pianeti, e spiega come si sostengono energeticamente. Non parlare di amore, lavoro o altri argomenti."
+        istruzione_focus = f"Stai parlando SOLO ed ESCLUSIVAMENTE della compatibilità relativa alla SALUTE e al BENESSERE tra {nome_a} e {nome_b}. Analizza gli aspetti tra Luna, Nettuno e gli altri pianeti. Non parlare di amore, lavoro o altri argomenti."
     elif focus == "crescita":
-        istruzione_focus = f"Stai parlando SOLO ed ESCLUSIVAMENTE della CRESCITA PERSONALE e del CAMMINO KARMICO tra {nome_a} e {nome_b}. Analizza gli aspetti tra NodoNord, Saturno e gli altri pianeti, e spiega come questa relazione stimola la crescita. Non parlare di amore, lavoro o altri argomenti."
+        istruzione_focus = f"Stai parlando SOLO ed ESCLUSIVAMENTE della CRESCITA PERSONALE e del CAMMINO KARMICO tra {nome_a} e {nome_b}. Analizza gli aspetti tra NodoNord, Saturno e gli altri pianeti. Non parlare di amore, lavoro o altri argomenti."
     elif focus == "previsioni":
         istruzione_focus = f"Stai parlando SOLO ed ESCLUSIVAMENTE delle PREVISIONI e dei TRANSITI per questa coppia. Analizza gli aspetti e spiega cosa possono aspettarsi nei prossimi mesi. Non parlare di amore, lavoro o altri argomenti."
     else:
@@ -166,7 +164,7 @@ REGOLE TASSATIVE:
 - Tono: caldo, diretto, professionale.
 - NON usare MAI asterischi o markdown, solo testo fluido.
 - Dai una risposta soddisfacente ma NON spiegare TUTTO. Lascia un velo di mistero.
-- Chiudi sempre con una frase che suggerisce che c'è un livello più profondo da scoprire, qualcosa che solo un consulto approfondito può svelare.
+- Chiudi sempre con una frase che suggerisce che c'è un livello più profondo da scoprire.
 
 Ecco i dati tecnici del loro confronto (ASPETTI):
 {aspetti_testo}
@@ -175,6 +173,53 @@ CONVERSAZIONE PRECEDENTE:
 {storico_testo}
 
 DOMANDA DI {nome_a}:
+{domanda}
+
+Rispondi come astrologa."""
+
+    return await _chiama_ai(prompt, max_tokens=600)
+
+
+async def rispondi_chat_tema(report: dict, focus: str, domanda: str, storico: list) -> str:
+    riepilogo = report.get("riepilogo_testuale", "")
+    nome = report.get("profile", {}).get("nome", "utente")
+
+    if focus == "amore":
+        istruzione_focus = "Stai parlando SOLO ed ESCLUSIVAMENTE della vita AMOROSA e delle RELAZIONI. Analizza Venere, Marte e Luna nel tema natale. Non divagare."
+    elif focus == "lavoro":
+        istruzione_focus = "Stai parlando SOLO ed ESCLUSIVAMENTE del LAVORO, CARRIERA e FINANZE. Analizza la Decima Casa, Saturno e Mercurio. Non divagare."
+    elif focus == "salute":
+        istruzione_focus = "Stai parlando SOLO ed ESCLUSIVAMENTE della SALUTE e del BENESSERE. Analizza la Sesta Casa, Luna e Nettuno. Non divagare."
+    elif focus == "crescita":
+        istruzione_focus = "Stai parlando SOLO ed ESCLUSIVAMENTE della CRESCITA PERSONALE e del CAMMINO KARMICO. Analizza il Nodo Nord e Saturno. Non divagare."
+    elif focus == "previsioni":
+        istruzione_focus = "Stai parlando SOLO ed ESCLUSIVAMENTE delle PREVISIONI per i prossimi mesi. Analizza i transiti lenti. Non divagare."
+    else:
+        istruzione_focus = "Stai parlando del tema natale in generale."
+
+    storico_testo = ""
+    for m in storico[-6:]:
+        ruolo = "Utente" if m.get("role") == "user" else "Astrologa"
+        storico_testo += f"{ruolo}: {m.get('content', '')}\n"
+
+    prompt = f"""Sei un'astrologa italiana esperta. Stai parlando con {nome}.
+
+{istruzione_focus}
+
+REGOLE TASSATIVE:
+- Massimo 70 parole.
+- Tono: caldo, diretto, professionale.
+- NON usare MAI asterischi o markdown, solo testo fluido.
+- Dai una risposta soddisfacente ma NON spiegare TUTTO. Lascia un velo di mistero.
+- Chiudi sempre con una frase che suggerisce che c'è un livello più profondo da scoprire.
+
+REPORT INTERNO:
+{riepilogo}
+
+CONVERSAZIONE PRECEDENTE:
+{storico_testo}
+
+DOMANDA DI {nome}:
 {domanda}
 
 Rispondi come astrologa."""
@@ -201,8 +246,6 @@ Scrivi il copione di apertura."""
 
 
 async def genera_copione_voce_compatibilita(dati_compatibilita: dict, focus: str) -> str:
-    """Genera il copione per la voce, specifico per il focus di compatibilità."""
-    
     nome_a = dati_compatibilita.get("persona_a", "Utente")
     nome_b = dati_compatibilita.get("persona_b", "l'altra persona")
     
@@ -211,22 +254,101 @@ async def genera_copione_voce_compatibilita(dati_compatibilita: dict, focus: str
         aspetti_testo += f"- {a['pianeta_a']} {a['tipo']} {a['pianeta_b']} (orbe {a['orb']}°)\n"
 
     if focus == "amore":
-        istruzione_focus = f"Stai per parlare al telefono con {nome_a} della sua compatibilità AMOROSA con {nome_b}. Apri la conversazione parlando degli aspetti tra Venere, Marte e Luna. Non divagare su altri argomenti."
+        istruzione_focus = f"Stai per parlare al telefono con {nome_a} della sua compatibilità AMOROSA con {nome_b}. Apri la conversazione parlando degli aspetti tra Venere, Marte e Luna."
     elif focus == "lavoro":
-        istruzione_focus = f"Stai per parlare al telefono con {nome_a} della sua compatibilità LAVORATIVA con {nome_b}. Apri la conversazione parlando degli aspetti tra Sole, Saturno e Mercurio. Non divagare su altri argomenti."
+        istruzione_focus = f"Stai per parlare al telefono con {nome_a} della sua compatibilità LAVORATIVA con {nome_b}. Apri la conversazione parlando degli aspetti tra Sole, Saturno e Mercurio."
     elif focus == "salute":
-        istruzione_focus = f"Stai per parlare al telefono con {nome_a} della compatibilità relativa alla SALUTE con {nome_b}. Apri la conversazione parlando degli aspetti tra Luna e Nettuno. Non divagare su altri argomenti."
+        istruzione_focus = f"Stai per parlare al telefono con {nome_a} della compatibilità relativa alla SALUTE con {nome_b}. Apri la conversazione parlando degli aspetti tra Luna e Nettuno."
     elif focus == "crescita":
-        istruzione_focus = f"Stai per parlare al telefono con {nome_a} della CRESCITA PERSONALE legata a {nome_b}. Apri la conversazione parlando degli aspetti tra NodoNord e Saturno. Non divagare su altri argomenti."
+        istruzione_focus = f"Stai per parlare al telefono con {nome_a} della CRESCITA PERSONALE legata a {nome_b}. Apri la conversazione parlando degli aspetti tra NodoNord e Saturno."
     elif focus == "previsioni":
-        istruzione_focus = f"Stai per parlare al telefono con {nome_a} delle PREVISIONI per la coppia con {nome_b}. Apri la conversazione parlando dei transiti futuri. Non divagare su altri argomenti."
+        istruzione_focus = f"Stai per parlare al telefono con {nome_a} delle PREVISIONI per la coppia con {nome_b}. Apri la conversazione parlando dei transiti futuri."
     else:
-        istruzione_focus = f"Stai per parlare al telefono con {nome_a} della sua COMPATIBILITÀ GENERALE con {nome_b}. Apri la conversazione parlando dei loro aspetti principali."
+        istruzione_focus = f"Stai per parlare al telefono con {nome_a} della sua COMPATIBILITÀ GENERALE con {nome_b}."
 
     prompt = f"""{istruzione_focus}
 
 Ecco i dati tecnici del loro confronto:
 {aspetti_testo}
+
+Scrivi il copione di apertura (circa 2 minuti). Tono: caldo, diretto, mistico ma professionale. Non usare asterischi o markdown. Struttura:
+
+1. Saluto personalizzato
+2. Introduzione all'argomento specifico
+3. Apertura alla conversazione ("dimmi cosa ti risuona di più")
+
+Scrivi il copione."""
+
+    return await _chiama_ai(prompt, max_tokens=800)
+
+
+async def genera_settori_tema(report: dict) -> dict:
+    """Genera le brevi descrizioni per i 5 settori del tema natale."""
+    riepilogo = report.get("riepilogo_testuale", "")
+
+    prompt = f"""Sei un'astrologa italiana esperta. Basandoti sul tema natale qui sotto, scrivi 5 brevi descrizioni (massimo 25 parole ciascuna) per i seguenti 5 argomenti:
+1. Amore e Relazioni
+2. Carriera e Finanze
+3. Salute e Benessere
+4. Crescita Personale
+5. Previsioni Annuali
+
+REGOLE TASSATIVE:
+- Per ogni argomento, scrivi 2-3 frasi che incuriosiscano.
+- NON spiegare tutto. Lascia un velo di mistero.
+- Tono: caldo, diretto.
+- Non usare mai asterischi o markdown.
+
+REPORT INTERNO:
+{riepilogo}
+
+Rispondi con questo formato esatto (senza altro testo):
+AMORE: [testo]
+LAVORO: [testo]
+SALUTE: [testo]
+CRESCITA: [testo]
+PREVISIONI: [testo]"""
+
+    risposta = await _chiama_ai(prompt, max_tokens=500)
+    
+    # Parser semplice della risposta
+    testi = {"amore": "", "lavoro": "", "salute": "", "crescita": "", "previsioni": ""}
+    for riga in risposta.split("\n"):
+        if riga.startswith("AMORE:"):
+            testi["amore"] = riga.replace("AMORE:", "").strip()
+        elif riga.startswith("LAVORO:"):
+            testi["lavoro"] = riga.replace("LAVORO:", "").strip()
+        elif riga.startswith("SALUTE:"):
+            testi["salute"] = riga.replace("SALUTE:", "").strip()
+        elif riga.startswith("CRESCITA:"):
+            testi["crescita"] = riga.replace("CRESCITA:", "").strip()
+        elif riga.startswith("PREVISIONI:"):
+            testi["previsioni"] = riga.replace("PREVISIONI:", "").strip()
+
+    return testi
+
+
+async def genera_copione_voce_tema(report: dict, focus: str) -> str:
+    riepilogo = report.get("riepilogo_testuale", "")
+    nome = report.get("profile", {}).get("nome", "utente")
+
+    if focus == "amore":
+        istruzione_focus = "Stai per parlare al telefono con {nome} della sua vita AMOROSA. Apri la conversazione parlando di Venere, Marte e Luna."
+    elif focus == "lavoro":
+        istruzione_focus = "Stai per parlare al telefono con {nome} del suo LAVORO e delle sue FINANZE. Apri la conversazione parlando della Decima Casa e di Saturno."
+    elif focus == "salute":
+        istruzione_focus = "Stai per parlare al telefono con {nome} della sua SALUTE e del suo BENESSERE. Apri la conversazione parlando della Sesta Casa e della Luna."
+    elif focus == "crescita":
+        istruzione_focus = "Stai per parlare al telefono con {nome} della sua CRESCITA PERSONALE. Apri la conversazione parlando del Nodo Nord e di Saturno."
+    elif focus == "previsioni":
+        istruzione_focus = "Stai per parlare al telefono con {nome} delle PREVISIONI per i prossimi mesi. Apri la conversazione parlando dei transiti."
+    else:
+        istruzione_focus = "Stai per parlare al telefono con {nome} del suo tema natale."
+
+    prompt = f"""{istruzione_focus.format(nome=nome)}
+
+REPORT INTERNO:
+{riepilogo}
 
 Scrivi il copione di apertura (circa 2 minuti). Tono: caldo, diretto, mistico ma professionale. Non usare asterischi o markdown. Struttura:
 
