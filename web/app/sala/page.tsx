@@ -185,79 +185,6 @@ function SalaContent() {
         ))}
       </div>
 
-      <div className="section-label">Esplora i tuoi settori</div>
-      <div className="accordion">
-        <Accordion title="❤️ Amore e Relazioni" bare>
-          <p style={{ fontSize: '13px', lineHeight: '1.6', marginBottom: '16px' }}>
-            {loadingSettori ? 'Sto leggendo le stelle...' : (settori?.amore || '...')}
-          </p>
-          <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-            <button className="icon-btn" title="Chat" onClick={() => router.push('/chat?focus=tema_amore')}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-            </button>
-            <button className="icon-btn accent" title="Voce" onClick={() => router.push('/consulenza?focus=tema_amore')}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
-            </button>
-          </div>
-        </Accordion>
-
-        <Accordion title="💼 Carriera e Finanze" bare>
-          <p style={{ fontSize: '13px', lineHeight: '1.6', marginBottom: '16px' }}>
-            {loadingSettori ? 'Sto leggendo le stelle...' : (settori?.lavoro || '...')}
-          </p>
-          <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-            <button className="icon-btn" title="Chat" onClick={() => router.push('/chat?focus=tema_lavoro')}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-            </button>
-            <button className="icon-btn accent" title="Voce" onClick={() => router.push('/consulenza?focus=tema_lavoro')}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
-            </button>
-          </div>
-        </Accordion>
-
-        <Accordion title="🌿 Salute e Benessere" bare>
-          <p style={{ fontSize: '13px', lineHeight: '1.6', marginBottom: '16px' }}>
-            {loadingSettori ? 'Sto leggendo le stelle...' : (settori?.salute || '...')}
-          </p>
-          <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-            <button className="icon-btn" title="Chat" onClick={() => router.push('/chat?focus=tema_salute')}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-            </button>
-            <button className="icon-btn accent" title="Voce" onClick={() => router.push('/consulenza?focus=tema_salute')}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
-            </button>
-          </div>
-        </Accordion>
-
-        <Accordion title="🌱 Crescita Personale" bare>
-          <p style={{ fontSize: '13px', lineHeight: '1.6', marginBottom: '16px' }}>
-            {loadingSettori ? 'Sto leggendo le stelle...' : (settori?.crescita || '...')}
-          </p>
-          <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-            <button className="icon-btn" title="Chat" onClick={() => router.push('/chat?focus=tema_crescita')}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-            </button>
-            <button className="icon-btn accent" title="Voce" onClick={() => router.push('/consulenza?focus=tema_crescita')}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
-            </button>
-          </div>
-        </Accordion>
-
-        <Accordion title="🔮 Previsioni Annuali" bare>
-          <p style={{ fontSize: '13px', lineHeight: '1.6', marginBottom: '16px' }}>
-            {loadingSettori ? 'Sto leggendo le stelle...' : (settori?.previsioni || '...')}
-          </p>
-          <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-            <button className="icon-btn" title="Chat" onClick={() => router.push('/chat?focus=tema_previsioni')}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-            </button>
-            <button className="icon-btn accent" title="Voce" onClick={() => router.push('/consulenza?focus=tema_previsioni')}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
-            </button>
-          </div>
-        </Accordion>
-      </div>
-
       <div className="section-label">Collega Telegram</div>
       <div className="confronto">
         <div className="info">
@@ -361,6 +288,79 @@ function SalaContent() {
               ))}
             </tbody>
           </table>
+        </Accordion>
+      </div>
+
+      <div className="section-label">Esplora i tuoi settori</div>
+      <div className="accordion">
+        <Accordion title="❤️ Amore e Relazioni" bare>
+          <p style={{ fontSize: '13px', lineHeight: '1.6', marginBottom: '16px' }}>
+            {loadingSettori ? 'Sto leggendo le stelle...' : (settori?.amore || '...')}
+          </p>
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+            <button className="icon-btn" title="Chat" onClick={() => router.push('/chat?focus=tema_amore')}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            </button>
+            <button className="icon-btn accent" title="Voce" onClick={() => router.push('/consulenza?focus=tema_amore')}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+            </button>
+          </div>
+        </Accordion>
+
+        <Accordion title="💼 Carriera e Finanze" bare>
+          <p style={{ fontSize: '13px', lineHeight: '1.6', marginBottom: '16px' }}>
+            {loadingSettori ? 'Sto leggendo le stelle...' : (settori?.lavoro || '...')}
+          </p>
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+            <button className="icon-btn" title="Chat" onClick={() => router.push('/chat?focus=tema_lavoro')}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            </button>
+            <button className="icon-btn accent" title="Voce" onClick={() => router.push('/consulenza?focus=tema_lavoro')}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+            </button>
+          </div>
+        </Accordion>
+
+        <Accordion title="🌿 Salute e Benessere" bare>
+          <p style={{ fontSize: '13px', lineHeight: '1.6', marginBottom: '16px' }}>
+            {loadingSettori ? 'Sto leggendo le stelle...' : (settori?.salute || '...')}
+          </p>
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+            <button className="icon-btn" title="Chat" onClick={() => router.push('/chat?focus=tema_salute')}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            </button>
+            <button className="icon-btn accent" title="Voce" onClick={() => router.push('/consulenza?focus=tema_salute')}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+            </button>
+          </div>
+        </Accordion>
+
+        <Accordion title="🌱 Crescita Personale" bare>
+          <p style={{ fontSize: '13px', lineHeight: '1.6', marginBottom: '16px' }}>
+            {loadingSettori ? 'Sto leggendo le stelle...' : (settori?.crescita || '...')}
+          </p>
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+            <button className="icon-btn" title="Chat" onClick={() => router.push('/chat?focus=tema_crescita')}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            </button>
+            <button className="icon-btn accent" title="Voce" onClick={() => router.push('/consulenza?focus=tema_crescita')}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+            </button>
+          </div>
+        </Accordion>
+
+        <Accordion title="🔮 Previsioni Annuali" bare>
+          <p style={{ fontSize: '13px', lineHeight: '1.6', marginBottom: '16px' }}>
+            {loadingSettori ? 'Sto leggendo le stelle...' : (settori?.previsioni || '...')}
+          </p>
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+            <button className="icon-btn" title="Chat" onClick={() => router.push('/chat?focus=tema_previsioni')}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            </button>
+            <button className="icon-btn accent" title="Voce" onClick={() => router.push('/consulenza?focus=tema_previsioni')}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+            </button>
+          </div>
         </Accordion>
       </div>
 
