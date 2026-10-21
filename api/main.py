@@ -613,4 +613,60 @@ async def cron_recupera_coda(request: Request):
             try:
                 prof_res = sb.table("profiles").select("*").eq("id", el["profile_id"]).execute()
                 if not prof_res.data:
-                    sb.table("coda_invii").
+                    sb.table("coda_invii").delete().eq("id", el["id"]).execute()
+                    continue
+                u = prof_res.data[0]
+
+                ultimo = u.get("ultimo_oroscopo_inviato")
+                if ultimo:
+                    dt_ultimo = datetime.fromisoformat(ultimo.replace("Z", "+00:00"))
+                    adesso = datetime.now(timezone.utc)
+                    inizio_settimana = adesso - timedelta(days=adesso.weekday(), hours=adesso.hour, minutes=adesso.minute, seconds=adesso.second)
+                    if dt_ultimo >= inizio_settimana:
+                        sb.table("coda_invii").delete().eq("id", el["id"]).execute()
+                        continue
+
+                tema = calcola_tema_completo(str(u["birth_date"]), str(u["birth_time"])[:5], float(u["birth_lat"]), float(u["birth_lon"]), 1.0)
+                report = genera_report_interno(u, tema, sb)
+                oroscopo = await genera_oroscopo_settimanale(report)
+
+                if not oroscopo:
+                    sb.table("coda_invii").update({"tentativi": (el.get("tentativi", 0) + 1), "ultimo_tentativo": datetime.now(timezone.utc).isoformat()}).eq("id", el["id"]).execute()
+                    falliti += 1
+                    continue
+
+                nome = u.get("nome", "")
+                adesso = datetime.now(timezone.utc)
+                data_inizio = adesso.strftime("%d/%m")
+                data_fine = (adesso + timedelta(days=6)).strftime("%d/%m")
+                testo = f"<b>Oroscopo settimanale dal {data_inizio} al {data_fine}</b>\n\n{oroscopo}\n\n🌐 <a href='{SITE_URL}/sala?token={u['access_token']}'>Approfondisci nella tua sala</a>"
+                
+                chat_id = int(u["telegram_id"])
+                await send_telegram(chat_id, testo)
+                
+                sb.table("profiles").update({"ultimo_oroscopo_inviato": adesso.isoformat()}).eq("id", u["id"]).execute()
+                sb.table("coda_invii").delete().eq("id", el["id"]).execute()
+                recuperati += 1
+            except Exception as e:
+                falliti += 1
+                print(f"=== CRON CODA: errore: {e} ===")
+
+        return {"status": "ok", "recuperati": recuperati, "falliti": falliti}
+    except HTTPException: raise
+    except Exception as e:
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Errore: {e}")
+
+async def send_telegram(chat_id, text):
+    if not TELEGRAM_API: return
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            await client.post(f"{TELEGRAM_API}/sendMessage", json={"chat_id": chat_id, "text": text, "parse_mode": "HTML", "disable_web_page_preview": True})
+    except Exception as e:
+        print(f"Errore Telegram: {e}")
+
+async def unlink_telegram_account(chat_id):
+    sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+    try:
+        sb.table("profiles").update({"telegram_id": None}).eq("telegram_id", str(chat_id)).execute()
+    except Exception: pass
