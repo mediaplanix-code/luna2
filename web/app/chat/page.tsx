@@ -1,11 +1,14 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useRef, useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
-export default function ChatPage() {
+function ChatContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const focus = searchParams.get('focus');
+  
   const [token, setToken] = useState<string | null>(null);
   const [domanda, setDomanda] = useState('');
   const [risposta, setRisposta] = useState('');
@@ -52,7 +55,8 @@ export default function ChatPage() {
     setRisposta('');
 
     try {
-      const res = await fetch(`https://luna2-api.onrender.com/chat/${token}`, {
+      const url = `https://luna2-api.onrender.com/chat/${token}${focus ? `?focus=${focus}` : ''}`;
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -93,7 +97,9 @@ export default function ChatPage() {
   return (
     <div className="canvas">
       <div className="topbar">
-        <Link href="/sala" className="back">← Sala</Link>
+        <Link href={focus ? "/compatibilita" : "/sala"} className="back">
+          ← {focus ? "Compatibilità" : "Sala"}
+        </Link>
         <div className="brand">✦ Luna Astrologica</div>
       </div>
 
@@ -104,7 +110,7 @@ export default function ChatPage() {
         textAlign: 'center',
         marginBottom: '6px'
       }}>
-        Parla con la tua astrologa
+        {focus ? "Approfondisci la compatibilità" : "Parla con la tua astrologa"}
       </h1>
       <p style={{
         textAlign: 'center',
@@ -147,7 +153,7 @@ export default function ChatPage() {
             className="cta"
             style={{ marginTop: '14px' }}
           >
-            {invio ? 'Sto consultando il tuo cielo…' : 'Chiedi'}
+            {invio ? 'Sto consultando il cielo…' : 'Chiedi'}
           </button>
 
           {errore && (
@@ -184,7 +190,7 @@ export default function ChatPage() {
             </button>
           ) : (
             <div style={{ marginTop: '16px', textAlign: 'center' }}>
-              <Link href="/consulenza" className="cta" style={{ display: 'inline-block' }}>
+              <Link href={`/consulenza${focus ? `?focus=${focus}` : ''}`} className="cta" style={{ display: 'inline-block' }}>
                 Prenota un consulto · €19
               </Link>
             </div>
@@ -194,7 +200,7 @@ export default function ChatPage() {
 
       {bloccato && !risposta && (
         <div style={{ marginTop: '16px', textAlign: 'center' }}>
-          <Link href="/consulenza" className="cta" style={{ display: 'inline-block' }}>
+          <Link href={`/consulenza${focus ? `?focus=${focus}` : ''}`} className="cta" style={{ display: 'inline-block' }}>
             Prenota un consulto · €19
           </Link>
         </div>
@@ -208,5 +214,13 @@ export default function ChatPage() {
         <Link href="/faq">?</Link>
       </div>
     </div>
+  );
+}
+
+export default function ChatPage() {
+  return (
+    <Suspense fallback={<div className="canvas"><p style={{ textAlign: 'center', marginTop: '40px' }}>Caricamento...</p></div>}>
+      <ChatContent />
+    </Suspense>
   );
 }
