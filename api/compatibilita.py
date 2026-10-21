@@ -54,13 +54,11 @@ async def calcola_compatibilita(token: str, persona_b: PersonaB):
 
     sb = create_client(SUPABASE_URL, SUPABASE_KEY)
     
-    # 1. Recupera la Persona A
     res = sb.table("profiles").select("*").eq("access_token", token).execute()
     if not res.data:
         raise HTTPException(status_code=404, detail="Profilo non trovato")
     persona_a = res.data[0]
 
-    # 2. Calcola i tempi
     jd_a = julian_day(str(persona_a["birth_date"]), str(persona_a["birth_time"])[:5])
     jd_b = julian_day(persona_b.birth_date, persona_b.birth_time)
 
@@ -70,7 +68,6 @@ async def calcola_compatibilita(token: str, persona_b: PersonaB):
     tema_a = calcola_pianeti(jd_a)
     tema_b = calcola_pianeti(jd_b)
 
-    # 3. Calcola gli aspetti e il punteggio
     aspetti = []
     punteggio_totale = 0
 
@@ -97,17 +94,18 @@ async def calcola_compatibilita(token: str, persona_b: PersonaB):
                     })
                     punteggio_totale += punteggio
 
-    # 4. Calcola la percentuale finale
     if aspetti:
         media = punteggio_totale / len(aspetti)
         percentuale = min(100, int(50 + (media * 5)))
     else:
         percentuale = 50
 
-    # 5. Ordina gli aspetti
     aspetti.sort(key=lambda x: x["punteggio"], reverse=True)
 
-    # 6. Prepara i pianeti di B per il frontend
+    # Segni di A e B
+    segno_a = SEGNI[int(tema_a["Sole"] // 30)]
+    segno_b = SEGNI[int(tema_b["Sole"] // 30)]
+
     pianeti_b = {}
     for nome, lon in tema_b.items():
         segno_idx = int(lon // 30)
@@ -117,16 +115,26 @@ async def calcola_compatibilita(token: str, persona_b: PersonaB):
             "grado": round(lon % 30, 2)
         }
 
-    # 7. Aggiorna il contatore
     usate = persona_a.get("compatibilita_usate", 0) or 0
     sb.table("profiles").update({"compatibilita_usate": usate + 1}).eq("id", persona_a["id"]).execute()
 
-    # 8. Restituisci tutto
+    # Logica per i testi dei 5 settori (basata sugli aspetti trovati)
+    testi = {
+        "amore": "La sinastria mostra una connessione significativa tra i vostri corpi celesti, con un'energia che può favorire l'intesa emotiva." if any(a["pianeta_a"] in ["Venere", "Luna"] or a["pianeta_b"] in ["Venere", "Luna"] for a in aspetti) else "Non ci sono aspetti dominanti tra i pianeti dell'amore, il che indica un legame che si costruisce con il tempo e la comprensione.",
+        "lavoro": "I vostri pianeti indicano una buona collaborazione e un sostegno reciproco nelle attività pratiche." if any(a["pianeta_a"] in ["Sole", "Saturno"] or a["pianeta_b"] in ["Sole", "Saturno"] for a in aspetti) else "Le energie professionali richiedono struttura e chiarezza per esprimersi al meglio.",
+        "salute": "Il vostro legame può essere un rifugio e una fonte di energia, aiutandovi a gestire lo stress." if any(a["pianeta_a"] in ["Luna", "Nettuno"] or a["pianeta_b"] in ["Luna", "Nettuno"] for a in aspetti) else "Le energie vitali si sostengono a vicenda, ma richiedono attenzione ai ritmi quotidiani.",
+        "crescita": "La relazione stimola una profonda crescita personale e un senso di scopo condiviso." if any(a["pianeta_a"] in ["NodoNord", "Saturno"] or a["pianeta_b"] in ["NodoNord", "Saturno"] for a in aspetti) else "Il vostro cammino di crescita è personale e si arricchisce attraverso il confronto.",
+        "previsioni": "I transiti futuri indicano un periodo di espansione e nuove opportunità per la coppia." if percentuale > 50 else "I transiti futuri richiedono pazienza e capacità di adattamento.",
+    }
+
     return {
         "persona_a": persona_a["nome"],
         "persona_b": persona_b.nome,
+        "segno_a": segno_a,
+        "segno_b": segno_b,
         "percentuale": percentuale,
         "pianeti_b": pianeti_b,
         "aspetti": aspetti[:15],
-        "totale_aspetti": len(aspetti)
+        "totale_aspetti": len(aspetti),
+        "testi": testi
     }
