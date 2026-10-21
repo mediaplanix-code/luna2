@@ -1,25 +1,40 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, ReactNode } from 'react';
 
 interface Props {
   title: string;
-  children: React.ReactNode;
+  children: ReactNode;
   bare?: boolean;
+  defaultOpen?: boolean;
 }
 
-export default function Accordion({ title, children, bare }: Props) {
-  const [open, setOpen] = useState(false);
+export default function Accordion({ title, children, bare = false, defaultOpen = false }: Props) {
+  const [aperto, setAperto] = useState(defaultOpen);
 
   return (
-    <div className={`acc-item ${bare ? 'bare' : ''} ${open ? 'open' : ''}`}>
-      <div className="acc-head" onClick={() => setOpen(!open)}>
-        <span>{title}</span>
-        <span className="arrow">▾</span>
-      </div>
-      <div className="acc-body">
-        <div className="acc-body-inner">{children}</div>
-      </div>
-    </div>
-  );
-}
+    <div style={{ borderBottom: bare ? '1px solid rgba(255,255,255,0.1)' : 'none' }}>
+      <button
+        onClick={() => setAperto(!aperto)}
+        style={{
+          width: '100%',
+          background: 'transparent',
+          border: 'none',
+          color: 'var(--text)',
+          textAlign: 'left',
+          padding: bare ? '16px 0' : '16px',
+          cursor: 'pointer',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          fontSize: '15px',
+          fontFamily: 'Georgia, serif',
+        }}
+      >
+        <span style={{ fontWeight: 500 }}>{title}</span>
+        <span style={{ transform: aperto ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 0.2s', fontSize: '12px' }}>
+          ▼
+        </span>
+      </button>
+      {aperto && (
+        <div style={{ padding: bare ? '0 0 20px 0'
