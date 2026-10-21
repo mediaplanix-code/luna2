@@ -347,4 +347,36 @@ export default function CompatibilitaPage() {
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                   </button>
                   <button className="icon-btn accent" title="Voce" onClick={() => router.push(`${risultato.link.generico.voce}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+                  </button>
+              </div>
+            </Accordion>
+          </div>
+
+          <div style={{ display: 'flex', gap: '10px', marginTop: '24px' }}>
+            <button 
+              onClick={() => router.push('/sala')}
+              className="cta" 
+              style={{ flex: 1, background: 'transparent', border: '1px solid var(--text-dim)', color: 'var(--text-dim)', fontSize: '12px' }}
+            >
+              ← Torna indietro
+            </button>
+            <button 
+              onClick={() => { setRisultato(null); setForm({ nome: '', birth_date: '', birth_time: '', birth_city: '', birth_lat: 0, birth_lon: 0 }); setCityQuery(''); }}
+              className="cta" 
+              style={{ flex: 1, fontSize: '12px' }}
+            >
+              Un altro confronto
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="footer">
+        <Link href="/privacy">Privacy</Link>·
+        <Link href="/disclaimer">Disclaimer</Link>·
+        <Link href="/faq">?</Link>
+      </div>
+    </div>
+  );
+}
