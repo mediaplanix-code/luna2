@@ -16,12 +16,6 @@ const SIMBOLI: Record<string, string> = {
   Bilancia: '♎', Scorpione: '♏', Sagittario: '♐', Capricorno: '♑', Acquario: '♒', Pesci: '♓',
 };
 
-function lonToSign(lon: number): string {
-  const segni = ['Ariete', 'Toro', 'Gemelli', 'Cancro', 'Leone', 'Vergine',
-    'Bilancia', 'Scorpione', 'Sagittario', 'Capricorno', 'Acquario', 'Pesci'];
-  return segni[Math.floor(((lon % 360) + 360) % 360 / 30)];
-}
-
 export default function CompatibilitaPage() {
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
@@ -40,10 +34,9 @@ export default function CompatibilitaPage() {
 
   const [cityQuery, setCityQuery] = useState('');
   const [suggestions, setSuggestions] = useState<any[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
   const [loadingCity, setLoadingCity] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const debounceRef = useRef<any>(null);
-  const wrapperRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const t = localStorage.getItem('luna2_token');
@@ -55,20 +48,12 @@ export default function CompatibilitaPage() {
   }, [router]);
 
   useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
-        setShowSuggestions(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (cityQuery.length < 2) { setSuggestions([]); setShowSuggestions(false); return; }
 
     setLoadingCity(true);
+    setShowSuggestions(true);
+
     debounceRef.current = setTimeout(async () => {
       try {
         const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(cityQuery)}&limit=5&lang=default`;
@@ -80,7 +65,6 @@ export default function CompatibilitaPage() {
           lon: f.geometry.coordinates[0],
         }));
         setSuggestions(items);
-        setShowSuggestions(items.length > 0);
       } catch {
         setSuggestions([]);
       } finally {
@@ -90,10 +74,8 @@ export default function CompatibilitaPage() {
     return () => clearTimeout(debounceRef.current);
   }, [cityQuery]);
 
-  // Funzione corretta: impedisce la chiusura prima del tempo
-  function pickCity(e: React.SyntheticEvent, s: any) {
-    e.preventDefault();
-    e.stopPropagation();
+  // Selezione città: chiude la lista e salva i dati
+  function selezionaCitta(s: any) {
     setForm(prev => ({ ...prev, birth_city: s.label, birth_lat: s.lat, birth_lon: s.lon }));
     setCityQuery(s.label);
     setSuggestions([]);
@@ -162,34 +144,46 @@ export default function CompatibilitaPage() {
             <label>Ora di nascita (esatta)</label>
             <input type="time" value={form.birth_time} onChange={(e) => setForm({ ...form, birth_time: e.target.value })} required />
           </div>
+          
           <div className="field">
             <label>Città di nascita</label>
-            <div ref={wrapperRef} className="city-wrap">
-              <input 
-                value={cityQuery} 
-                onChange={(e) => setCityQuery(e.target.value)} 
-                placeholder="es. Roma" 
-                autoComplete="off" 
-                required 
-              />
-              {loadingCity && <div className="city-loading">Cerco…</div>}
-              {showSuggestions && suggestions.length > 0 && (
-                <ul className="city-suggestions">
-                  {suggestions.map((s, i) => (
-                    <li 
-                      key={i} 
-                      onMouseDown={(e) => pickCity(e, s)}
-                      onClick={(e) => pickCity(e, s)}
-                      onTouchStart={(e) => pickCity(e, s)}
-                      style={{ cursor: 'pointer', padding: '8px' }}
-                    >
-                      {s.label}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
+            <input 
+              value={cityQuery} 
+              onChange={(e) => setCityQuery(e.target.value)} 
+              placeholder="es. Roma" 
+              autoComplete="off" 
+              required 
+            />
+            {/* Messaggio di stato della ricerca */}
+            {loadingCity && <div style={{ fontSize: '12px', color: '#F5A623', marginTop: '6px' }}>Cerco la città...</div>}
           </div>
+
+          {/* La lista dei risultati è FUORI dal wrapper dell'input, così non si chiude da sola */}
+          {showSuggestions && suggestions.length > 0 && (
+            <div style={{ 
+              background: 'rgba(255,255,255,0.05)', 
+              border: '1px solid rgba(245,166,35,0.3)', 
+              borderRadius: '8px', 
+              marginTop: '8px', 
+              padding: '4px'
+            }}>
+              {suggestions.map((s, i) => (
+                <div 
+                  key={i} 
+                  onClick={() => selezionaCitta(s)}
+                  style={{ 
+                    padding: '10px', 
+                    cursor: 'pointer', 
+                    borderBottom: i < suggestions.length - 1 ? '1px solid rgba(255,255,255,0.1)' : 'none',
+                    fontSize: '14px'
+                  }}
+                >
+                  {s.label}
+                </div>
+              ))}
+            </div>
+          )}
+
           <button type="submit" className="cta" disabled={loading} style={{ marginTop: '22px' }}>
             {loading ? 'Calcolo la sinastria...' : 'Calcola compatibilità'}
           </button>
@@ -204,42 +198,14 @@ export default function CompatibilitaPage() {
               {risultato.persona_a} e {risultato.persona_b}
             </h2>
             <div style={{ 
-              fontSize: '42px', 
+              fontSize: '48px', 
               fontWeight: 'bold', 
               color: risultato.percentuale > 60 ? '#06D6A0' : risultato.percentuale > 40 ? '#F5A623' : '#EF476F',
               marginTop: '10px' 
             }}>
               {risultato.percentuale}%
             </div>
-            <p style={{ fontSize: '12px', color: 'var(--text-dim)' }}>di compatibilità</p>
-          </div>
-
-          <div className="section-label">Il tema di {risultato.persona_b}</div>
-          <div className="identikit">
-            {risultato.pianeti_b?.Sole && (
-              <div className="row">
-                <span className="label">Sole</span>
-                <span className="value">
-                  <span className="sym">{SIMBOLI[risultato.pianeti_b.Sole.segno]}</span> {risultato.pianeti_b.Sole.segno}
-                </span>
-              </div>
-            )}
-            {risultato.pianeti_b?.Luna && (
-              <div className="row">
-                <span className="label">Luna</span>
-                <span className="value">
-                  <span className="sym">{SIMBOLI[risultato.pianeti_b.Luna.segno]}</span> {risultato.pianeti_b.Luna.segno}
-                </span>
-              </div>
-            )}
-            {risultato.pianeti_b?.Mercurio && (
-              <div className="row">
-                <span className="label">Mercurio</span>
-                <span className="value">
-                  <span className="sym">{SIMBOLI[risultato.pianeti_b.Mercurio.segno]}</span> {risultato.pianeti_b.Mercurio.segno}
-                </span>
-              </div>
-            )}
+            <p style={{ fontSize: '12px', color: 'var(--text-dim)' }}>di compatibilità complessiva</p>
           </div>
 
           <div className="section-label">I vostri aspetti principali</div>
@@ -262,7 +228,6 @@ export default function CompatibilitaPage() {
           <div className="section-label" style={{ marginTop: '30px' }}>Vuoi approfondire?</div>
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            
             <div style={{ border: '1px solid rgba(245,166,35,0.2)', borderRadius: '8px', padding: '12px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ fontFamily: 'Georgia, serif', fontSize: '15px' }}>❤️ Amore e Relazioni</div>
@@ -347,7 +312,6 @@ export default function CompatibilitaPage() {
                 Rivoluzione Solare, tendenze dei prossimi 12 mesi.
               </div>
             </div>
-
           </div>
 
           <button 
