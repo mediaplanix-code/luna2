@@ -95,11 +95,12 @@ function ChatContent() {
 
   const rimaste = Math.max(0, domandeLimite - domandeUsate);
   
-  // Costruisce il titolo
-  let titolo = "Parla con la tua astrologa";
-  let sottotitolo = "";
+  const isCompatibilita = focus && focus.startsWith('compatibilita');
+  const isTema = focus && focus.startsWith('tema');
   
-  if (focus && focus.startsWith('compatibilita')) {
+  let titolo = "Parla con la tua astrologa";
+  
+  if (isCompatibilita) {
     const argomento = focus.replace('compatibilita_', '');
     const mappaArgomenti: Record<string, string> = {
       'amore': 'Amore',
@@ -111,14 +112,28 @@ function ChatContent() {
     };
     const nomeArgomento = mappaArgomenti[argomento] || 'Compatibilità';
     titolo = `Approfondimento ${nomeArgomento}${nomeB ? ` tra te e ${nomeB}` : ''}`;
-    sottotitolo = nomeB ? `Con ${nomeB}` : '';
+  } else if (isTema) {
+    const argomento = focus.replace('tema_', '');
+    const mappaArgomenti: Record<string, string> = {
+      'amore': 'Amore',
+      'lavoro': 'Lavoro',
+      'salute': 'Salute',
+      'crescita': 'Crescita Personale',
+      'previsioni': 'Previsioni'
+    };
+    const nomeArgomento = mappaArgomenti[argomento] || 'Tema Natale';
+    titolo = `Approfondimento ${nomeArgomento}`;
   }
+
+  // Link di ritorno corretto
+  const backLink = isCompatibilita ? "/compatibilita" : "/sala";
+  const backText = isCompatibilita ? "← Compatibilità" : "← Sala";
 
   return (
     <div className="canvas">
       <div className="topbar">
-        <Link href={focus ? "/compatibilita" : "/sala"} className="back">
-          ← {focus ? "Compatibilità" : "Sala"}
+        <Link href={backLink} className="back">
+          {backText}
         </Link>
         <div className="brand">✦ Luna Astrologica</div>
       </div>
@@ -228,8 +243,7 @@ function ChatContent() {
 
       <div ref={fondoRef} />
 
-      {/* Pulsante per tornare indietro senza rifare il form */}
-      {focus && (
+      {isCompatibilita && (
         <div style={{ marginTop: '20px', textAlign: 'center' }}>
           <Link href="/compatibilita" className="cta" style={{ background: 'transparent', border: '1px solid var(--text-dim)', color: 'var(--text-dim)', display: 'inline-block' }}>
             ← Torna alla compatibilità
