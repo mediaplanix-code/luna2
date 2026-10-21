@@ -41,6 +41,21 @@ function formatGrado(lon: number): string {
   return `${g}°${String(m).padStart(2, '0')}'`;
 }
 
+// Componente per i pulsanti Chat/Voce all'interno delle tendine tecniche
+function AzioniTecniche({ token, argomento }: { token: string, argomento: string }) {
+  const router = useRouter();
+  return (
+    <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginTop: '16px', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+      <button className="icon-btn" title="Chiedi alla Chat" onClick={() => router.push(`/chat?focus=${argomento}`)}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      </button>
+      <button className="icon-btn accent" title="Approfondisci con la Voce" onClick={() => router.push(`/consulenza?focus=${argomento}`)}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+      </button>
+    </div>
+  );
+}
+
 function SalaContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -126,10 +141,6 @@ function SalaContent() {
 
   const compatibili = COMPATIBILI[soleSegno] || [];
   const transitiList = (data.transits?.aspects_to_natal || []).slice(0, 5);
-
-  const oroscopoSettimanale = transitiList.length > 0
-    ? `Questa settimana ${transitiList.map((t: any) => `${t.transito} in ${t.tipo} al tuo ${t.natale}`).slice(0, 2).join(', ')}.`
-    : 'Nessun transito rilevante questa settimana.';
 
   return (
     <div className="canvas">
@@ -231,6 +242,7 @@ function SalaContent() {
               ))}
             </tbody>
           </table>
+          <AzioniTecniche token={token!} argomento="tema_pianeti" />
         </Accordion>
 
         <Accordion title="Case">
@@ -248,6 +260,7 @@ function SalaContent() {
               ))}
             </tbody>
           </table>
+          <AzioniTecniche token={token!} argomento="tema_case" />
         </Accordion>
 
         <Accordion title="Aspetti">
@@ -266,6 +279,7 @@ function SalaContent() {
               ))}
             </tbody>
           </table>
+          <AzioniTecniche token={token!} argomento="tema_aspetti" />
         </Accordion>
 
         <Accordion title="Transiti">
@@ -288,6 +302,7 @@ function SalaContent() {
               ))}
             </tbody>
           </table>
+          <AzioniTecniche token={token!} argomento="tema_transiti" />
         </Accordion>
       </div>
 
@@ -364,36 +379,36 @@ function SalaContent() {
         </Accordion>
       </div>
 
-      <div className="section-label">Confronto con un&apos;altra persona</div>
-      <div className="confronto">
-        <div className="info">2 confronti gratuiti · poi su prenotazione</div>
-        <Link href="/compatibilita" className="btn-line">Compatibilità</Link>
+      {/* Sezione Compatibilità snella */}
+      <div className="section-label" style={{ marginTop: '30px' }}>Compatibilità</div>
+      <div className="accordion">
+        <Accordion title="Scopri l'intesa con un'altra persona" bare>
+          <div style={{ fontSize: '13px', color: 'var(--text-dim)', marginBottom: '16px' }}>
+            Inserisci i dati di un'altra persona per vedere la sinastria completa.
+          </div>
+          <Link href="/compatibilita" className="btn-line" style={{ display: 'inline-block', width: '100%', textAlign: 'center' }}>
+            Vai alla compatibilità →
+          </Link>
+        </Accordion>
       </div>
 
-      <button className="cta-voice" onClick={() => router.push('/consulenza')}>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-          <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-          <line x1="12" y1="19" x2="12" y2="23"/>
-          <line x1="8" y1="23" x2="16" y2="23"/>
-        </svg>
-        <div className="text">
-          <div className="title">Prenota il tuo consulto</div>
-          <div className="desc">15 minuti · €19</div>
-        </div>
-      </button>
-
-      <button className="cta-chat" onClick={() => router.push('/chat')}>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-        </svg>
-        <div className="text">
-          <div className="title">Apri la chat</div>
-          <div className="desc">
-            Hai {data.profile.chat_questions_limit - data.profile.chat_questions_used} domande disponibili
-          </div>
-        </div>
-      </button>
+      {/* Pulsanti finali affiancati */}
+      <div style={{ display: 'flex', gap: '10px', marginTop: '30px' }}>
+        <button 
+          onClick={() => router.push('/consulenza')}
+          className="cta" 
+          style={{ flex: 1, fontSize: '13px', padding: '12px' }}
+        >
+          Prenota un consulto
+        </button>
+        <button 
+          onClick={() => router.push('/chat')}
+          className="cta" 
+          style={{ flex: 1, fontSize: '13px', padding: '12px', background: 'transparent', border: '1px solid var(--text-dim)', color: 'var(--text-dim)' }}
+        >
+          Apri la chat
+        </button>
+      </div>
 
       <div className="footer">
         <Link href="/privacy">Privacy</Link>·
