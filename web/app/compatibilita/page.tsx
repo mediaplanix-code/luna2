@@ -22,13 +22,6 @@ function lonToSign(lon: number): string {
   return segni[Math.floor(((lon % 360) + 360) % 360 / 30)];
 }
 
-function formatGrado(lon: number): string {
-  const deg = ((lon % 360) + 360) % 360;
-  const g = Math.floor(deg % 30);
-  const m = Math.floor((deg % 1) * 60);
-  return `${g}°${String(m).padStart(2, '0')}'`;
-}
-
 export default function CompatibilitaPage() {
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
@@ -97,7 +90,8 @@ export default function CompatibilitaPage() {
     return () => clearTimeout(debounceRef.current);
   }, [cityQuery]);
 
-  function pickCity(e: React.MouseEvent, s: any) {
+  // Funzione corretta: impedisce la chiusura prima del tempo
+  function pickCity(e: React.SyntheticEvent, s: any) {
     e.preventDefault();
     e.stopPropagation();
     setForm(prev => ({ ...prev, birth_city: s.label, birth_lat: s.lat, birth_lon: s.lon }));
@@ -182,7 +176,13 @@ export default function CompatibilitaPage() {
               {showSuggestions && suggestions.length > 0 && (
                 <ul className="city-suggestions">
                   {suggestions.map((s, i) => (
-                    <li key={i} onMouseDown={(e) => pickCity(e, s)} style={{ cursor: 'pointer', padding: '8px' }}>
+                    <li 
+                      key={i} 
+                      onMouseDown={(e) => pickCity(e, s)}
+                      onClick={(e) => pickCity(e, s)}
+                      onTouchStart={(e) => pickCity(e, s)}
+                      style={{ cursor: 'pointer', padding: '8px' }}
+                    >
                       {s.label}
                     </li>
                   ))}
@@ -203,6 +203,15 @@ export default function CompatibilitaPage() {
             <h2 style={{ fontFamily: 'Georgia, serif', fontSize: '20px', color: '#F5A623' }}>
               {risultato.persona_a} e {risultato.persona_b}
             </h2>
+            <div style={{ 
+              fontSize: '42px', 
+              fontWeight: 'bold', 
+              color: risultato.percentuale > 60 ? '#06D6A0' : risultato.percentuale > 40 ? '#F5A623' : '#EF476F',
+              marginTop: '10px' 
+            }}>
+              {risultato.percentuale}%
+            </div>
+            <p style={{ fontSize: '12px', color: 'var(--text-dim)' }}>di compatibilità</p>
           </div>
 
           <div className="section-label">Il tema di {risultato.persona_b}</div>
@@ -254,7 +263,6 @@ export default function CompatibilitaPage() {
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             
-            {/* AMORE */}
             <div style={{ border: '1px solid rgba(245,166,35,0.2)', borderRadius: '8px', padding: '12px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ fontFamily: 'Georgia, serif', fontSize: '15px' }}>❤️ Amore e Relazioni</div>
@@ -272,7 +280,6 @@ export default function CompatibilitaPage() {
               </div>
             </div>
 
-            {/* CARRIERA */}
             <div style={{ border: '1px solid rgba(245,166,35,0.2)', borderRadius: '8px', padding: '12px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ fontFamily: 'Georgia, serif', fontSize: '15px' }}>💼 Carriera e Finanze</div>
@@ -290,7 +297,6 @@ export default function CompatibilitaPage() {
               </div>
             </div>
 
-            {/* SALUTE */}
             <div style={{ border: '1px solid rgba(245,166,35,0.2)', borderRadius: '8px', padding: '12px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ fontFamily: 'Georgia, serif', fontSize: '15px' }}>🌿 Salute e Benessere</div>
@@ -308,7 +314,6 @@ export default function CompatibilitaPage() {
               </div>
             </div>
 
-            {/* CRESCITA */}
             <div style={{ border: '1px solid rgba(245,166,35,0.2)', borderRadius: '8px', padding: '12px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ fontFamily: 'Georgia, serif', fontSize: '15px' }}>🌱 Crescita Personale</div>
@@ -326,7 +331,6 @@ export default function CompatibilitaPage() {
               </div>
             </div>
 
-            {/* PREVISIONI */}
             <div style={{ border: '1px solid rgba(245,166,35,0.2)', borderRadius: '8px', padding: '12px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ fontFamily: 'Georgia, serif', fontSize: '15px' }}>🔮 Previsioni Annuali</div>
