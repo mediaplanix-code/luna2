@@ -22,7 +22,8 @@ export default function Accordion({ title, children, bare = false, defaultOpen =
           border: 'none',
           color: 'var(--text)',
           textAlign: 'left',
-          padding: bare ? '16px 0' : '16px',
+          // Padding uniforme: orizzontale sempre 16px, verticale cambia se è 'bare'
+          padding: bare ? '16px' : '16px',
           cursor: 'pointer',
           display: 'flex',
           justifyContent: 'space-between',
@@ -36,7 +37,7 @@ export default function Accordion({ title, children, bare = false, defaultOpen =
         </span>
       </button>
       {aperto && (
-        <div style={{ padding: bare ? '0 0 20px 0' : '0 16px 20px 16px' }}>
+        <div style={{ padding: bare ? '0 16px 20px 16px' : '0 16px 20px 16px' }}>
           {children}
         </div>
       )}
