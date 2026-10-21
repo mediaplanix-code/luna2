@@ -68,8 +68,9 @@ async def calcola_compatibilita(token: str, persona_b: PersonaB):
     tema_a = calcola_pianeti(jd_a)
     tema_b = calcola_pianeti(jd_b)
 
-    # Calcola gli aspetti tra A e B
     aspetti = []
+    punteggio_totale = 0
+
     for p_a, lon_a in tema_a.items():
         for p_b, lon_b in tema_b.items():
             diff = abs(lon_a - lon_b)
@@ -77,14 +78,31 @@ async def calcola_compatibilita(token: str, persona_b: PersonaB):
             
             for nome_asp, (ang, orb) in ASPETTI.items():
                 if abs(diff - ang) <= orb:
+                    punteggio = 0
+                    if nome_asp == "trigono": punteggio = 10
+                    elif nome_asp == "sestile": punteggio = 8
+                    elif nome_asp == "congiunzione": punteggio = 6
+                    elif nome_asp == "quadratura": punteggio = 3
+                    elif nome_asp == "opposizione": punteggio = 2
+                    
                     aspetti.append({
                         "pianeta_a": p_a,
                         "pianeta_b": p_b,
                         "tipo": nome_asp,
-                        "orb": round(abs(diff - ang), 2)
+                        "orb": round(abs(diff - ang), 2),
+                        "punteggio": punteggio
                     })
+                    punteggio_totale += punteggio
 
-    # Pulisce i pianeti di B per il frontend
+    if aspetti:
+        media = punteggio_totale / len(aspetti)
+        percentuale = min(100, int(50 + (media * 5)))
+    else:
+        percentuale = 50
+
+    # Ordina per punteggio
+    aspetti.sort(key=lambda x: x["punteggio"], reverse=True)
+
     pianeti_b = {}
     for nome, lon in tema_b.items():
         segno_idx = int(lon // 30)
@@ -100,6 +118,7 @@ async def calcola_compatibilita(token: str, persona_b: PersonaB):
     return {
         "persona_a": persona_a["nome"],
         "persona_b": persona_b.nome,
+        "percentuale": percentuale,
         "pianeti_b": pianeti_b,
         "aspetti": aspetti[:15],
         "totale_aspetti": len(aspetti)
