@@ -17,12 +17,6 @@ const SIMBOLI: Record<string, string> = {
   Bilancia: '♎', Scorpione: '♏', Sagittario: '♐', Capricorno: '♑', Acquario: '♒', Pesci: '♓',
 };
 
-function lonToSign(lon: number): string {
-  const segni = ['Ariete', 'Toro', 'Gemelli', 'Cancro', 'Leone', 'Vergine',
-    'Bilancia', 'Scorpione', 'Sagittario', 'Capricorno', 'Acquario', 'Pesci'];
-  return segni[Math.floor(((lon % 360) + 360) % 360 / 30)];
-}
-
 export default function CompatibilitaPage() {
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
@@ -54,6 +48,7 @@ export default function CompatibilitaPage() {
     setToken(t);
   }, [router]);
 
+  // Rimosso il wrapper che chiudeva la tendina e causava il doppio click
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (cityQuery.length < 2) { setSuggestions([]); setShowSuggestions(false); return; }
@@ -163,6 +158,7 @@ export default function CompatibilitaPage() {
             {loadingCity && <div style={{ fontSize: '12px', color: '#F5A623', marginTop: '6px' }}>Cerco la città...</div>}
           </div>
 
+          {/* La lista è fuori dal wrapper, quindi non si chiude al click */}
           {showSuggestions && suggestions.length > 0 && (
             <div style={{ 
               background: 'rgba(255,255,255,0.05)', 
@@ -197,7 +193,6 @@ export default function CompatibilitaPage() {
 
       {risultato && (
         <div>
-          {/* Intestazione con i segni */}
           <div style={{ textAlign: 'center', margin: '10px 0 20px 0' }}>
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '20px', marginBottom: '10px' }}>
               <div>
@@ -231,14 +226,13 @@ export default function CompatibilitaPage() {
               <p style={{ fontSize: '13px', lineHeight: '1.6', marginBottom: '16px' }}>
                 {risultato.testi.amore}
               </p>
-              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                 <button className="icon-btn" title="Chat" onClick={() => router.push('/chat')}>
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                 <button className="icon-btn" title="Chat" onClick={() => router.push(risultato.link.amore.chat)}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                   </button>
-                  <button className="icon-btn accent" title="Voce" onClick={() => router.push('/consulenza')}>
+                  <button className="icon-btn accent" title="Voce" onClick={() => router.push(risultato.link.amore.voce)}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
                   </button>
-                  <span style={{ fontSize: '12px', color: '#F5A623' }}>Approfondisci (€19)</span>
               </div>
             </Accordion>
 
@@ -246,14 +240,13 @@ export default function CompatibilitaPage() {
               <p style={{ fontSize: '13px', lineHeight: '1.6', marginBottom: '16px' }}>
                 {risultato.testi.lavoro}
               </p>
-              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                 <button className="icon-btn" title="Chat" onClick={() => router.push('/chat')}>
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                 <button className="icon-btn" title="Chat" onClick={() => router.push(risultato.link.lavoro.chat)}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                   </button>
-                  <button className="icon-btn accent" title="Voce" onClick={() => router.push('/consulenza')}>
+                  <button className="icon-btn accent" title="Voce" onClick={() => router.push(risultato.link.lavoro.voce)}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
                   </button>
-                  <span style={{ fontSize: '12px', color: '#F5A623' }}>Approfondisci (€19)</span>
               </div>
             </Accordion>
 
@@ -261,14 +254,13 @@ export default function CompatibilitaPage() {
               <p style={{ fontSize: '13px', lineHeight: '1.6', marginBottom: '16px' }}>
                 {risultato.testi.salute}
               </p>
-              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                 <button className="icon-btn" title="Chat" onClick={() => router.push('/chat')}>
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                 <button className="icon-btn" title="Chat" onClick={() => router.push(risultato.link.salute.chat)}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                   </button>
-                  <button className="icon-btn accent" title="Voce" onClick={() => router.push('/consulenza')}>
+                  <button className="icon-btn accent" title="Voce" onClick={() => router.push(risultato.link.salute.voce)}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
                   </button>
-                  <span style={{ fontSize: '12px', color: '#F5A623' }}>Approfondisci (€19)</span>
               </div>
             </Accordion>
 
@@ -276,14 +268,13 @@ export default function CompatibilitaPage() {
               <p style={{ fontSize: '13px', lineHeight: '1.6', marginBottom: '16px' }}>
                 {risultato.testi.crescita}
               </p>
-              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                 <button className="icon-btn" title="Chat" onClick={() => router.push('/chat')}>
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                 <button className="icon-btn" title="Chat" onClick={() => router.push(risultato.link.crescita.chat)}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                   </button>
-                  <button className="icon-btn accent" title="Voce" onClick={() => router.push('/consulenza')}>
+                  <button className="icon-btn accent" title="Voce" onClick={() => router.push(risultato.link.crescita.voce)}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
                   </button>
-                  <span style={{ fontSize: '12px', color: '#F5A623' }}>Approfondisci (€19)</span>
               </div>
             </Accordion>
 
@@ -291,21 +282,20 @@ export default function CompatibilitaPage() {
               <p style={{ fontSize: '13px', lineHeight: '1.6', marginBottom: '16px' }}>
                 {risultato.testi.previsioni}
               </p>
-              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                 <button className="icon-btn" title="Chat" onClick={() => router.push('/chat')}>
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                 <button className="icon-btn" title="Chat" onClick={() => router.push(risultato.link.previsioni.chat)}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                   </button>
-                  <button className="icon-btn accent" title="Voce" onClick={() => router.push('/consulenza')}>
+                  <button className="icon-btn accent" title="Voce" onClick={() => router.push(risultato.link.previsioni.voce)}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
                   </button>
-                  <span style={{ fontSize: '12px', color: '#F5A623' }}>Approfondisci (€19)</span>
               </div>
             </Accordion>
           </div>
 
           <div className="section-label" style={{ marginTop: '30px' }}>Dettagli tecnici</div>
           <div className="accordion">
-            <Accordion title="Il tema di B" bare>
+            <Accordion title={`Il tema di ${risultato.persona_b}`} bare>
               <div className="identikit">
                 {risultato.pianeti_b?.Sole && (
                   <div className="row">
@@ -329,7 +319,7 @@ export default function CompatibilitaPage() {
             </Accordion>
             
             <Accordion title="Gli aspetti principali" bare>
-              <table className="data">
+              <table className="data" style={{ marginBottom: '16px' }}>
                 <thead>
                   <tr><th>Pianeta A</th><th>Aspetto</th><th>Pianeta B</th><th>Orbe</th></tr>
                 </thead>
@@ -344,10 +334,17 @@ export default function CompatibilitaPage() {
                   ))}
                 </tbody>
               </table>
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                 <button className="icon-btn" title="Chat" onClick={() => router.push(risultato.link.generico.chat)}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                  </button>
+                  <button className="icon-btn accent" title="Voce" onClick={() => router.push(risultato.link.generico.voce)}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+                  </button>
+              </div>
             </Accordion>
           </div>
 
-          {/* Pulsanti finali affiancati */}
           <div style={{ display: 'flex', gap: '10px', marginTop: '24px' }}>
             <button 
               onClick={() => router.push('/sala')}
