@@ -1,0 +1,118 @@
+import os
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+from datetime import datetime
+import swisseph as swe
+from supabase import create_client
+
+router = APIRouter()
+
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+
+# Riusiamo le definizioni del tema natale (importandole da main non si può perché creerebbe un loop,
+# quindi le riscriviamo qui in modo compatto)
+PIANETI = {
+    "Sole": swe.SUN, "Luna": swe.MOON, "Mercurio": swe.MERCURY,
+    "Venere": swe.VENUS, "Marte": swe.MARS, "Giove": swe.JUPITER,
+    "Saturno": swe.SATURN, "Urano": swe.URANUS, "Nettuno": swe.NEPTUNE,
+    "Plutone": swe.PLUTO, "NodoNord": swe.TRUE_NODE, "Chirone": swe.CHIRON,
+}
+
+SEGNI = ["Ariete", "Toro", "Gemelli", "Cancro", "Leone", "Vergine",
+         "Bilancia", "Scorpione", "Sagittario", "Capricorno", "Acquario", "Pesci"]
+
+ASPETTI = {"congiunzione": (0, 8), "sestile": (60, 4), "quadratura": (90, 6), "trigono": (120, 6), "opposizione": (180, 8)}
+
+class PersonaB(BaseModel):
+    nome: str
+    birth_date: str
+    birth_time: str
+    birth_lat: float
+    birth_lon: float
+
+def julian_day(date_str: str, time_str: str) -> float:
+    dt = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
+    return swe.julday(dt.year, dt.month, dt.day, dt.hour + dt.minute / 60 - 1.0)
+
+def calcola_pianeti(jd: float) -> dict:
+    planets = {}
+    for nome, pid in PIANETI.items():
+        try:
+            res = swe.calc_ut(jd, pid)
+            lon = res[0][0] if isinstance(res[0], tuple) else res[0]
+            planets[nome] = {"longitude": round(lon % 360, 4)}
+        except Exception:
+            continue
+    return planets
+
+@router.post("/compatibilita/{token}")
+async def calcola_compatibilita(token: str, persona_b: PersonaB):
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        raise HTTPException(status_code=500, detail="Supabase non configurato")
+
+    sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+    
+    # 1. Recupera il profilo dell'utente (Persona A)
+    res = sb.table("profiles").select("*").eq("access_token", token).execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Profilo non trovato")
+    persona_a = res.data[0]
+
+    # 2. Calcola i due temi natali
+    jd_a = julian_day(str(persona_a["birth_date"]), str(persona_a["birth_time"])[:5])
+    jd_b = julian_day(persona_b.birth_date, persona_b.birth_time)
+
+    tema_a = calcola_pianeti(jd_a)
+    tema_b = calcola_pianeti(jd_b)
+
+    # 3. Calcola gli aspetti tra i due temi (Sinastria)
+    aspetti = []
+    punteggio_totale = 0
+    num_aspetti = 0
+
+    for p_a, pos_a in tema_a.items():
+        for p_b, pos_b in tema_b.items():
+            diff = abs(pos_a["longitude"] - pos_b["longitude"])
+            diff = min(diff, 360 - diff)
+            
+            for nome_asp, (ang, orb) in ASPETTI.items():
+                if abs(diff - ang) <= orb:
+                    # Punteggio: Trigoni e Sestili buoni, Quadrature e Opposizioni stimolanti (ma faticosi)
+                    punteggio = 0
+                    if nome_asp == "trigono": punteggio = 10
+                    elif nome_asp == "sestile": punteggio = 8
+                    elif nome_asp == "congiunzione": punteggio = 6
+                    elif nome_asp == "quadratura": punteggio = 3
+                    elif nome_asp == "opposizione": punteggio = 2
+                    
+                    aspetti.append({
+                        "pianeta_a": p_a, "pianeta_b": p_b,
+                        "tipo": nome_asp, "orb": round(abs(diff - ang), 2),
+                        "punteggio": punteggio
+                    })
+                    punteggio_totale += punteggio
+                    num_aspetti += 1
+
+    # 4. Calcola la percentuale finale (base 50% + bonus aspetti, max 100%)
+    if num_aspetti > 0:
+        media = punteggio_totale / num_aspetti
+        percentuale = min(100, int(50 + (media * 5)))
+    else:
+        percentuale = 50
+
+    # 5. Ordina gli aspetti per punteggio (prima i più forti)
+    aspetti.sort(key=lambda x: x["punteggio"], reverse=True)
+
+    # 6. Incrementa il contatore dell'utente
+    usate = persona_a.get("compatibilita_usate", 0) or 0
+    sb.table("profiles").update({"compatibilita_usate": usate + 1}).eq("id", persona_a["id"]).execute()
+
+    # 7. Restituisci il risultato (SENZA interpretazione, solo numeri)
+    return {
+        "persona_a": persona_a["nome"],
+        "persona_b": persona_b.nome,
+        "percentuale": percentuale,
+        "aspetti": aspetti[:10],  # Mostriamo i 10 aspetti più importanti
+        "totale_aspetti_trovati": num_aspetti
+    }
