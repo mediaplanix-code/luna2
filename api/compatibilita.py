@@ -102,7 +102,6 @@ async def calcola_compatibilita(token: str, persona_b: PersonaB):
 
     aspetti.sort(key=lambda x: x["punteggio"], reverse=True)
 
-    # Segni di A e B
     segno_a = SEGNI[int(tema_a["Sole"] // 30)]
     segno_b = SEGNI[int(tema_b["Sole"] // 30)]
 
@@ -118,13 +117,22 @@ async def calcola_compatibilita(token: str, persona_b: PersonaB):
     usate = persona_a.get("compatibilita_usate", 0) or 0
     sb.table("profiles").update({"compatibilita_usate": usate + 1}).eq("id", persona_a["id"]).execute()
 
-    # Logica per i testi dei 5 settori (basata sugli aspetti trovati)
     testi = {
         "amore": "La sinastria mostra una connessione significativa tra i vostri corpi celesti, con un'energia che può favorire l'intesa emotiva." if any(a["pianeta_a"] in ["Venere", "Luna"] or a["pianeta_b"] in ["Venere", "Luna"] for a in aspetti) else "Non ci sono aspetti dominanti tra i pianeti dell'amore, il che indica un legame che si costruisce con il tempo e la comprensione.",
         "lavoro": "I vostri pianeti indicano una buona collaborazione e un sostegno reciproco nelle attività pratiche." if any(a["pianeta_a"] in ["Sole", "Saturno"] or a["pianeta_b"] in ["Sole", "Saturno"] for a in aspetti) else "Le energie professionali richiedono struttura e chiarezza per esprimersi al meglio.",
         "salute": "Il vostro legame può essere un rifugio e una fonte di energia, aiutandovi a gestire lo stress." if any(a["pianeta_a"] in ["Luna", "Nettuno"] or a["pianeta_b"] in ["Luna", "Nettuno"] for a in aspetti) else "Le energie vitali si sostengono a vicenda, ma richiedono attenzione ai ritmi quotidiani.",
         "crescita": "La relazione stimola una profonda crescita personale e un senso di scopo condiviso." if any(a["pianeta_a"] in ["NodoNord", "Saturno"] or a["pianeta_b"] in ["NodoNord", "Saturno"] for a in aspetti) else "Il vostro cammino di crescita è personale e si arricchisce attraverso il confronto.",
         "previsioni": "I transiti futuri indicano un periodo di espansione e nuove opportunità per la coppia." if percentuale > 50 else "I transiti futuri richiedono pazienza e capacità di adattamento.",
+    }
+
+    # Link con il contesto per la chat e la voce
+    link_contesto = {
+        "generico": {"chat": f"/chat?focus=compatibilita", "voce": f"/consulenza?focus=compatibilita"},
+        "amore": {"chat": f"/chat?focus=compatibilita_amore", "voce": f"/consulenza?focus=compatibilita_amore"},
+        "lavoro": {"chat": f"/chat?focus=compatibilita_lavoro", "voce": f"/consulenza?focus=compatibilita_lavoro"},
+        "salute": {"chat": f"/chat?focus=compatibilita_salute", "voce": f"/consulenza?focus=compatibilita_salute"},
+        "crescita": {"chat": f"/chat?focus=compatibilita_crescita", "voce": f"/consulenza?focus=compatibilita_crescita"},
+        "previsioni": {"chat": f"/chat?focus=compatibilita_previsioni", "voce": f"/consulenza?focus=compatibilita_previsioni"},
     }
 
     return {
@@ -136,5 +144,6 @@ async def calcola_compatibilita(token: str, persona_b: PersonaB):
         "pianeti_b": pianeti_b,
         "aspetti": aspetti[:15],
         "totale_aspetti": len(aspetti),
-        "testi": testi
+        "testi": testi,
+        "link": link_contesto
     }
