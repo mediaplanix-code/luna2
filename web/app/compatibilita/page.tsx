@@ -9,8 +9,25 @@ type Aspetto = {
   pianeta_b: string;
   tipo: string;
   orb: number;
-  punteggio: number;
 };
+
+const SIMBOLI: Record<string, string> = {
+  Ariete: '♈', Toro: '♉', Gemelli: '♊', Cancro: '♋', Leone: '♌', Vergine: '♍',
+  Bilancia: '♎', Scorpione: '♏', Sagittario: '♐', Capricorno: '♑', Acquario: '♒', Pesci: '♓',
+};
+
+function lonToSign(lon: number): string {
+  const segni = ['Ariete', 'Toro', 'Gemelli', 'Cancro', 'Leone', 'Vergine',
+    'Bilancia', 'Scorpione', 'Sagittario', 'Capricorno', 'Acquario', 'Pesci'];
+  return segni[Math.floor(((lon % 360) + 360) % 360 / 30)];
+}
+
+function formatGrado(lon: number): string {
+  const deg = ((lon % 360) + 360) % 360;
+  const g = Math.floor(deg % 30);
+  const m = Math.floor((deg % 1) * 60);
+  return `${g}°${String(m).padStart(2, '0')}'`;
+}
 
 export default function CompatibilitaPage() {
   const router = useRouter();
@@ -28,7 +45,6 @@ export default function CompatibilitaPage() {
     birth_lon: 0,
   });
 
-  // Autocomplete città (semplificato)
   const [cityQuery, setCityQuery] = useState('');
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -187,15 +203,34 @@ export default function CompatibilitaPage() {
             <h2 style={{ fontFamily: 'Georgia, serif', fontSize: '20px', color: '#F5A623' }}>
               {risultato.persona_a} e {risultato.persona_b}
             </h2>
-            <div style={{ 
-              fontSize: '48px', 
-              fontWeight: 'bold', 
-              color: risultato.percentuale > 60 ? '#06D6A0' : risultato.percentuale > 40 ? '#F5A623' : '#EF476F',
-              marginTop: '10px' 
-            }}>
-              {risultato.percentuale}%
-            </div>
-            <p style={{ fontSize: '12px', color: 'var(--text-dim)' }}>di compatibilità</p>
+          </div>
+
+          <div className="section-label">Il tema di {risultato.persona_b}</div>
+          <div className="identikit">
+            {risultato.pianeti_b?.Sole && (
+              <div className="row">
+                <span className="label">Sole</span>
+                <span className="value">
+                  <span className="sym">{SIMBOLI[risultato.pianeti_b.Sole.segno]}</span> {risultato.pianeti_b.Sole.segno}
+                </span>
+              </div>
+            )}
+            {risultato.pianeti_b?.Luna && (
+              <div className="row">
+                <span className="label">Luna</span>
+                <span className="value">
+                  <span className="sym">{SIMBOLI[risultato.pianeti_b.Luna.segno]}</span> {risultato.pianeti_b.Luna.segno}
+                </span>
+              </div>
+            )}
+            {risultato.pianeti_b?.Mercurio && (
+              <div className="row">
+                <span className="label">Mercurio</span>
+                <span className="value">
+                  <span className="sym">{SIMBOLI[risultato.pianeti_b.Mercurio.segno]}</span> {risultato.pianeti_b.Mercurio.segno}
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="section-label">I vostri aspetti principali</div>
@@ -215,19 +250,106 @@ export default function CompatibilitaPage() {
             </tbody>
           </table>
 
-          <div style={{ marginTop: '30px', textAlign: 'center' }}>
-            <p style={{ fontSize: '14px', color: 'var(--text-dim)', marginBottom: '16px' }}>
-              Vuoi sapere cosa significano questi numeri per la vostra relazione?
-            </p>
-            <Link href="/consulenza" className="cta" style={{ display: 'inline-block' }}>
-              Approfondisci con la voce · €19
-            </Link>
+          <div className="section-label" style={{ marginTop: '30px' }}>Vuoi approfondire?</div>
+          
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            
+            {/* AMORE */}
+            <div style={{ border: '1px solid rgba(245,166,35,0.2)', borderRadius: '8px', padding: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ fontFamily: 'Georgia, serif', fontSize: '15px' }}>❤️ Amore e Relazioni</div>
+                <div className="icon-row" style={{ margin: 0 }}>
+                  <button className="icon-btn" title="Chat" onClick={() => router.push('/chat')}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                  </button>
+                  <button className="icon-btn accent" title="Voce" onClick={() => router.push('/consulenza')}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+                  </button>
+                </div>
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '4px' }}>
+                Sinastria, crisi di coppia, nuovi incontri.
+              </div>
+            </div>
+
+            {/* CARRIERA */}
+            <div style={{ border: '1px solid rgba(245,166,35,0.2)', borderRadius: '8px', padding: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ fontFamily: 'Georgia, serif', fontSize: '15px' }}>💼 Carriera e Finanze</div>
+                <div className="icon-row" style={{ margin: 0 }}>
+                  <button className="icon-btn" title="Chat" onClick={() => router.push('/chat')}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                  </button>
+                  <button className="icon-btn accent" title="Voce" onClick={() => router.push('/consulenza')}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+                  </button>
+                </div>
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '4px' }}>
+                Orientamento, cambi di lavoro, investimenti.
+              </div>
+            </div>
+
+            {/* SALUTE */}
+            <div style={{ border: '1px solid rgba(245,166,35,0.2)', borderRadius: '8px', padding: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ fontFamily: 'Georgia, serif', fontSize: '15px' }}>🌿 Salute e Benessere</div>
+                <div className="icon-row" style={{ margin: 0 }}>
+                  <button className="icon-btn" title="Chat" onClick={() => router.push('/chat')}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                  </button>
+                  <button className="icon-btn accent" title="Voce" onClick={() => router.push('/consulenza')}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+                  </button>
+                </div>
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '4px' }}>
+                Gestione dello stress, energie, prevenzione.
+              </div>
+            </div>
+
+            {/* CRESCITA */}
+            <div style={{ border: '1px solid rgba(245,166,35,0.2)', borderRadius: '8px', padding: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ fontFamily: 'Georgia, serif', fontSize: '15px' }}>🌱 Crescita Personale</div>
+                <div className="icon-row" style={{ margin: 0 }}>
+                  <button className="icon-btn" title="Chat" onClick={() => router.push('/chat')}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                  </button>
+                  <button className="icon-btn accent" title="Voce" onClick={() => router.push('/consulenza')}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+                  </button>
+                </div>
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '4px' }}>
+                Nodi Lunari, Ritorno di Saturno, scopo di vita.
+              </div>
+            </div>
+
+            {/* PREVISIONI */}
+            <div style={{ border: '1px solid rgba(245,166,35,0.2)', borderRadius: '8px', padding: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ fontFamily: 'Georgia, serif', fontSize: '15px' }}>🔮 Previsioni Annuali</div>
+                <div className="icon-row" style={{ margin: 0 }}>
+                  <button className="icon-btn" title="Chat" onClick={() => router.push('/chat')}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                  </button>
+                  <button className="icon-btn accent" title="Voce" onClick={() => router.push('/consulenza')}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+                  </button>
+                </div>
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '4px' }}>
+                Rivoluzione Solare, tendenze dei prossimi 12 mesi.
+              </div>
+            </div>
+
           </div>
 
           <button 
             onClick={() => { setRisultato(null); setForm({ nome: '', birth_date: '', birth_time: '', birth_city: '', birth_lat: 0, birth_lon: 0 }); setCityQuery(''); }}
             className="cta" 
-            style={{ marginTop: '16px', background: 'transparent', border: '1px solid var(--text-dim)', color: 'var(--text-dim)', width: '100%' }}
+            style={{ marginTop: '24px', background: 'transparent', border: '1px solid var(--text-dim)', color: 'var(--text-dim)', width: '100%' }}
           >
             Fai un altro confronto
           </button>
