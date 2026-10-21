@@ -41,16 +41,21 @@ function formatGrado(lon: number): string {
   return `${g}°${String(m).padStart(2, '0')}'`;
 }
 
-function AzioniTecniche({ token, argomento }: { token: string, argomento: string }) {
+function AzioniTecniche({ argomento }: { argomento: string }) {
   const router = useRouter();
   return (
-    <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', marginTop: '24px', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-      <button className="icon-btn" style={{ width: '48px', height: '48px' }} title="Chiedi alla Chat" onClick={() => router.push(`/chat?focus=${argomento}`)}>
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-      </button>
-      <button className="icon-btn accent" style={{ width: '48px', height: '48px' }} title="Approfondisci con la Voce" onClick={() => router.push(`/consulenza?focus=${argomento}`)}>
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
-      </button>
+    <div style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+      <div style={{ textAlign: 'center', fontSize: '13px', color: 'var(--text-dim)', marginBottom: '12px' }}>
+        Approfondisci il significato
+      </div>
+      <div style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
+        <button className="icon-btn" style={{ width: '48px', height: '48px' }} title="Chiedi alla Chat" onClick={() => router.push(`/chat?focus=${argomento}`)}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </button>
+        <button className="icon-btn accent" style={{ width: '48px', height: '48px' }} title="Approfondisci con la Voce" onClick={() => router.push(`/consulenza?focus=${argomento}`)}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+        </button>
+      </div>
     </div>
   );
 }
@@ -167,20 +172,16 @@ function SalaContent() {
         <div className="user" style={{ fontSize: '14px' }}>{nome} ▾</div>
       </div>
 
-      {/* Intestazione Saluto */}
       <div style={{ textAlign: 'center', margin: '20px 0' }}>
         <h1 style={{ fontSize: '26px', marginBottom: '4px' }}>Ciao {nome}.</h1>
         <p style={{ fontSize: '14px', color: 'var(--text-dim)' }}>Ecco il tuo cielo oggi.</p>
       </div>
 
-      {/* Identikit a due colonne */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginTop: '10px' }}>
-        {/* Colonna Sinistra: Segno Solare */}
         <div style={{ flex: '0 0 35%', textAlign: 'center' }}>
           <div style={{ fontSize: '80px', lineHeight: '1', color: '#F5A623' }}>{SIMBOLI[soleSegno]}</div>
-          <div style={{ fontSize: '20px', fontFamily: 'Georgia, serif', marginTop: '8px' }}>{soleSegno}</div>
+          <div style={{ fontSize: '20px', marginTop: '8px' }}>{soleSegno}</div>
         </div>
-        {/* Colonna Destra: Altri Segni */}
         <div style={{ flex: '1' }}>
           <div className="identikit" style={{ margin: 0 }}>
             <div className="row" style={{ fontSize: '15px', padding: '10px 0' }}>
@@ -199,7 +200,6 @@ function SalaContent() {
         </div>
       </div>
 
-      {/* Segni Compatibili - Griglia 4 colonne */}
       <div className="section-label" style={{ fontSize: '15px', marginTop: '30px' }}>Segni compatibili</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginTop: '10px' }}>
         {compatibili.map((s) => (
@@ -227,7 +227,6 @@ function SalaContent() {
         />
       </div>
 
-      {/* Oroscopo Settimanale - Aperto di default */}
       <div className="section-label" style={{ fontSize: '15px' }}>Il tuo oroscopo settimanale</div>
       <div className="accordion">
         <Accordion title="Leggi l'oroscopo della settimana" bare defaultOpen={true}>
@@ -265,7 +264,7 @@ function SalaContent() {
               ))}
             </tbody>
           </table>
-          <AzioniTecniche token={token!} argomento="tema_pianeti" />
+          <AzioniTecniche argomento="tema_pianeti" />
         </Accordion>
 
         <Accordion title="Case">
@@ -283,7 +282,7 @@ function SalaContent() {
               ))}
             </tbody>
           </table>
-          <AzioniTecniche token={token!} argomento="tema_case" />
+          <AzioniTecniche argomento="tema_case" />
         </Accordion>
 
         <Accordion title="Aspetti">
@@ -302,7 +301,7 @@ function SalaContent() {
               ))}
             </tbody>
           </table>
-          <AzioniTecniche token={token!} argomento="tema_aspetti" />
+          <AzioniTecniche argomento="tema_aspetti" />
         </Accordion>
 
         <Accordion title="Transiti">
@@ -325,7 +324,7 @@ function SalaContent() {
               ))}
             </tbody>
           </table>
-          <AzioniTecniche token={token!} argomento="tema_transiti" />
+          <AzioniTecniche argomento="tema_transiti" />
         </Accordion>
       </div>
 
@@ -335,80 +334,42 @@ function SalaContent() {
           <p style={{ fontSize: '14px', lineHeight: '1.6', marginBottom: '16px' }}>
             {loadingSettori ? 'Sto leggendo le stelle...' : (settori?.amore || '...')}
           </p>
-          <div style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
-            <button className="icon-btn" style={{ width: '48px', height: '48px' }} title="Chat" onClick={() => router.push('/chat?focus=tema_amore')}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-            </button>
-            <button className="icon-btn accent" style={{ width: '48px', height: '48px' }} title="Voce" onClick={() => router.push('/consulenza?focus=tema_amore')}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
-            </button>
-          </div>
+          <AzioniTecniche argomento="tema_amore" />
         </Accordion>
 
         <Accordion title="💼 Carriera e Finanze" bare>
           <p style={{ fontSize: '14px', lineHeight: '1.6', marginBottom: '16px' }}>
             {loadingSettori ? 'Sto leggendo le stelle...' : (settori?.lavoro || '...')}
           </p>
-          <div style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
-            <button className="icon-btn" style={{ width: '48px', height: '48px' }} title="Chat" onClick={() => router.push('/chat?focus=tema_lavoro')}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-            </button>
-            <button className="icon-btn accent" style={{ width: '48px', height: '48px' }} title="Voce" onClick={() => router.push('/consulenza?focus=tema_lavoro')}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
-            </button>
-          </div>
+          <AzioniTecniche argomento="tema_lavoro" />
         </Accordion>
 
         <Accordion title="🌿 Salute e Benessere" bare>
           <p style={{ fontSize: '14px', lineHeight: '1.6', marginBottom: '16px' }}>
             {loadingSettori ? 'Sto leggendo le stelle...' : (settori?.salute || '...')}
           </p>
-          <div style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
-            <button className="icon-btn" style={{ width: '48px', height: '48px' }} title="Chat" onClick={() => router.push('/chat?focus=tema_salute')}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-            </button>
-            <button className="icon-btn accent" style={{ width: '48px', height: '48px' }} title="Voce" onClick={() => router.push('/consulenza?focus=tema_salute')}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
-            </button>
-          </div>
+          <AzioniTecniche argomento="tema_salute" />
         </Accordion>
 
         <Accordion title="🌱 Crescita Personale" bare>
           <p style={{ fontSize: '14px', lineHeight: '1.6', marginBottom: '16px' }}>
             {loadingSettori ? 'Sto leggendo le stelle...' : (settori?.crescita || '...')}
           </p>
-          <div style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
-            <button className="icon-btn" style={{ width: '48px', height: '48px' }} title="Chat" onClick={() => router.push('/chat?focus=tema_crescita')}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-            </button>
-            <button className="icon-btn accent" style={{ width: '48px', height: '48px' }} title="Voce" onClick={() => router.push('/consulenza?focus=tema_crescita')}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
-            </button>
-          </div>
+          <AzioniTecniche argomento="tema_crescita" />
         </Accordion>
 
         <Accordion title="🔮 Previsioni Annuali" bare>
           <p style={{ fontSize: '14px', lineHeight: '1.6', marginBottom: '16px' }}>
             {loadingSettori ? 'Sto leggendo le stelle...' : (settori?.previsioni || '...')}
           </p>
-          <div style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
-            <button className="icon-btn" style={{ width: '48px', height: '48px' }} title="Chat" onClick={() => router.push('/chat?focus=tema_previsioni')}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-            </button>
-            <button className="icon-btn accent" style={{ width: '48px', height: '48px' }} title="Voce" onClick={() => router.push('/consulenza?focus=tema_previsioni')}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
-            </button>
-          </div>
+          <AzioniTecniche argomento="tema_previsioni" />
         </Accordion>
       </div>
 
       <div className="section-label" style={{ marginTop: '30px', fontSize: '15px' }}>Compatibilità</div>
       <div className="accordion">
         <Accordion title="Scopri l'intesa con un'altra persona" bare>
-          <div style={{ fontSize: '14px', color: 'var(--text-dim)', marginBottom: '16px' }}>
-            Inserisci i dati di un'altra persona per vedere la sinastria completa.
-          </div>
-          <Link href="/compatibilita" className="btn-line" style={{ display: 'inline-block', width: '100%', textAlign: 'center', fontSize: '15px' }}>
+          <Link href="/compatibilita" className="btn-line" style={{ display: 'inline-block', width: '100%', textAlign: 'center', fontSize: '15px', marginTop: '10px' }}>
             Vai alla compatibilità →
           </Link>
         </Accordion>
