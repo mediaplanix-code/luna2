@@ -37,4 +37,10 @@ export default function Accordion({ title, children, bare = false, defaultOpen =
         </span>
       </button>
       {aperto && (
-        <div style={{ padding: bare ? '0 0 20px 0'
+        <div style={{ padding: bare ? '0 0 20px 0' : '0 16px 20px 16px' }}>
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
