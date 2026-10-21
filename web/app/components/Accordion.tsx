@@ -28,11 +28,10 @@ export default function Accordion({ title, children, bare = false, defaultOpen =
           justifyContent: 'space-between',
           alignItems: 'center',
           fontSize: '15px',
-          fontFamily: 'Georgia, serif',
         }}
       >
         <span style={{ fontWeight: 500 }}>{title}</span>
-        <span style={{ transform: aperto ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 0.2s', fontSize: '12px' }}>
+        <span style={{ transform: aperto ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 0.2s', fontSize: '12px', width: '20px', textAlign: 'center' }}>
           ▼
         </span>
       </button>
