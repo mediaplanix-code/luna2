@@ -1,7 +1,3 @@
-# =========================================================
-# LUNA2 — Integrazione AI (Groq + DeepSeek con fallback)
-# =========================================================
-
 import os
 import asyncio
 import httpx
@@ -31,7 +27,7 @@ async def _chiama_provider(nome: str, url: str, api_key: str, modello: str, prom
         "messages": [{"role": "user", "content": prompt}],
         "max_tokens": max_tokens,
         "temperature": 0.7,
-        "reasoning_effort": "low",  # <--- FONDAMENTALE: riduce il "pensiero" interno
+        "reasoning_effort": "low",
     }
 
     try:
@@ -49,7 +45,6 @@ async def _chiama_provider(nome: str, url: str, api_key: str, modello: str, prom
             data = r.json()
             choices = data.get("choices", [])
             if not choices:
-                print(f"=== AI {nome}: nessuna scelta nella risposta ===")
                 return ""
 
             choice = choices[0]
@@ -60,23 +55,14 @@ async def _chiama_provider(nome: str, url: str, api_key: str, modello: str, prom
                 print(f"=== AI {nome}: contenuto vuoto. finish_reason: {finish_reason} ===")
                 return ""
 
-            print(f"=== AI {nome}: OK, {len(testo)} caratteri (finish_reason: {finish_reason}) ===")
             return testo
 
-    except httpx.TimeoutException:
-        print(f"=== AI {nome}: timeout (60s) ===")
-        return ""
-    except httpx.ConnectError as e:
-        print(f"=== AI {nome}: errore connessione: {e} ===")
-        return ""
     except Exception as e:
         print(f"=== AI {nome}: eccezione {type(e).__name__}: {e} ===")
         return ""
 
 
 async def _chiama_ai(prompt: str, max_tokens: int = 800) -> str:
-    """Prova Groq, poi DeepSeek. Se il primo tentativo restituisce vuoto, ritenta."""
-    
     risposta = await _chiama_provider("GROQ", GROQ_URL, GROQ_API_KEY, GROQ_MODELLO, prompt, max_tokens)
     if risposta:
         return risposta
@@ -90,7 +76,6 @@ async def _chiama_ai(prompt: str, max_tokens: int = 800) -> str:
     if risposta:
         return risposta
 
-    print("=== AI: tutti i tentativi falliti ===")
     return ""
 
 
@@ -110,7 +95,6 @@ REGOLE TASSATIVE:
 
 Scrivi il testo. Inizia con "Ciao {nome}," e poi 2-3 frasi."""
 
-    # Aumentato a 800 per dare spazio al ragionamento + testo
     return await _chiama_ai(prompt, max_tokens=800)
 
 
@@ -136,7 +120,55 @@ DOMANDA DI {nome}:
 
 Rispondi come astrologa."""
 
-    return await _chiama_ai(prompt, max_tokens=800)
+    return await _chiama_ai(prompt, max_tokens=600)
+
+
+async def rispondi_chat_compatibilita(dati_compatibilita: dict, focus: str, domanda: str, storico: list) -> str:
+    """Chat specializzata nella compatibilità, con focus specifico."""
+    
+    nome_a = dati_compatibilita.get("persona_a", "Utente")
+    nome_b = dati_compatibilita.get("persona_b", "l'altra persona")
+    
+    # Costruisce la descrizione degli aspetti
+    aspetti_testo = ""
+    for a in dati_compatibilita.get("aspetti", []):
+        aspetti_testo += f"- {a['pianeta_a']} {a['tipo']} {a['pianeta_b']} (orbe {a['orb']}°)\n"
+
+    # Mappa il focus in un'istruzione specifica
+    if focus == "amore":
+        istruzione_focus = f"Stai parlando SOLO ed ESCLUSIVAMENTE della compatibilità AMOROSA tra {nome_a} e {nome_b}. Analizza gli aspetti tra Venere, Marte e Luna, e spiega cosa significano per la loro relazione sentimentale. Non parlare di lavoro, salute o altri argomenti."
+    elif focus == "lavoro":
+        istruzione_focus = f"Stai parlando SOLO ed ESCLUSIVAMENTE della compatibilità LAVORATIVA tra {nome_a} e {nome_b}. Analizza gli aspetti tra Sole, Saturno e Mercurio, e spiega come possono collaborare. Non parlare di amore, salute o altri argomenti."
+    elif focus == "salute":
+        istruzione_focus = f"Stai parlando SOLO ed ESCLUSIVAMENTE della compatibilità relativa alla SALUTE e al BENESSERE tra {nome_a} e {nome_b}. Analizza gli aspetti tra Luna, Nettuno e gli altri pianeti, e spiega come si sostengono energeticamente. Non parlare di amore, lavoro o altri argomenti."
+    elif focus == "crescita":
+        istruzione_focus = f"Stai parlando SOLO ed ESCLUSIVAMENTE della CRESCITA PERSONALE e del CAMMINO KARMICO tra {nome_a} e {nome_b}. Analizza gli aspetti tra NodoNord, Saturno e gli altri pianeti, e spiega come questa relazione stimola la crescita. Non parlare di amore, lavoro o altri argomenti."
+    elif focus == "previsioni":
+        istruzione_focus = f"Stai parlando SOLO ed ESCLUSIVAMENTE delle PREVISIONI e dei TRANSITI per questa coppia. Analizza gli aspetti e spiega cosa possono aspettarsi nei prossimi mesi. Non parlare di amore, lavoro o altri argomenti."
+    else:
+        istruzione_focus = f"Stai parlando della COMPATIBILITÀ GENERALE tra {nome_a} e {nome_b}. Analizza i loro aspetti e spiega cosa significano per la loro relazione."
+
+    storico_testo = ""
+    for m in storico[-6:]:
+        ruolo = "Utente" if m.get("role") == "user" else "Astrologa"
+        storico_testo += f"{ruolo}: {m.get('content', '')}\n"
+
+    prompt = f"""Sei un'astrologa italiana esperta di sinastria. Stai parlando con {nome_a} riguardo alla sua compatibilità con {nome_b}.
+
+{istruzione_focus}
+
+Ecco i dati tecnici del loro confronto (ASPETTI):
+{aspetti_testo}
+
+CONVERSAZIONE PRECEDENTE:
+{storico_testo}
+
+DOMANDA DI {nome_a}:
+{domanda}
+
+Rispondi come astrologa. Tono: caldo, diretto, professionale. Massimo 150 parole. NON usare MAI asterischi o markdown, solo testo fluido."""
+
+    return await _chiama_ai(prompt, max_tokens=600)
 
 
 async def genera_copione_voce(report: dict) -> str:
@@ -155,3 +187,43 @@ REPORT INTERNO:
 
 Scrivi il copione di apertura."""
     return await _chiama_ai(prompt, max_tokens=1000)
+
+
+async def genera_copione_voce_compatibilita(dati_compatibilita: dict, focus: str) -> str:
+    """Genera il copione per la voce, specifico per il focus di compatibilità."""
+    
+    nome_a = dati_compatibilita.get("persona_a", "Utente")
+    nome_b = dati_compatibilita.get("persona_b", "l'altra persona")
+    
+    aspetti_testo = ""
+    for a in dati_compatibilita.get("aspetti", []):
+        aspetti_testo += f"- {a['pianeta_a']} {a['tipo']} {a['pianeta_b']} (orbe {a['orb']}°)\n"
+
+    istruzione_focus = ""
+    if focus == "amore":
+        istruzione_focus = f"Stai per parlare al telefono con {nome_a} della sua compatibilità AMOROSA con {nome_b}. Apri la conversazione parlando degli aspetti tra Venere, Marte e Luna. Non divagare su altri argomenti."
+    elif focus == "lavoro":
+        istruzione_focus = f"Stai per parlare al telefono con {nome_a} della sua compatibilità LAVORATIVA con {nome_b}. Apri la conversazione parlando degli aspetti tra Sole, Saturno e Mercurio. Non divagare su altri argomenti."
+    elif focus == "salute":
+        istruzione_focus = f"Stai per parlare al telefono con {nome_a} della compatibilità relativa alla SALUTE con {nome_b}. Apri la conversazione parlando degli aspetti tra Luna e Nettuno. Non divagare su altri argomenti."
+    elif focus == "crescita":
+        istruzione_focus = f"Stai per parlare al telefono con {nome_a} della CRESCITA PERSONALE legata a {nome_b}. Apri la conversazione parlando degli aspetti tra NodoNord e Saturno. Non divagare su altri argomenti."
+    elif focus == "previsioni":
+        istruzione_focus = f"Stai per parlare al telefono con {nome_a} delle PREVISIONI per la coppia con {nome_b}. Apri la conversazione parlando dei transiti futuri. Non divagare su altri argomenti."
+    else:
+        istruzione_focus = f"Stai per parlare al telefono con {nome_a} della sua COMPATIBILITÀ GENERALE con {nome_b}. Apri la conversazione parlando dei loro aspetti principali."
+
+    prompt = f"""{istruzione_focus}
+
+Ecco i dati tecnici del loro confronto:
+{aspetti_testo}
+
+Scrivi il copione di apertura (circa 2 minuti). Tono: caldo, diretto, mistico ma professionale. Non usare asterischi o markdown. Struttura:
+
+1. Saluto personalizzato
+2. Introduzione all'argomento specifico
+3. Apertura alla conversazione ("dimmi cosa ti risuona di più")
+
+Scrivi il copione."""
+
+    return await _chiama_ai(prompt, max_tokens=800)
