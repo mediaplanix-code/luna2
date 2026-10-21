@@ -8,7 +8,8 @@ function ChatContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const focus = searchParams.get('focus');
-  
+  const nomeB = searchParams.get('nome_b');
+
   const [token, setToken] = useState<string | null>(null);
   const [domanda, setDomanda] = useState('');
   const [risposta, setRisposta] = useState('');
@@ -93,6 +94,25 @@ function ChatContent() {
   }
 
   const rimaste = Math.max(0, domandeLimite - domandeUsate);
+  
+  // Costruisce il titolo
+  let titolo = "Parla con la tua astrologa";
+  let sottotitolo = "";
+  
+  if (focus && focus.startsWith('compatibilita')) {
+    const argomento = focus.replace('compatibilita_', '');
+    const mappaArgomenti: Record<string, string> = {
+      'amore': 'Amore',
+      'lavoro': 'Lavoro',
+      'salute': 'Salute',
+      'crescita': 'Crescita Personale',
+      'previsioni': 'Previsioni',
+      'generico': 'Generale'
+    };
+    const nomeArgomento = mappaArgomenti[argomento] || 'Compatibilità';
+    titolo = `Approfondimento ${nomeArgomento}${nomeB ? ` tra te e ${nomeB}` : ''}`;
+    sottotitolo = nomeB ? `Con ${nomeB}` : '';
+  }
 
   return (
     <div className="canvas">
@@ -110,7 +130,7 @@ function ChatContent() {
         textAlign: 'center',
         marginBottom: '6px'
       }}>
-        {focus ? "Approfondisci la compatibilità" : "Parla con la tua astrologa"}
+        {titolo}
       </h1>
       <p style={{
         textAlign: 'center',
@@ -207,6 +227,15 @@ function ChatContent() {
       )}
 
       <div ref={fondoRef} />
+
+      {/* Pulsante per tornare indietro senza rifare il form */}
+      {focus && (
+        <div style={{ marginTop: '20px', textAlign: 'center' }}>
+          <Link href="/compatibilita" className="cta" style={{ background: 'transparent', border: '1px solid var(--text-dim)', color: 'var(--text-dim)', display: 'inline-block' }}>
+            ← Torna alla compatibilità
+          </Link>
+        </div>
+      )}
 
       <div className="footer">
         <Link href="/privacy">Privacy</Link>·
