@@ -46,9 +46,18 @@ export default function CompatibilitaPage() {
       return;
     }
     setToken(t);
+
+    // Recupera l'ultimo confronto dal profilo, se esiste
+    fetch(`https://luna2-api.onrender.com/sala/${t}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.profile && d.profile.ultima_compatibilita) {
+          setRisultato(d.profile.ultima_compatibilita);
+        }
+      })
+      .catch(() => {});
   }, [router]);
 
-  // Rimosso il wrapper che chiudeva la tendina e causava il doppio click
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (cityQuery.length < 2) { setSuggestions([]); setShowSuggestions(false); return; }
@@ -158,7 +167,6 @@ export default function CompatibilitaPage() {
             {loadingCity && <div style={{ fontSize: '12px', color: '#F5A623', marginTop: '6px' }}>Cerco la città...</div>}
           </div>
 
-          {/* La lista è fuori dal wrapper, quindi non si chiude al click */}
           {showSuggestions && suggestions.length > 0 && (
             <div style={{ 
               background: 'rgba(255,255,255,0.05)', 
@@ -227,10 +235,10 @@ export default function CompatibilitaPage() {
                 {risultato.testi.amore}
               </p>
               <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-                 <button className="icon-btn" title="Chat" onClick={() => router.push(risultato.link.amore.chat)}>
+                 <button className="icon-btn" title="Chat" onClick={() => router.push(`${risultato.link.amore.chat}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                   </button>
-                  <button className="icon-btn accent" title="Voce" onClick={() => router.push(risultato.link.amore.voce)}>
+                  <button className="icon-btn accent" title="Voce" onClick={() => router.push(`${risultato.link.amore.voce}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
                   </button>
               </div>
@@ -241,10 +249,10 @@ export default function CompatibilitaPage() {
                 {risultato.testi.lavoro}
               </p>
               <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-                 <button className="icon-btn" title="Chat" onClick={() => router.push(risultato.link.lavoro.chat)}>
+                 <button className="icon-btn" title="Chat" onClick={() => router.push(`${risultato.link.lavoro.chat}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                   </button>
-                  <button className="icon-btn accent" title="Voce" onClick={() => router.push(risultato.link.lavoro.voce)}>
+                  <button className="icon-btn accent" title="Voce" onClick={() => router.push(`${risultato.link.lavoro.voce}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
                   </button>
               </div>
@@ -255,10 +263,10 @@ export default function CompatibilitaPage() {
                 {risultato.testi.salute}
               </p>
               <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-                 <button className="icon-btn" title="Chat" onClick={() => router.push(risultato.link.salute.chat)}>
+                 <button className="icon-btn" title="Chat" onClick={() => router.push(`${risultato.link.salute.chat}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                   </button>
-                  <button className="icon-btn accent" title="Voce" onClick={() => router.push(risultato.link.salute.voce)}>
+                  <button className="icon-btn accent" title="Voce" onClick={() => router.push(`${risultato.link.salute.voce}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
                   </button>
               </div>
@@ -269,10 +277,10 @@ export default function CompatibilitaPage() {
                 {risultato.testi.crescita}
               </p>
               <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-                 <button className="icon-btn" title="Chat" onClick={() => router.push(risultato.link.crescita.chat)}>
+                 <button className="icon-btn" title="Chat" onClick={() => router.push(`${risultato.link.crescita.chat}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                   </button>
-                  <button className="icon-btn accent" title="Voce" onClick={() => router.push(risultato.link.crescita.voce)}>
+                  <button className="icon-btn accent" title="Voce" onClick={() => router.push(`${risultato.link.crescita.voce}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
                   </button>
               </div>
@@ -283,10 +291,10 @@ export default function CompatibilitaPage() {
                 {risultato.testi.previsioni}
               </p>
               <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-                 <button className="icon-btn" title="Chat" onClick={() => router.push(risultato.link.previsioni.chat)}>
+                 <button className="icon-btn" title="Chat" onClick={() => router.push(`${risultato.link.previsioni.chat}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                   </button>
-                  <button className="icon-btn accent" title="Voce" onClick={() => router.push(risultato.link.previsioni.voce)}>
+                  <button className="icon-btn accent" title="Voce" onClick={() => router.push(`${risultato.link.previsioni.voce}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
                   </button>
               </div>
@@ -335,40 +343,8 @@ export default function CompatibilitaPage() {
                 </tbody>
               </table>
               <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-                 <button className="icon-btn" title="Chat" onClick={() => router.push(risultato.link.generico.chat)}>
+                 <button className="icon-btn" title="Chat" onClick={() => router.push(`${risultato.link.generico.chat}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                   </button>
-                  <button className="icon-btn accent" title="Voce" onClick={() => router.push(risultato.link.generico.voce)}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
-                  </button>
-              </div>
-            </Accordion>
-          </div>
-
-          <div style={{ display: 'flex', gap: '10px', marginTop: '24px' }}>
-            <button 
-              onClick={() => router.push('/sala')}
-              className="cta" 
-              style={{ flex: 1, background: 'transparent', border: '1px solid var(--text-dim)', color: 'var(--text-dim)', fontSize: '12px' }}
-            >
-              ← Torna indietro
-            </button>
-            <button 
-              onClick={() => { setRisultato(null); setForm({ nome: '', birth_date: '', birth_time: '', birth_city: '', birth_lat: 0, birth_lon: 0 }); setCityQuery(''); }}
-              className="cta" 
-              style={{ flex: 1, fontSize: '12px' }}
-            >
-              Un altro confronto
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div className="footer">
-        <Link href="/privacy">Privacy</Link>·
-        <Link href="/disclaimer">Disclaimer</Link>·
-        <Link href="/faq">?</Link>
-      </div>
-    </div>
-  );
-}
+                  <button className="icon-btn accent" title="Voce" onClick={() => router.push(`${risultato.link.generico.voce}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19
