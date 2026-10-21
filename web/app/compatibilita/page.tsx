@@ -47,12 +47,21 @@ export default function CompatibilitaPage() {
     }
     setToken(t);
 
-    // Recupera l'ultimo confronto dal profilo, se esiste
+    // 1. Prova a leggere dal localStorage (istantaneo)
+    const salvatoLocale = localStorage.getItem('luna2_ultima_compatibilita');
+    if (salvatoLocale) {
+      try {
+        setRisultato(JSON.parse(salvatoLocale));
+      } catch (e) {}
+    }
+
+    // 2. Poi aggiorna dal server (se c'è qualcosa di più recente)
     fetch(`https://luna2-api.onrender.com/sala/${t}`)
       .then(r => r.json())
       .then(d => {
         if (d.profile && d.profile.ultima_compatibilita) {
           setRisultato(d.profile.ultima_compatibilita);
+          localStorage.setItem('luna2_ultima_compatibilita', JSON.stringify(d.profile.ultima_compatibilita));
         }
       })
       .catch(() => {});
@@ -103,6 +112,7 @@ export default function CompatibilitaPage() {
     setLoading(true);
     setError('');
     setRisultato(null);
+    localStorage.removeItem('luna2_ultima_compatibilita');
 
     try {
       const res = await fetch(`https://luna2-api.onrender.com/compatibilita/${token}`, {
@@ -119,6 +129,7 @@ export default function CompatibilitaPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || `Errore ${res.status}`);
       setRisultato(data);
+      localStorage.setItem('luna2_ultima_compatibilita', JSON.stringify(data));
     } catch (err: any) {
       setError(err.message || 'Errore sconosciuto');
     } finally {
@@ -137,7 +148,7 @@ export default function CompatibilitaPage() {
         Compatibilità
       </h1>
       <p style={{ textAlign: 'center', fontSize: '12px', color: 'var(--text-dim)', marginBottom: '22px' }}>
-        Inserisci i dati di nascita dell&apos;altra persona.
+        {risultato ? "Ecco il vostro confronto." : "Inserisci i dati di nascita dell'altra persona."}
       </p>
 
       {!risultato && (
@@ -295,88 +306,4 @@ export default function CompatibilitaPage() {
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                   </button>
                   <button className="icon-btn accent" title="Voce" onClick={() => router.push(`${risultato.link.previsioni.voce}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
-                  </button>
-              </div>
-            </Accordion>
-          </div>
-
-          <div className="section-label" style={{ marginTop: '30px' }}>Dettagli tecnici</div>
-          <div className="accordion">
-            <Accordion title={`Il tema di ${risultato.persona_b}`} bare>
-              <div className="identikit">
-                {risultato.pianeti_b?.Sole && (
-                  <div className="row">
-                    <span className="label">Sole</span>
-                    <span className="value"><span className="sym">{SIMBOLI[risultato.pianeti_b.Sole.segno]}</span> {risultato.pianeti_b.Sole.segno}</span>
-                  </div>
-                )}
-                {risultato.pianeti_b?.Luna && (
-                  <div className="row">
-                    <span className="label">Luna</span>
-                    <span className="value"><span className="sym">{SIMBOLI[risultato.pianeti_b.Luna.segno]}</span> {risultato.pianeti_b.Luna.segno}</span>
-                  </div>
-                )}
-                {risultato.pianeti_b?.Mercurio && (
-                  <div className="row">
-                    <span className="label">Mercurio</span>
-                    <span className="value"><span className="sym">{SIMBOLI[risultato.pianeti_b.Mercurio.segno]}</span> {risultato.pianeti_b.Mercurio.segno}</span>
-                  </div>
-                )}
-              </div>
-            </Accordion>
-            
-            <Accordion title="Gli aspetti principali" bare>
-              <table className="data" style={{ marginBottom: '16px' }}>
-                <thead>
-                  <tr><th>Pianeta A</th><th>Aspetto</th><th>Pianeta B</th><th>Orbe</th></tr>
-                </thead>
-                <tbody>
-                  {risultato.aspetti.map((a: Aspetto, i: number) => (
-                    <tr key={i}>
-                      <td>{a.pianeta_a}</td>
-                      <td>{a.tipo}</td>
-                      <td>{a.pianeta_b}</td>
-                      <td>{a.orb}°</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-                 <button className="icon-btn" title="Chat" onClick={() => router.push(`${risultato.link.generico.chat}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                  </button>
-                  <button className="icon-btn accent" title="Voce" onClick={() => router.push(`${risultato.link.generico.voce}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
-                  </button>
-              </div>
-            </Accordion>
-          </div>
-
-          <div style={{ display: 'flex', gap: '10px', marginTop: '24px' }}>
-            <button 
-              onClick={() => router.push('/sala')}
-              className="cta" 
-              style={{ flex: 1, background: 'transparent', border: '1px solid var(--text-dim)', color: 'var(--text-dim)', fontSize: '12px' }}
-            >
-              ← Torna indietro
-            </button>
-            <button 
-              onClick={() => { setRisultato(null); setForm({ nome: '', birth_date: '', birth_time: '', birth_city: '', birth_lat: 0, birth_lon: 0 }); setCityQuery(''); }}
-              className="cta" 
-              style={{ flex: 1, fontSize: '12px' }}
-            >
-              Un altro confronto
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div className="footer">
-        <Link href="/privacy">Privacy</Link>·
-        <Link href="/disclaimer">Disclaimer</Link>·
-        <Link href="/faq">?</Link>
-      </div>
-    </div>
-  );
-}
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0
