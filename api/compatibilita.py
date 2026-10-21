@@ -125,7 +125,6 @@ async def calcola_compatibilita(token: str, persona_b: PersonaB):
         "previsioni": "I transiti futuri indicano un periodo di espansione e nuove opportunità per la coppia." if percentuale > 50 else "I transiti futuri richiedono pazienza e capacità di adattamento.",
     }
 
-    # Link con il contesto per la chat e la voce
     link_contesto = {
         "generico": {"chat": f"/chat?focus=compatibilita", "voce": f"/consulenza?focus=compatibilita"},
         "amore": {"chat": f"/chat?focus=compatibilita_amore", "voce": f"/consulenza?focus=compatibilita_amore"},
@@ -135,7 +134,7 @@ async def calcola_compatibilita(token: str, persona_b: PersonaB):
         "previsioni": {"chat": f"/chat?focus=compatibilita_previsioni", "voce": f"/consulenza?focus=compatibilita_previsioni"},
     }
 
-    return {
+    risultato = {
         "persona_a": persona_a["nome"],
         "persona_b": persona_b.nome,
         "segno_a": segno_a,
@@ -147,3 +146,8 @@ async def calcola_compatibilita(token: str, persona_b: PersonaB):
         "testi": testi,
         "link": link_contesto
     }
+
+    # Salva l'ultimo confronto nel profilo dell'utente
+    sb.table("profiles").update({"ultima_compatibilita": risultato}).eq("id", persona_a["id"]).execute()
+
+    return risultato
