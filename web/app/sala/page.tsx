@@ -41,12 +41,12 @@ function formatGrado(lon: number): string {
   return `${g}°${String(m).padStart(2, '0')}'`;
 }
 
-function AzioniTecniche({ argomento }: { argomento: string }) {
+function AzioniTecniche({ argomento, testo }: { argomento: string, testo: string }) {
   const router = useRouter();
   return (
     <div style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-      <div style={{ textAlign: 'center', fontSize: '13px', color: 'var(--text-dim)', marginBottom: '12px' }}>
-        Approfondisci il significato
+      <div style={{ textAlign: 'center', fontSize: '14px', color: 'var(--text-dim)', marginBottom: '12px' }}>
+        {testo}
       </div>
       <div style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
         <button className="icon-btn" style={{ width: '48px', height: '48px' }} title="Chiedi alla Chat" onClick={() => router.push(`/chat?focus=${argomento}`)}>
@@ -264,7 +264,7 @@ function SalaContent() {
               ))}
             </tbody>
           </table>
-          <AzioniTecniche argomento="tema_pianeti" />
+          <AzioniTecniche argomento="tema_pianeti" testo="Approfondisci il significato" />
         </Accordion>
 
         <Accordion title="Case">
@@ -282,7 +282,7 @@ function SalaContent() {
               ))}
             </tbody>
           </table>
-          <AzioniTecniche argomento="tema_case" />
+          <AzioniTecniche argomento="tema_case" testo="Approfondisci il significato" />
         </Accordion>
 
         <Accordion title="Aspetti">
@@ -301,7 +301,7 @@ function SalaContent() {
               ))}
             </tbody>
           </table>
-          <AzioniTecniche argomento="tema_aspetti" />
+          <AzioniTecniche argomento="tema_aspetti" testo="Approfondisci il significato" />
         </Accordion>
 
         <Accordion title="Transiti">
@@ -324,45 +324,45 @@ function SalaContent() {
               ))}
             </tbody>
           </table>
-          <AzioniTecniche argomento="tema_transiti" />
+          <AzioniTecniche argomento="tema_transiti" testo="Approfondisci il significato" />
         </Accordion>
       </div>
 
       <div className="section-label" style={{ fontSize: '15px' }}>Esplora i tuoi settori</div>
       <div className="accordion">
         <Accordion title="❤️ Amore e Relazioni" bare>
-          <p style={{ fontSize: '14px', lineHeight: '1.6', marginBottom: '16px' }}>
+          <p style={{ fontSize: '15px', lineHeight: '1.7', marginBottom: '16px' }}>
             {loadingSettori ? 'Sto leggendo le stelle...' : (settori?.amore || '...')}
           </p>
-          <AzioniTecniche argomento="tema_amore" />
+          <AzioniTecniche argomento="tema_amore" testo="Approfondisci" />
         </Accordion>
 
         <Accordion title="💼 Carriera e Finanze" bare>
-          <p style={{ fontSize: '14px', lineHeight: '1.6', marginBottom: '16px' }}>
+          <p style={{ fontSize: '15px', lineHeight: '1.7', marginBottom: '16px' }}>
             {loadingSettori ? 'Sto leggendo le stelle...' : (settori?.lavoro || '...')}
           </p>
-          <AzioniTecniche argomento="tema_lavoro" />
+          <AzioniTecniche argomento="tema_lavoro" testo="Approfondisci" />
         </Accordion>
 
         <Accordion title="🌿 Salute e Benessere" bare>
-          <p style={{ fontSize: '14px', lineHeight: '1.6', marginBottom: '16px' }}>
+          <p style={{ fontSize: '15px', lineHeight: '1.7', marginBottom: '16px' }}>
             {loadingSettori ? 'Sto leggendo le stelle...' : (settori?.salute || '...')}
           </p>
-          <AzioniTecniche argomento="tema_salute" />
+          <AzioniTecniche argomento="tema_salute" testo="Approfondisci" />
         </Accordion>
 
         <Accordion title="🌱 Crescita Personale" bare>
-          <p style={{ fontSize: '14px', lineHeight: '1.6', marginBottom: '16px' }}>
+          <p style={{ fontSize: '15px', lineHeight: '1.7', marginBottom: '16px' }}>
             {loadingSettori ? 'Sto leggendo le stelle...' : (settori?.crescita || '...')}
           </p>
-          <AzioniTecniche argomento="tema_crescita" />
+          <AzioniTecniche argomento="tema_crescita" testo="Approfondisci" />
         </Accordion>
 
         <Accordion title="🔮 Previsioni Annuali" bare>
-          <p style={{ fontSize: '14px', lineHeight: '1.6', marginBottom: '16px' }}>
+          <p style={{ fontSize: '15px', lineHeight: '1.7', marginBottom: '16px' }}>
             {loadingSettori ? 'Sto leggendo le stelle...' : (settori?.previsioni || '...')}
           </p>
-          <AzioniTecniche argomento="tema_previsioni" />
+          <AzioniTecniche argomento="tema_previsioni" testo="Approfondisci" />
         </Accordion>
       </div>
 
