@@ -54,11 +54,13 @@ async def calcola_compatibilita(token: str, persona_b: PersonaB):
 
     sb = create_client(SUPABASE_URL, SUPABASE_KEY)
     
+    # 1. Recupera la Persona A
     res = sb.table("profiles").select("*").eq("access_token", token).execute()
     if not res.data:
         raise HTTPException(status_code=404, detail="Profilo non trovato")
     persona_a = res.data[0]
 
+    # 2. Calcola i tempi
     jd_a = julian_day(str(persona_a["birth_date"]), str(persona_a["birth_time"])[:5])
     jd_b = julian_day(persona_b.birth_date, persona_b.birth_time)
 
@@ -68,6 +70,7 @@ async def calcola_compatibilita(token: str, persona_b: PersonaB):
     tema_a = calcola_pianeti(jd_a)
     tema_b = calcola_pianeti(jd_b)
 
+    # 3. Calcola gli aspetti e il punteggio
     aspetti = []
     punteggio_totale = 0
 
@@ -94,15 +97,17 @@ async def calcola_compatibilita(token: str, persona_b: PersonaB):
                     })
                     punteggio_totale += punteggio
 
+    # 4. Calcola la percentuale finale
     if aspetti:
         media = punteggio_totale / len(aspetti)
         percentuale = min(100, int(50 + (media * 5)))
     else:
         percentuale = 50
 
-    # Ordina per punteggio
+    # 5. Ordina gli aspetti
     aspetti.sort(key=lambda x: x["punteggio"], reverse=True)
 
+    # 6. Prepara i pianeti di B per il frontend
     pianeti_b = {}
     for nome, lon in tema_b.items():
         segno_idx = int(lon // 30)
@@ -112,9 +117,11 @@ async def calcola_compatibilita(token: str, persona_b: PersonaB):
             "grado": round(lon % 30, 2)
         }
 
+    # 7. Aggiorna il contatore
     usate = persona_a.get("compatibilita_usate", 0) or 0
     sb.table("profiles").update({"compatibilita_usate": usate + 1}).eq("id", persona_a["id"]).execute()
 
+    # 8. Restituisci tutto
     return {
         "persona_a": persona_a["nome"],
         "persona_b": persona_b.nome,
