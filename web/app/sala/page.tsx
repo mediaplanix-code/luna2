@@ -95,7 +95,6 @@ function SalaContent() {
   useEffect(() => {
     if (!token) return;
     
-    // Carica i settori
     setLoadingSettori(true);
     fetch(`https://luna2-api.onrender.com/settori/${token}`)
       .then(r => r.json())
@@ -105,7 +104,6 @@ function SalaContent() {
       .catch(() => {})
       .finally(() => setLoadingSettori(false));
 
-    // Carica l'oroscopo con timeout lungo (30s)
     setLoadingOroscopo(true);
     const abortController = new AbortController();
     const timeoutId = setTimeout(() => abortController.abort(), 30000);
@@ -169,49 +167,52 @@ function SalaContent() {
         <div className="user" style={{ fontSize: '14px' }}>{nome} ▾</div>
       </div>
 
-      <div className="sign-hero">
-        <div className="sign-symbol" style={{ fontSize: '64px' }}>{SIMBOLI[soleSegno]}</div>
-        <div className="sign-name" style={{ fontSize: '24px' }}>{soleSegno}</div>
-        <div className="greeting">
-          <h1 style={{ fontSize: '26px' }}>Ciao {nome}.</h1>
-          <p style={{ fontSize: '14px' }}>Ecco il tuo cielo oggi.</p>
+      {/* Intestazione Saluto */}
+      <div style={{ textAlign: 'center', margin: '20px 0' }}>
+        <h1 style={{ fontSize: '26px', marginBottom: '4px' }}>Ciao {nome}.</h1>
+        <p style={{ fontSize: '14px', color: 'var(--text-dim)' }}>Ecco il tuo cielo oggi.</p>
+      </div>
+
+      {/* Identikit a due colonne */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginTop: '10px' }}>
+        {/* Colonna Sinistra: Segno Solare */}
+        <div style={{ flex: '0 0 35%', textAlign: 'center' }}>
+          <div style={{ fontSize: '80px', lineHeight: '1', color: '#F5A623' }}>{SIMBOLI[soleSegno]}</div>
+          <div style={{ fontSize: '20px', fontFamily: 'Georgia, serif', marginTop: '8px' }}>{soleSegno}</div>
+        </div>
+        {/* Colonna Destra: Altri Segni */}
+        <div style={{ flex: '1' }}>
+          <div className="identikit" style={{ margin: 0 }}>
+            <div className="row" style={{ fontSize: '15px', padding: '10px 0' }}>
+              <span className="label">Ascendente</span>
+              <span className="value"><span className="sym" style={{ fontSize: '20px' }}>{SIMBOLI[ascSegno] || '✦'}</span> {ascSegno}</span>
+            </div>
+            <div className="row" style={{ fontSize: '15px', padding: '10px 0' }}>
+              <span className="label">Luna</span>
+              <span className="value"><span className="sym" style={{ fontSize: '20px' }}>{SIMBOLI[lunaSegno]}</span> {lunaSegno}</span>
+            </div>
+            <div className="row" style={{ fontSize: '15px', padding: '10px 0' }}>
+              <span className="label">Medio Cielo</span>
+              <span className="value"><span className="sym" style={{ fontSize: '20px' }}>{SIMBOLI[mcSegno] || '✦'}</span> {mcSegno}</span>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="section-label" style={{ fontSize: '15px' }}>Il tuo identikit</div>
-      <div className="identikit">
-        <div className="row" style={{ fontSize: '15px' }}>
-          <span className="label">Segno solare</span>
-          <span className="value"><span className="sym" style={{ fontSize: '20px' }}>{SIMBOLI[soleSegno]}</span> {soleSegno}</span>
-        </div>
-        <div className="row" style={{ fontSize: '15px' }}>
-          <span className="label">Ascendente</span>
-          <span className="value"><span className="sym" style={{ fontSize: '20px' }}>{SIMBOLI[ascSegno] || '✦'}</span> {ascSegno}</span>
-        </div>
-        <div className="row" style={{ fontSize: '15px' }}>
-          <span className="label">Luna</span>
-          <span className="value"><span className="sym" style={{ fontSize: '20px' }}>{SIMBOLI[lunaSegno]}</span> {lunaSegno}</span>
-        </div>
-        <div className="row" style={{ fontSize: '15px' }}>
-          <span className="label">Medio Cielo</span>
-          <span className="value"><span className="sym" style={{ fontSize: '20px' }}>{SIMBOLI[mcSegno] || '✦'}</span> {mcSegno}</span>
-        </div>
-      </div>
-
-      <div className="section-label" style={{ fontSize: '15px' }}>Segni compatibili</div>
-      <div className="compat" style={{ fontSize: '15px' }}>
-        {compatibili.slice(0, 3).map((s, i) => (
-          <span key={s}>
-            {i > 0 && <span className="dot">·</span>}
-            {SIMBOLI[s]} {s}
-          </span>
-        ))}
-        <br />
-        {compatibili.slice(3).map((s, i) => (
-          <span key={s}>
-            {i > 0 && <span className="dot">·</span>}
-            {SIMBOLI[s]} {s}
-          </span>
+      {/* Segni Compatibili - Griglia 4 colonne */}
+      <div className="section-label" style={{ fontSize: '15px', marginTop: '30px' }}>Segni compatibili</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginTop: '10px' }}>
+        {compatibili.map((s) => (
+          <div key={s} style={{ 
+            background: 'rgba(255,255,255,0.03)', 
+            border: '1px solid rgba(245,166,35,0.2)', 
+            borderRadius: '8px', 
+            padding: '12px 4px', 
+            textAlign: 'center' 
+          }}>
+            <div style={{ fontSize: '24px', color: '#F5A623', marginBottom: '4px' }}>{SIMBOLI[s]}</div>
+            <div style={{ fontSize: '11px', color: 'var(--text-dim)' }}>{s}</div>
+          </div>
         ))}
       </div>
 
@@ -224,6 +225,26 @@ function SalaContent() {
           houses={houses}
           size={500}
         />
+      </div>
+
+      {/* Oroscopo Settimanale - Aperto di default */}
+      <div className="section-label" style={{ fontSize: '15px' }}>Il tuo oroscopo settimanale</div>
+      <div className="accordion">
+        <Accordion title="Leggi l'oroscopo della settimana" bare defaultOpen={true}>
+          {loadingOroscopo ? (
+            <p style={{ fontSize: '14px', color: 'var(--text-dim)', fontStyle: 'italic' }}>
+              Sto interrogando le stelle... (potrebbe volerci mezzo minuto)
+            </p>
+          ) : oroscopo ? (
+            <p style={{ fontSize: '15px', lineHeight: '1.7', whiteSpace: 'pre-wrap' }}>
+              {oroscopo}
+            </p>
+          ) : (
+            <p style={{ fontSize: '14px', color: 'var(--text-dim)' }}>
+              Nessun oroscopo disponibile in questo momento. Riprova più tardi.
+            </p>
+          )}
+        </Accordion>
       </div>
 
       <div className="section-label" style={{ fontSize: '15px' }}>I tuoi dati</div>
@@ -305,26 +326,6 @@ function SalaContent() {
             </tbody>
           </table>
           <AzioniTecniche token={token!} argomento="tema_transiti" />
-        </Accordion>
-      </div>
-
-      {/* Oroscopo Settimanale */}
-      <div className="section-label" style={{ fontSize: '15px' }}>Il tuo oroscopo settimanale</div>
-      <div className="accordion">
-        <Accordion title="Leggi l'oroscopo della settimana" bare>
-          {loadingOroscopo ? (
-            <p style={{ fontSize: '14px', color: 'var(--text-dim)', fontStyle: 'italic' }}>
-              Sto interrogando le stelle... (potrebbe volerci mezzo minuto)
-            </p>
-          ) : oroscopo ? (
-            <p style={{ fontSize: '15px', lineHeight: '1.7', whiteSpace: 'pre-wrap' }}>
-              {oroscopo}
-            </p>
-          ) : (
-            <p style={{ fontSize: '14px', color: 'var(--text-dim)' }}>
-              Nessun oroscopo disponibile in questo momento. Riprova più tardi.
-            </p>
-          )}
         </Accordion>
       </div>
 
@@ -443,7 +444,6 @@ function SalaContent() {
         </Accordion>
       </div>
 
-      {/* Pulsanti finali affiancati con icone */}
       <div style={{ display: 'flex', gap: '12px', marginTop: '30px' }}>
         <button 
           onClick={() => router.push('/consulenza')}
