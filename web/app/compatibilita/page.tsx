@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Accordion from '../components/Accordion';
 
 type Aspetto = {
   pianeta_a: string;
@@ -15,6 +16,12 @@ const SIMBOLI: Record<string, string> = {
   Ariete: '♈', Toro: '♉', Gemelli: '♊', Cancro: '♋', Leone: '♌', Vergine: '♍',
   Bilancia: '♎', Scorpione: '♏', Sagittario: '♐', Capricorno: '♑', Acquario: '♒', Pesci: '♓',
 };
+
+function lonToSign(lon: number): string {
+  const segni = ['Ariete', 'Toro', 'Gemelli', 'Cancro', 'Leone', 'Vergine',
+    'Bilancia', 'Scorpione', 'Sagittario', 'Capricorno', 'Acquario', 'Pesci'];
+  return segni[Math.floor(((lon % 360) + 360) % 360 / 30)];
+}
 
 export default function CompatibilitaPage() {
   const router = useRouter();
@@ -74,7 +81,6 @@ export default function CompatibilitaPage() {
     return () => clearTimeout(debounceRef.current);
   }, [cityQuery]);
 
-  // Selezione città: chiude la lista e salva i dati
   function selezionaCitta(s: any) {
     setForm(prev => ({ ...prev, birth_city: s.label, birth_lat: s.lat, birth_lon: s.lon }));
     setCityQuery(s.label);
@@ -123,7 +129,7 @@ export default function CompatibilitaPage() {
         <div className="brand">✦ Luna Astrologica</div>
       </div>
 
-      <h1 style={{ fontFamily: 'Georgia, serif', fontSize: '22px', fontWeight: 400, textAlign: 'center', marginBottom: '6px' }}>
+      <h1 style={{ fontSize: '22px', fontWeight: 400, textAlign: 'center', marginBottom: '6px' }}>
         Compatibilità
       </h1>
       <p style={{ textAlign: 'center', fontSize: '12px', color: 'var(--text-dim)', marginBottom: '22px' }}>
@@ -154,11 +160,9 @@ export default function CompatibilitaPage() {
               autoComplete="off" 
               required 
             />
-            {/* Messaggio di stato della ricerca */}
             {loadingCity && <div style={{ fontSize: '12px', color: '#F5A623', marginTop: '6px' }}>Cerco la città...</div>}
           </div>
 
-          {/* La lista dei risultati è FUORI dal wrapper dell'input, così non si chiude da sola */}
           {showSuggestions && suggestions.length > 0 && (
             <div style={{ 
               background: 'rgba(255,255,255,0.05)', 
@@ -193,134 +197,173 @@ export default function CompatibilitaPage() {
 
       {risultato && (
         <div>
-          <div style={{ textAlign: 'center', margin: '20px 0' }}>
-            <h2 style={{ fontFamily: 'Georgia, serif', fontSize: '20px', color: '#F5A623' }}>
+          {/* Intestazione con i segni */}
+          <div style={{ textAlign: 'center', margin: '10px 0 20px 0' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '20px', marginBottom: '10px' }}>
+              <div>
+                <div style={{ fontSize: '32px' }}>{SIMBOLI[risultato.segno_a]}</div>
+                <div style={{ fontSize: '12px', color: 'var(--text-dim)' }}>{risultato.segno_a}</div>
+              </div>
+              <div style={{ fontSize: '20px', color: 'var(--text-dim)' }}>&amp;</div>
+              <div>
+                <div style={{ fontSize: '32px' }}>{SIMBOLI[risultato.segno_b]}</div>
+                <div style={{ fontSize: '12px', color: 'var(--text-dim)' }}>{risultato.segno_b}</div>
+              </div>
+            </div>
+            <h2 style={{ fontSize: '18px', color: '#F5A623', margin: '8px 0 4px 0' }}>
               {risultato.persona_a} e {risultato.persona_b}
             </h2>
             <div style={{ 
-              fontSize: '48px', 
+              fontSize: '36px', 
               fontWeight: 'bold', 
               color: risultato.percentuale > 60 ? '#06D6A0' : risultato.percentuale > 40 ? '#F5A623' : '#EF476F',
-              marginTop: '10px' 
+              marginTop: '8px' 
             }}>
               {risultato.percentuale}%
             </div>
-            <p style={{ fontSize: '12px', color: 'var(--text-dim)' }}>di compatibilità complessiva</p>
+            <p style={{ fontSize: '12px', color: 'var(--text-dim)', marginTop: '4px' }}>di compatibilità complessiva</p>
           </div>
 
-          <div className="section-label">I vostri aspetti principali</div>
-          <table className="data">
-            <thead>
-              <tr><th>Pianeta A</th><th>Aspetto</th><th>Pianeta B</th><th>Orbe</th></tr>
-            </thead>
-            <tbody>
-              {risultato.aspetti.map((a: Aspetto, i: number) => (
-                <tr key={i}>
-                  <td>{a.pianeta_a}</td>
-                  <td>{a.tipo}</td>
-                  <td>{a.pianeta_b}</td>
-                  <td>{a.orb}°</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          <div className="section-label" style={{ marginTop: '30px' }}>Vuoi approfondire?</div>
+          <div className="section-label">I settori della vostra vita</div>
           
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <div style={{ border: '1px solid rgba(245,166,35,0.2)', borderRadius: '8px', padding: '12px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ fontFamily: 'Georgia, serif', fontSize: '15px' }}>❤️ Amore e Relazioni</div>
-                <div className="icon-row" style={{ margin: 0 }}>
-                  <button className="icon-btn" title="Chat" onClick={() => router.push('/chat')}>
+          <div className="accordion">
+            <Accordion title="❤️ Amore e Relazioni" bare>
+              <p style={{ fontSize: '13px', lineHeight: '1.6', marginBottom: '16px' }}>
+                {risultato.testi.amore}
+              </p>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                 <button className="icon-btn" title="Chat" onClick={() => router.push('/chat')}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                   </button>
                   <button className="icon-btn accent" title="Voce" onClick={() => router.push('/consulenza')}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
                   </button>
-                </div>
+                  <span style={{ fontSize: '12px', color: '#F5A623' }}>Approfondisci (€19)</span>
               </div>
-              <div style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '4px' }}>
-                Sinastria, crisi di coppia, nuovi incontri.
-              </div>
-            </div>
+            </Accordion>
 
-            <div style={{ border: '1px solid rgba(245,166,35,0.2)', borderRadius: '8px', padding: '12px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ fontFamily: 'Georgia, serif', fontSize: '15px' }}>💼 Carriera e Finanze</div>
-                <div className="icon-row" style={{ margin: 0 }}>
-                  <button className="icon-btn" title="Chat" onClick={() => router.push('/chat')}>
+            <Accordion title="💼 Carriera e Finanze" bare>
+              <p style={{ fontSize: '13px', lineHeight: '1.6', marginBottom: '16px' }}>
+                {risultato.testi.lavoro}
+              </p>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                 <button className="icon-btn" title="Chat" onClick={() => router.push('/chat')}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                   </button>
                   <button className="icon-btn accent" title="Voce" onClick={() => router.push('/consulenza')}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
                   </button>
-                </div>
+                  <span style={{ fontSize: '12px', color: '#F5A623' }}>Approfondisci (€19)</span>
               </div>
-              <div style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '4px' }}>
-                Orientamento, cambi di lavoro, investimenti.
-              </div>
-            </div>
+            </Accordion>
 
-            <div style={{ border: '1px solid rgba(245,166,35,0.2)', borderRadius: '8px', padding: '12px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ fontFamily: 'Georgia, serif', fontSize: '15px' }}>🌿 Salute e Benessere</div>
-                <div className="icon-row" style={{ margin: 0 }}>
-                  <button className="icon-btn" title="Chat" onClick={() => router.push('/chat')}>
+            <Accordion title="🌿 Salute e Benessere" bare>
+              <p style={{ fontSize: '13px', lineHeight: '1.6', marginBottom: '16px' }}>
+                {risultato.testi.salute}
+              </p>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                 <button className="icon-btn" title="Chat" onClick={() => router.push('/chat')}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                   </button>
                   <button className="icon-btn accent" title="Voce" onClick={() => router.push('/consulenza')}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
                   </button>
-                </div>
+                  <span style={{ fontSize: '12px', color: '#F5A623' }}>Approfondisci (€19)</span>
               </div>
-              <div style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '4px' }}>
-                Gestione dello stress, energie, prevenzione.
-              </div>
-            </div>
+            </Accordion>
 
-            <div style={{ border: '1px solid rgba(245,166,35,0.2)', borderRadius: '8px', padding: '12px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ fontFamily: 'Georgia, serif', fontSize: '15px' }}>🌱 Crescita Personale</div>
-                <div className="icon-row" style={{ margin: 0 }}>
-                  <button className="icon-btn" title="Chat" onClick={() => router.push('/chat')}>
+            <Accordion title="🌱 Crescita Personale" bare>
+              <p style={{ fontSize: '13px', lineHeight: '1.6', marginBottom: '16px' }}>
+                {risultato.testi.crescita}
+              </p>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                 <button className="icon-btn" title="Chat" onClick={() => router.push('/chat')}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                   </button>
                   <button className="icon-btn accent" title="Voce" onClick={() => router.push('/consulenza')}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
                   </button>
-                </div>
+                  <span style={{ fontSize: '12px', color: '#F5A623' }}>Approfondisci (€19)</span>
               </div>
-              <div style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '4px' }}>
-                Nodi Lunari, Ritorno di Saturno, scopo di vita.
-              </div>
-            </div>
+            </Accordion>
 
-            <div style={{ border: '1px solid rgba(245,166,35,0.2)', borderRadius: '8px', padding: '12px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ fontFamily: 'Georgia, serif', fontSize: '15px' }}>🔮 Previsioni Annuali</div>
-                <div className="icon-row" style={{ margin: 0 }}>
-                  <button className="icon-btn" title="Chat" onClick={() => router.push('/chat')}>
+            <Accordion title="🔮 Previsioni Annuali" bare>
+              <p style={{ fontSize: '13px', lineHeight: '1.6', marginBottom: '16px' }}>
+                {risultato.testi.previsioni}
+              </p>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                 <button className="icon-btn" title="Chat" onClick={() => router.push('/chat')}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                   </button>
                   <button className="icon-btn accent" title="Voce" onClick={() => router.push('/consulenza')}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
                   </button>
-                </div>
+                  <span style={{ fontSize: '12px', color: '#F5A623' }}>Approfondisci (€19)</span>
               </div>
-              <div style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '4px' }}>
-                Rivoluzione Solare, tendenze dei prossimi 12 mesi.
-              </div>
-            </div>
+            </Accordion>
           </div>
 
-          <button 
-            onClick={() => { setRisultato(null); setForm({ nome: '', birth_date: '', birth_time: '', birth_city: '', birth_lat: 0, birth_lon: 0 }); setCityQuery(''); }}
-            className="cta" 
-            style={{ marginTop: '24px', background: 'transparent', border: '1px solid var(--text-dim)', color: 'var(--text-dim)', width: '100%' }}
-          >
-            Fai un altro confronto
-          </button>
+          <div className="section-label" style={{ marginTop: '30px' }}>Dettagli tecnici</div>
+          <div className="accordion">
+            <Accordion title="Il tema di B" bare>
+              <div className="identikit">
+                {risultato.pianeti_b?.Sole && (
+                  <div className="row">
+                    <span className="label">Sole</span>
+                    <span className="value"><span className="sym">{SIMBOLI[risultato.pianeti_b.Sole.segno]}</span> {risultato.pianeti_b.Sole.segno}</span>
+                  </div>
+                )}
+                {risultato.pianeti_b?.Luna && (
+                  <div className="row">
+                    <span className="label">Luna</span>
+                    <span className="value"><span className="sym">{SIMBOLI[risultato.pianeti_b.Luna.segno]}</span> {risultato.pianeti_b.Luna.segno}</span>
+                  </div>
+                )}
+                {risultato.pianeti_b?.Mercurio && (
+                  <div className="row">
+                    <span className="label">Mercurio</span>
+                    <span className="value"><span className="sym">{SIMBOLI[risultato.pianeti_b.Mercurio.segno]}</span> {risultato.pianeti_b.Mercurio.segno}</span>
+                  </div>
+                )}
+              </div>
+            </Accordion>
+            
+            <Accordion title="Gli aspetti principali" bare>
+              <table className="data">
+                <thead>
+                  <tr><th>Pianeta A</th><th>Aspetto</th><th>Pianeta B</th><th>Orbe</th></tr>
+                </thead>
+                <tbody>
+                  {risultato.aspetti.map((a: Aspetto, i: number) => (
+                    <tr key={i}>
+                      <td>{a.pianeta_a}</td>
+                      <td>{a.tipo}</td>
+                      <td>{a.pianeta_b}</td>
+                      <td>{a.orb}°</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Accordion>
+          </div>
+
+          {/* Pulsanti finali affiancati */}
+          <div style={{ display: 'flex', gap: '10px', marginTop: '24px' }}>
+            <button 
+              onClick={() => router.push('/sala')}
+              className="cta" 
+              style={{ flex: 1, background: 'transparent', border: '1px solid var(--text-dim)', color: 'var(--text-dim)', fontSize: '12px' }}
+            >
+              ← Torna indietro
+            </button>
+            <button 
+              onClick={() => { setRisultato(null); setForm({ nome: '', birth_date: '', birth_time: '', birth_city: '', birth_lat: 0, birth_lon: 0 }); setCityQuery(''); }}
+              className="cta" 
+              style={{ flex: 1, fontSize: '12px' }}
+            >
+              Un altro confronto
+            </button>
+          </div>
         </div>
       )}
 
