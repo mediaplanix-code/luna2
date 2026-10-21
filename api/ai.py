@@ -107,7 +107,13 @@ async def rispondi_chat(report: dict, domanda: str, storico: list) -> str:
         ruolo = "Utente" if m.get("role") == "user" else "Astrologa"
         storico_testo += f"{ruolo}: {m.get('content', '')}\n"
 
-    prompt = f"""Sei un'astrologa italiana esperta, stai parlando con {nome}. Rispondi alla sua domanda basandoti ESCLUSIVAMENTE sul report interno qui sotto. Non inventare nulla. Se la domanda esce dal tema natale e dai transiti, riportala con gentilezza ai dati che hai. Tono: caldo, diretto, professionale. Massimo 150 parole. NON usare mai asterischi o markdown, solo testo fluido.
+    prompt = f"""Sei un'astrologa italiana esperta, stai parlando con {nome}. Rispondi alla sua domanda basandoti ESCLUSIVAMENTE sul report interno qui sotto.
+REGOLE TASSATIVE:
+- Massimo 70 parole.
+- Tono: caldo, diretto, professionale.
+- NON usare MAI asterischi o markdown, solo testo fluido.
+- Dai una risposta soddisfacente ma NON spiegare TUTTO. Lascia un velo di mistero.
+- Chiudi sempre con una frase che suggerisce che c'è un livello più profondo da scoprire, qualcosa che solo un consulto approfondito può svelare.
 
 REPORT INTERNO:
 {riepilogo}
@@ -129,12 +135,10 @@ async def rispondi_chat_compatibilita(dati_compatibilita: dict, focus: str, doma
     nome_a = dati_compatibilita.get("persona_a", "Utente")
     nome_b = dati_compatibilita.get("persona_b", "l'altra persona")
     
-    # Costruisce la descrizione degli aspetti
     aspetti_testo = ""
     for a in dati_compatibilita.get("aspetti", []):
         aspetti_testo += f"- {a['pianeta_a']} {a['tipo']} {a['pianeta_b']} (orbe {a['orb']}°)\n"
 
-    # Mappa il focus in un'istruzione specifica
     if focus == "amore":
         istruzione_focus = f"Stai parlando SOLO ed ESCLUSIVAMENTE della compatibilità AMOROSA tra {nome_a} e {nome_b}. Analizza gli aspetti tra Venere, Marte e Luna, e spiega cosa significano per la loro relazione sentimentale. Non parlare di lavoro, salute o altri argomenti."
     elif focus == "lavoro":
@@ -157,6 +161,13 @@ async def rispondi_chat_compatibilita(dati_compatibilita: dict, focus: str, doma
 
 {istruzione_focus}
 
+REGOLE TASSATIVE:
+- Massimo 70 parole.
+- Tono: caldo, diretto, professionale.
+- NON usare MAI asterischi o markdown, solo testo fluido.
+- Dai una risposta soddisfacente ma NON spiegare TUTTO. Lascia un velo di mistero.
+- Chiudi sempre con una frase che suggerisce che c'è un livello più profondo da scoprire, qualcosa che solo un consulto approfondito può svelare.
+
 Ecco i dati tecnici del loro confronto (ASPETTI):
 {aspetti_testo}
 
@@ -166,7 +177,7 @@ CONVERSAZIONE PRECEDENTE:
 DOMANDA DI {nome_a}:
 {domanda}
 
-Rispondi come astrologa. Tono: caldo, diretto, professionale. Massimo 150 parole. NON usare MAI asterischi o markdown, solo testo fluido."""
+Rispondi come astrologa."""
 
     return await _chiama_ai(prompt, max_tokens=600)
 
@@ -199,7 +210,6 @@ async def genera_copione_voce_compatibilita(dati_compatibilita: dict, focus: str
     for a in dati_compatibilita.get("aspetti", []):
         aspetti_testo += f"- {a['pianeta_a']} {a['tipo']} {a['pianeta_b']} (orbe {a['orb']}°)\n"
 
-    istruzione_focus = ""
     if focus == "amore":
         istruzione_focus = f"Stai per parlare al telefono con {nome_a} della sua compatibilità AMOROSA con {nome_b}. Apri la conversazione parlando degli aspetti tra Venere, Marte e Luna. Non divagare su altri argomenti."
     elif focus == "lavoro":
