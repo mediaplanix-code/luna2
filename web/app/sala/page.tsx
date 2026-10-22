@@ -355,4 +355,146 @@ function SalaContent() {
         <Accordion title="Transiti">
           <table className="data" style={{ fontSize: '14px' }}>
             <thead>
-              <tr><th>Transito</th><th>Aspetto</th><th>Al tuo</th
+              <tr><th>Transito</th><th>Aspetto</th><th>Al tuo</th><th>Orbe</th></tr>
+            </thead>
+            <tbody>
+              {transitiList.length === 0 ? (
+                <tr><td colSpan={4} style={{ textAlign: 'center', color: 'var(--text-dim)' }}>
+                  Nessun transito rilevante oggi
+                </td></tr>
+              ) : transitiList.map((t: any, i: number) => (
+                <tr key={i}>
+                  <td>{t.transito}</td>
+                  <td>{t.tipo}</td>
+                  <td>{t.natale}</td>
+                  <td>{t.orb}°</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <AzioniTecniche argomento="tema_transiti" testo="Approfondisci il significato" />
+        </Accordion>
+      </div>
+
+      <div className="section-label" style={{ fontSize: '15px' }}>Esplora i tuoi settori</div>
+      <div className="accordion">
+        <Accordion title="❤️ Amore e Relazioni" bare>
+          <p style={{ fontSize: '15px', lineHeight: '1.7', marginBottom: '16px' }}>
+            {loadingSettori ? 'Sto leggendo le stelle...' : (settori?.amore || '...')}
+          </p>
+          <AzioniTecniche argomento="tema_amore" testo="Approfondisci" />
+        </Accordion>
+
+        <Accordion title="💼 Carriera e Finanze" bare>
+          <p style={{ fontSize: '15px', lineHeight: '1.7', marginBottom: '16px' }}>
+            {loadingSettori ? 'Sto leggendo le stelle...' : (settori?.lavoro || '...')}
+          </p>
+          <AzioniTecniche argomento="tema_lavoro" testo="Approfondisci" />
+        </Accordion>
+
+        <Accordion title="🌿 Salute e Benessere" bare>
+          <p style={{ fontSize: '15px', lineHeight: '1.7', marginBottom: '16px' }}>
+            {loadingSettori ? 'Sto leggendo le stelle...' : (settori?.salute || '...')}
+          </p>
+          <AzioniTecniche argomento="tema_salute" testo="Approfondisci" />
+        </Accordion>
+
+        <Accordion title="🌱 Crescita Personale" bare>
+          <p style={{ fontSize: '15px', lineHeight: '1.7', marginBottom: '16px' }}>
+            {loadingSettori ? 'Sto leggendo le stelle...' : (settori?.crescita || '...')}
+          </p>
+          <AzioniTecniche argomento="tema_crescita" testo="Approfondisci" />
+        </Accordion>
+
+        <Accordion title="🔮 Previsioni Annuali" bare>
+          <p style={{ fontSize: '15px', lineHeight: '1.7', marginBottom: '16px' }}>
+            {loadingSettori ? 'Sto leggendo le stelle...' : (settori?.previsioni || '...')}
+          </p>
+          <AzioniTecniche argomento="tema_previsioni" testo="Approfondisci" />
+        </Accordion>
+      </div>
+
+      <div className="section-label" style={{ marginTop: '30px', fontSize: '15px' }}>Compatibilità</div>
+      <div className="accordion">
+        <Accordion title="Scopri l'intesa con un'altra persona" bare>
+          <Link href="/compatibilita" className="btn-line" style={{ display: 'inline-block', width: '100%', textAlign: 'center', fontSize: '15px', marginTop: '10px' }}>
+            Vai alla compatibilità →
+          </Link>
+        </Accordion>
+      </div>
+
+      <div className="section-label" style={{ marginTop: '30px', fontSize: '15px' }}>Rimani connesso</div>
+      <div className="accordion">
+        <Accordion title="Collega Telegram" bare>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', padding: '10px 0' }}>
+            {token && (
+              <a
+                href={`https://t.me/Luna2OroscopoBot?start=${token}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: '#2AABEE',
+                  width: '64px',
+                  height: '64px',
+                  borderRadius: '50%',
+                  textDecoration: 'none',
+                  boxShadow: '0 4px 12px rgba(42, 171, 238, 0.3)'
+                }}
+              >
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="white">
+                  <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
+                </svg>
+              </a>
+            )}
+          </div>
+        </Accordion>
+      </div>
+
+      <div style={{ display: 'flex', gap: '12px', marginTop: '30px' }}>
+        <button 
+          onClick={() => router.push('/consulenza')}
+          className="cta" 
+          style={{ flex: 1, fontSize: '15px', padding: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+          Prenota consulto
+        </button>
+        <button 
+          onClick={() => router.push('/chat')}
+          className="cta" 
+          style={{ flex: 1, fontSize: '15px', padding: '14px', background: 'transparent', border: '1px solid var(--text-dim)', color: 'var(--text-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          Apri chat
+        </button>
+      </div>
+
+      <div className="footer" style={{ fontSize: '12px' }}>
+        <Link href="/privacy">Privacy</Link>·
+        <Link href="/disclaimer">Disclaimer</Link>·
+        <Link href="/faq">?</Link>
+      </div>
+
+    </div>
+  );
+}
+
+export default function SalaPage() {
+  return (
+    <Suspense fallback={
+      <div className="canvas">
+        <div className="topbar">
+          <div className="brand">✦ Luna Astrologica</div>
+        </div>
+        <p style={{ textAlign: 'center', marginTop: '40px', color: 'var(--text-dim)' }}>
+          Caricamento...
+        </p>
+      </div>
+    }>
+      <SalaContent />
+    </Suspense>
+  );
+}
