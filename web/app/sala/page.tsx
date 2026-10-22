@@ -253,6 +253,13 @@ function SalaContent() {
           <div className="section-label" style={{ fontSize: '15px' }}>Segnali dalle stelle</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginTop: '10px' }}>
             {segnali.map((s: any, i: number) => {
+              const pianeta = s.pianeta || '—';
+              const aspetto = s.aspetto || '—';
+              const punto = s.punto_natale || '—';
+              const dataFormattata = s.data_evento 
+                ? new Date(s.data_evento).toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })
+                : 'In arrivo';
+              
               return (
                 <div key={i} style={{ 
                   background: 'rgba(255,255,255,0.03)', 
@@ -265,10 +272,10 @@ function SalaContent() {
                 }}>
                   <div>
                     <div style={{ fontSize: '12px', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px' }}>
-                      {s.data_evento ? new Date(s.data_evento).toLocaleDateString('it-IT', { month: 'long', year: 'numeric' }) : 'In arrivo'}
+                      {dataFormattata}
                     </div>
                     <div style={{ fontFamily: 'Georgia, serif', fontSize: '18px', marginBottom: '8px', color: '#F5A623' }}>
-                      {s.pianeta} in {s.aspetto} al tuo {s.punto_natale}
+                      {pianeta} in {aspetto} al tuo {punto}
                     </div>
                     <p style={{ fontSize: '13px', lineHeight: '1.6', color: 'var(--text-dim)', marginBottom: '16px' }}>
                       Un transito importante che porterà cambiamenti. Approfondisci per scoprire cosa significa per te.
