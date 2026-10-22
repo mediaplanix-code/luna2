@@ -98,9 +98,10 @@ export default function FormPage() {
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [cityQuery]);
 
-  function pickCity(e: React.MouseEvent, s: CacheEntry) {
-    e.preventDefault(); 
-    e.stopPropagation(); 
+  // Funzione unificata: accetta qualsiasi evento e chiama preventDefault se esiste
+  function pickCity(e: React.SyntheticEvent, s: CacheEntry) {
+    e.preventDefault();
+    e.stopPropagation();
     setForm(prev => ({ ...prev, birth_city: s.label, birth_country: s.country, birth_lat: s.lat, birth_lon: s.lon }));
     setCityQuery(s.label);
     setSuggestions([]);
