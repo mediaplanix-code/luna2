@@ -1,0 +1,18 @@
+name: Auguri di Compleanno
+
+on:
+  schedule:
+    # Ogni giorno alle 23:00 UTC (mezzanotte in Italia)
+    - cron: '0 23 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  invia:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Chiama endpoint auguri
+        run: |
+          curl -sS -X POST "https://luna2-api.onrender.com/cron/auguri-compleanno" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            --max-time 300
