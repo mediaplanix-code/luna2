@@ -23,6 +23,7 @@ export default function CompatibilitaPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [risultato, setRisultato] = useState<any>(null);
+  const [resetVoluto, setResetVoluto] = useState(false);
 
   const [form, setForm] = useState({
     nome: '',
@@ -47,25 +48,26 @@ export default function CompatibilitaPage() {
     }
     setToken(t);
 
-    // 1. Prova a leggere dal localStorage (istantaneo)
-    const salvatoLocale = localStorage.getItem('luna2_ultima_compatibilita');
-    if (salvatoLocale) {
-      try {
-        setRisultato(JSON.parse(salvatoLocale));
-      } catch (e) {}
-    }
+    // Se resetVoluto è true, non caricare nulla dal database
+    if (!resetVoluto) {
+      const salvatoLocale = localStorage.getItem('luna2_ultima_compatibilita');
+      if (salvatoLocale) {
+        try {
+          setRisultato(JSON.parse(salvatoLocale));
+        } catch (e) {}
+      }
 
-    // 2. Poi aggiorna dal server (se c'è qualcosa di più recente)
-    fetch(`https://luna2-api.onrender.com/sala/${t}`)
-      .then(r => r.json())
-      .then(d => {
-        if (d.profile && d.profile.ultima_compatibilita) {
-          setRisultato(d.profile.ultima_compatibilita);
-          localStorage.setItem('luna2_ultima_compatibilita', JSON.stringify(d.profile.ultima_compatibilita));
-        }
-      })
-      .catch(() => {});
-  }, [router]);
+      fetch(`https://luna2-api.onrender.com/sala/${t}`)
+        .then(r => r.json())
+        .then(d => {
+          if (d.profile && d.profile.ultima_compatibilita) {
+            setRisultato(d.profile.ultima_compatibilita);
+            localStorage.setItem('luna2_ultima_compatibilita', JSON.stringify(d.profile.ultima_compatibilita));
+          }
+        })
+        .catch(() => {});
+    }
+  }, [router, resetVoluto]);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -135,6 +137,15 @@ export default function CompatibilitaPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function nuovoConfronto() {
+    setRisultato(null);
+    setResetVoluto(true);
+    setForm({ nome: '', birth_date: '', birth_time: '', birth_city: '', birth_lat: 0, birth_lon: 0 });
+    setCityQuery('');
+    setSuggestions([]);
+    localStorage.removeItem('luna2_ultima_compatibilita');
   }
 
   return (
@@ -243,13 +254,13 @@ export default function CompatibilitaPage() {
           <div className="accordion">
             <Accordion title="❤️ Amore e Relazioni" bare>
               <p style={{ fontSize: '13px', lineHeight: '1.6', marginBottom: '16px' }}>
-                {risultato.testi.amore}
+                {risultato.testi?.amore || ''}
               </p>
               <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-                 <button className="icon-btn" title="Chat" onClick={() => router.push(`${risultato.link.amore.chat}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
+                 <button className="icon-btn" title="Chat" onClick={() => router.push(`${risultato.link?.amore?.chat || '/chat'}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                   </button>
-                  <button className="icon-btn accent" title="Voce" onClick={() => router.push(`${risultato.link.amore.voce}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
+                  <button className="icon-btn accent" title="Voce" onClick={() => router.push(`${risultato.link?.amore?.voce || '/consulenza'}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
                   </button>
               </div>
@@ -257,13 +268,13 @@ export default function CompatibilitaPage() {
 
             <Accordion title="💼 Carriera e Finanze" bare>
               <p style={{ fontSize: '13px', lineHeight: '1.6', marginBottom: '16px' }}>
-                {risultato.testi.lavoro}
+                {risultato.testi?.lavoro || ''}
               </p>
               <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-                 <button className="icon-btn" title="Chat" onClick={() => router.push(`${risultato.link.lavoro.chat}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
+                 <button className="icon-btn" title="Chat" onClick={() => router.push(`${risultato.link?.lavoro?.chat || '/chat'}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                   </button>
-                  <button className="icon-btn accent" title="Voce" onClick={() => router.push(`${risultato.link.lavoro.voce}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
+                  <button className="icon-btn accent" title="Voce" onClick={() => router.push(`${risultato.link?.lavoro?.voce || '/consulenza'}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
                   </button>
               </div>
@@ -271,13 +282,13 @@ export default function CompatibilitaPage() {
 
             <Accordion title="🌿 Salute e Benessere" bare>
               <p style={{ fontSize: '13px', lineHeight: '1.6', marginBottom: '16px' }}>
-                {risultato.testi.salute}
+                {risultato.testi?.salute || ''}
               </p>
               <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-                 <button className="icon-btn" title="Chat" onClick={() => router.push(`${risultato.link.salute.chat}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
+                 <button className="icon-btn" title="Chat" onClick={() => router.push(`${risultato.link?.salute?.chat || '/chat'}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                   </button>
-                  <button className="icon-btn accent" title="Voce" onClick={() => router.push(`${risultato.link.salute.voce}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
+                  <button className="icon-btn accent" title="Voce" onClick={() => router.push(`${risultato.link?.salute?.voce || '/consulenza'}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
                   </button>
               </div>
@@ -285,13 +296,13 @@ export default function CompatibilitaPage() {
 
             <Accordion title="🌱 Crescita Personale" bare>
               <p style={{ fontSize: '13px', lineHeight: '1.6', marginBottom: '16px' }}>
-                {risultato.testi.crescita}
+                {risultato.testi?.crescita || ''}
               </p>
               <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-                 <button className="icon-btn" title="Chat" onClick={() => router.push(`${risultato.link.crescita.chat}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
+                 <button className="icon-btn" title="Chat" onClick={() => router.push(`${risultato.link?.crescita?.chat || '/chat'}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                   </button>
-                  <button className="icon-btn accent" title="Voce" onClick={() => router.push(`${risultato.link.crescita.voce}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
+                  <button className="icon-btn accent" title="Voce" onClick={() => router.push(`${risultato.link?.crescita?.voce || '/consulenza'}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
                   </button>
               </div>
@@ -299,13 +310,13 @@ export default function CompatibilitaPage() {
 
             <Accordion title="🔮 Previsioni Annuali" bare>
               <p style={{ fontSize: '13px', lineHeight: '1.6', marginBottom: '16px' }}>
-                {risultato.testi.previsioni}
+                {risultato.testi?.previsioni || ''}
               </p>
               <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-                 <button className="icon-btn" title="Chat" onClick={() => router.push(`${risultato.link.previsioni.chat}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
+                 <button className="icon-btn" title="Chat" onClick={() => router.push(`${risultato.link?.previsioni?.chat || '/chat'}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                   </button>
-                  <button className="icon-btn accent" title="Voce" onClick={() => router.push(`${risultato.link.previsioni.voce}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
+                  <button className="icon-btn accent" title="Voce" onClick={() => router.push(`${risultato.link?.previsioni?.voce || '/consulenza'}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
                   </button>
               </div>
@@ -343,7 +354,7 @@ export default function CompatibilitaPage() {
                   <tr><th>Pianeta A</th><th>Aspetto</th><th>Pianeta B</th><th>Orbe</th></tr>
                 </thead>
                 <tbody>
-                  {risultato.aspetti.map((a: Aspetto, i: number) => (
+                  {(risultato.aspetti || []).map((a: Aspetto, i: number) => (
                     <tr key={i}>
                       <td>{a.pianeta_a}</td>
                       <td>{a.tipo}</td>
@@ -354,10 +365,10 @@ export default function CompatibilitaPage() {
                 </tbody>
               </table>
               <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-                 <button className="icon-btn" title="Chat" onClick={() => router.push(`${risultato.link.generico.chat}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
+                 <button className="icon-btn" title="Chat" onClick={() => router.push(`${risultato.link?.generico?.chat || '/chat'}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                   </button>
-                  <button className="icon-btn accent" title="Voce" onClick={() => router.push(`${risultato.link.generico.voce}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
+                  <button className="icon-btn accent" title="Voce" onClick={() => router.push(`${risultato.link?.generico?.voce || '/consulenza'}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
                   </button>
               </div>
@@ -373,7 +384,7 @@ export default function CompatibilitaPage() {
               ← Torna indietro
             </button>
             <button 
-              onClick={() => { setRisultato(null); setForm({ nome: '', birth_date: '', birth_time: '', birth_city: '', birth_lat: 0, birth_lon: 0 }); setCityQuery(''); localStorage.removeItem('luna2_ultima_compatibilita'); }}
+              onClick={nuovoConfronto}
               className="cta" 
               style={{ flex: 1, fontSize: '12px' }}
             >
