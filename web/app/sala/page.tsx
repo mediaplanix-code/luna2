@@ -253,11 +253,6 @@ function SalaContent() {
           <div className="section-label" style={{ fontSize: '15px' }}>Segnali dalle stelle</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginTop: '10px' }}>
             {segnali.map((s: any, i: number) => {
-              // Estrai pianeta, aspetto, punto dal campo 'descrizione' (es. "Saturno_quadratura_Sole")
-              const parti = s.descrizione.split('_');
-              const pianeta = parti[0] || '';
-              const aspetto = parti[1] || '';
-              const punto = parti[2] || '';
               return (
                 <div key={i} style={{ 
                   background: 'rgba(255,255,255,0.03)', 
@@ -273,7 +268,7 @@ function SalaContent() {
                       {s.data_evento ? new Date(s.data_evento).toLocaleDateString('it-IT', { month: 'long', year: 'numeric' }) : 'In arrivo'}
                     </div>
                     <div style={{ fontFamily: 'Georgia, serif', fontSize: '18px', marginBottom: '8px', color: '#F5A623' }}>
-                      {pianeta} in {aspetto} al tuo {punto}
+                      {s.pianeta} in {s.aspetto} al tuo {s.punto_natale}
                     </div>
                     <p style={{ fontSize: '13px', lineHeight: '1.6', color: 'var(--text-dim)', marginBottom: '16px' }}>
                       Un transito importante che porterà cambiamenti. Approfondisci per scoprire cosa significa per te.
