@@ -163,7 +163,7 @@ function SalaContent() {
 
   const compatibili = COMPATIBILI[soleSegno] || [];
   const transitiList = (data.transits?.aspects_to_natal || []).slice(0, 5);
-  const segnali = data.segnali || [];
+  const segnali = (data.segnali || []).slice(0, 3);
 
   return (
     <div className="canvas">
@@ -247,51 +247,52 @@ function SalaContent() {
         </Accordion>
       </div>
 
-      {/* SEGNALI DALLE STELLE */}
+      {/* SEGNALI DALLE STELLE (UNICA TENDINA) */}
       {segnali.length > 0 && (
         <>
           <div className="section-label" style={{ fontSize: '15px' }}>Segnali dalle stelle</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginTop: '10px' }}>
-            {segnali.map((s: any, i: number) => {
-              const pianeta = s.pianeta || '—';
-              const aspetto = s.aspetto || '—';
-              const punto = s.punto_natale || '—';
-              const dataFormattata = s.data_evento 
-                ? new Date(s.data_evento).toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })
-                : 'In arrivo';
-              
-              return (
-                <div key={i} style={{ 
-                  background: 'rgba(255,255,255,0.03)', 
-                  border: '1px solid rgba(245,166,35,0.3)', 
-                  borderRadius: '10px', 
-                  padding: '16px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between'
-                }}>
-                  <div>
-                    <div style={{ fontSize: '12px', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px' }}>
-                      {dataFormattata}
+          <div className="accordion">
+            <Accordion title="I prossimi transiti importanti" bare>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {segnali.map((s: any, i: number) => {
+                  const pianeta = s.pianeta || '—';
+                  const aspetto = s.aspetto || '—';
+                  const punto = s.punto_natale || '—';
+                  const dataFormattata = s.data_evento 
+                    ? new Date(s.data_evento).toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })
+                    : 'In arrivo';
+                  
+                  return (
+                    <div key={i} style={{ 
+                      background: 'rgba(255,255,255,0.02)', 
+                      border: '1px solid rgba(245,166,35,0.15)', 
+                      borderRadius: '8px', 
+                      padding: '12px'
+                    }}>
+                      <div style={{ fontSize: '12px', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '4px' }}>
+                        {dataFormattata}
+                      </div>
+                      <div style={{ fontSize: '15px', color: '#F5A623', fontWeight: 'bold' }}>
+                        {pianeta} in {aspetto} al tuo {punto}
+                      </div>
                     </div>
-                    <div style={{ fontFamily: 'Georgia, serif', fontSize: '18px', marginBottom: '8px', color: '#F5A623' }}>
-                      {pianeta} in {aspetto} al tuo {punto}
-                    </div>
-                    <p style={{ fontSize: '13px', lineHeight: '1.6', color: 'var(--text-dim)', marginBottom: '16px' }}>
-                      Un transito importante che porterà cambiamenti. Approfondisci per scoprire cosa significa per te.
-                    </p>
-                  </div>
-                  <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-                    <button className="icon-btn" title="Chat" onClick={() => router.push(`/chat?focus=tema_transiti`)}>
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                    </button>
-                    <button className="icon-btn accent" title="Voce" onClick={() => router.push(`/consulenza?focus=tema_transiti`)}>
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
-                    </button>
-                  </div>
+                  );
+                })}
+              </div>
+              <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                <div style={{ textAlign: 'center', fontSize: '14px', color: 'var(--text-dim)', marginBottom: '12px' }}>
+                  Approfondisci
                 </div>
-              );
-            })}
+                <div style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
+                  <button className="icon-btn" style={{ width: '48px', height: '48px' }} title="Chiedi alla Chat" onClick={() => router.push('/chat?focus=tema_transiti')}>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                  </button>
+                  <button className="icon-btn accent" style={{ width: '48px', height: '48px' }} title="Approfondisci con la Voce" onClick={() => router.push('/consulenza?focus=tema_transiti')}>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+                  </button>
+                </div>
+              </div>
+            </Accordion>
           </div>
         </>
       )}
