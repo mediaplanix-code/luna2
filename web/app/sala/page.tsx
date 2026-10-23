@@ -41,6 +41,22 @@ function formatGrado(lon: number): string {
   return `${g}°${String(m).padStart(2, '0')}'`;
 }
 
+function distanzaTempo(dataEvento: string): string {
+  try {
+    const adesso = new Date();
+    const evento = new Date(dataEvento);
+    const diffMesi = Math.round((evento.getTime() - adesso.getTime()) / (1000 * 60 * 60 * 24 * 30));
+    
+    if (diffMesi <= 0) return "in corso d'opera";
+    if (diffMesi === 1) return "il mese prossimo";
+    if (diffMesi < 12) return `tra ${diffMesi} mesi`;
+    const anni = Math.round(diffMesi / 12);
+    return anni === 1 ? "tra un anno" : `tra ${anni} anni`;
+  } catch {
+    return "in arrivo";
+  }
+}
+
 function AzioniTecniche({ argomento, testo }: { argomento: string, testo: string }) {
   const router = useRouter();
   return (
@@ -247,34 +263,22 @@ function SalaContent() {
         </Accordion>
       </div>
 
-      {/* SEGNALI DALLE STELLE (UNICA TENDINA) */}
+      {/* SEGNALI DALLE STELLE (UNICO BLOCCO, TESTO PUNTEGGIATO) */}
       {segnali.length > 0 && (
         <>
           <div className="section-label" style={{ fontSize: '15px' }}>Segnali dalle stelle</div>
           <div className="accordion">
             <Accordion title="I prossimi transiti importanti" bare>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ fontSize: '15px', lineHeight: '1.8', color: 'var(--text)' }}>
                 {segnali.map((s: any, i: number) => {
                   const pianeta = s.pianeta || '—';
                   const aspetto = s.aspetto || '—';
                   const punto = s.punto_natale || '—';
-                  const dataFormattata = s.data_evento 
-                    ? new Date(s.data_evento).toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })
-                    : 'In arrivo';
+                  const tempo = distanzaTempo(s.data_evento);
                   
                   return (
-                    <div key={i} style={{ 
-                      background: 'rgba(255,255,255,0.02)', 
-                      border: '1px solid rgba(245,166,35,0.15)', 
-                      borderRadius: '8px', 
-                      padding: '12px'
-                    }}>
-                      <div style={{ fontSize: '12px', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '4px' }}>
-                        {dataFormattata}
-                      </div>
-                      <div style={{ fontSize: '15px', color: '#F5A623', fontWeight: 'bold' }}>
-                        {pianeta} in {aspetto} al tuo {punto}
-                      </div>
+                    <div key={i} style={{ marginBottom: '8px' }}>
+                      • <strong style={{ color: '#F5A623' }}>{tempo}</strong>: {pianeta} in {aspetto} al tuo {punto}.
                     </div>
                   );
                 })}
