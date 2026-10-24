@@ -57,13 +57,27 @@ function ConsulenzaContent() {
     try {
       const token = localStorage.getItem('luna2_token');
       
-      // Override dell'Assistente con Server URL esplicito
+      // Passiamo un assistente transiente (inline) con server URL e metadati.
+      // Questo è l'unico modo per far chiamare il webhook alla Web SDK.
       await vapiRef.current.start({
-        assistantId: VAPI_ASSISTANT_ID,
+        name: "Luna - La tua astrologa",
+        firstMessage: "Ciao, sono Luna. Benvenuto al tuo consulto. Dimmi pure cosa ti sta a cuore.",
+        model: {
+          provider: "openai",
+          model: "gpt-4",
+          messages: [
+            {
+              role: "system",
+              content: "Sei Luna, un'astrologa italiana esperta. Rispondi in italiano con tono caldo e mistico."
+            }
+          ]
+        },
         server: {
           url: VAPI_WEBHOOK_URL
         },
-        metadata: { token: token }
+        metadata: {
+          token: token
+        }
       });
     } catch (e) {
       console.error(e);
