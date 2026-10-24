@@ -5,7 +5,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Vapi from '@vapi-ai/web';
 
-const VAPI_PUBLIC_KEY = "pk_test_51UTqG6RvYSbh82ZlAClClgrJjpdsKGfy8SFsBEfQLEnAuavCH31elM6PsFeytRoB3XsRGCeH5cFhNXNZAZgwnHcg00Y2Kx8Xms";
+// CHIAVE PUBBLICA VAPI (non è quella di Stripe!)
+const VAPI_PUBLIC_KEY = "73d30b26-4506-4edd-8037-a32959293655";
 const VAPI_ASSISTANT_ID = "687814ce-7e70-4df1-85f9-f21d96c8db74";
 
 function ConsulenzaContent() {
@@ -24,7 +25,7 @@ function ConsulenzaContent() {
     const nomeSalvato = localStorage.getItem('luna2_nome');
     if (nomeSalvato) setNome(nomeSalvato);
 
-    // Inizializza Vapi con la chiave pubblica
+    // Inizializza Vapi con la chiave pubblica CORRETTA
     const vapi = new Vapi(VAPI_PUBLIC_KEY);
     vapiRef.current = vapi;
 
@@ -39,7 +40,7 @@ function ConsulenzaContent() {
       setInCaricamento(false);
     });
 
-    vapi.on('error', (e) => {
+    vapi.on('error', (e: any) => {
       console.error('Errore Vapi:', e);
       setErrore('Si è verificato un problema con la chiamata. Riprova.');
       setCallAttiva(false);
