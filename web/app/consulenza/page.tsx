@@ -5,9 +5,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Vapi from '@vapi-ai/web';
 
-// CHIAVE PUBBLICA VAPI (non è quella di Stripe!)
 const VAPI_PUBLIC_KEY = "73d30b26-4506-4edd-8037-a32959293655";
 const VAPI_ASSISTANT_ID = "687814ce-7e70-4df1-85f9-f21d96c8db74";
+const VAPI_WEBHOOK_URL = "https://luna2-api.onrender.com/vapi/webhook";
 
 function ConsulenzaContent() {
   const router = useRouter();
@@ -25,11 +25,9 @@ function ConsulenzaContent() {
     const nomeSalvato = localStorage.getItem('luna2_nome');
     if (nomeSalvato) setNome(nomeSalvato);
 
-    // Inizializza Vapi con la chiave pubblica CORRETTA
     const vapi = new Vapi(VAPI_PUBLIC_KEY);
     vapiRef.current = vapi;
 
-    // Gestione eventi
     vapi.on('call-start', () => {
       setCallAttiva(true);
       setInCaricamento(false);
@@ -57,11 +55,14 @@ function ConsulenzaContent() {
     setInCaricamento(true);
     setErrore('');
     try {
-      // Recupera il token del cliente
       const token = localStorage.getItem('luna2_token');
       
-      // Avvia la chiamata passando l'ID e il token nei metadati
-      await vapiRef.current.start(VAPI_ASSISTANT_ID, {
+      // Override dell'Assistente con Server URL esplicito
+      await vapiRef.current.start({
+        assistantId: VAPI_ASSISTANT_ID,
+        server: {
+          url: VAPI_WEBHOOK_URL
+        },
         metadata: { token: token }
       });
     } catch (e) {
