@@ -6,7 +6,6 @@ import Link from 'next/link';
 import Vapi from '@vapi-ai/web';
 
 const VAPI_PUBLIC_KEY = "73d30b26-4506-4edd-8037-a32959293655";
-const VAPI_ASSISTANT_ID = "687814ce-7e70-4df1-85f9-f21d96c8db74";
 const VAPI_WEBHOOK_URL = "https://luna2-api.onrender.com/vapi/webhook";
 
 function ConsulenzaContent() {
@@ -57,7 +56,7 @@ function ConsulenzaContent() {
     try {
       const token = localStorage.getItem('luna2_token');
       
-      // Passiamo un assistente transiente (inline) con server URL e metadati.
+      // Passiamo un assistente transiente (inline) con server URL e metadati dentro assistantOverrides.
       // Questo è l'unico modo per far chiamare il webhook alla Web SDK.
       await vapiRef.current.start({
         name: "Luna - La tua astrologa",
@@ -75,8 +74,10 @@ function ConsulenzaContent() {
         server: {
           url: VAPI_WEBHOOK_URL
         },
-        metadata: {
-          token: token
+        assistantOverrides: {
+          metadata: {
+            token: token
+          }
         }
       });
     } catch (e) {
