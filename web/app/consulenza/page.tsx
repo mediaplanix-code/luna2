@@ -6,7 +6,6 @@ import Link from 'next/link';
 import Vapi from '@vapi-ai/web';
 
 const VAPI_PUBLIC_KEY = "73d30b26-4506-4edd-8037-a32959293655";
-const VAPI_ASSISTANT_ID = "687814ce-7e70-4df1-85f9-f21d96c8db74";
 const VAPI_WEBHOOK_URL = "https://luna2-api.onrender.com/vapi/webhook";
 
 function ConsulenzaContent() {
@@ -57,7 +56,7 @@ function ConsulenzaContent() {
     try {
       const token = localStorage.getItem('luna2_token');
       
-      // Primo argomento: assistente transiente (senza assistantOverrides)
+      // Assistente transiente: specifichiamo esplicitamente role: "system"
       const assistenteTransiente = {
         name: "Luna - La tua astrologa",
         firstMessage: "Ciao, sono Luna. Benvenuto al tuo consulto. Dimmi pure cosa ti sta a cuore.",
@@ -66,7 +65,7 @@ function ConsulenzaContent() {
           model: "gpt-4",
           messages: [
             {
-              role: "system",
+              role: "system" as const,
               content: "Sei Luna, un'astrologa italiana esperta. Rispondi in italiano con tono caldo e mistico."
             }
           ]
@@ -76,7 +75,7 @@ function ConsulenzaContent() {
         }
       };
 
-      // Secondo argomento: assistantOverrides con i metadati
+      // Override passati come secondo argomento (documentazione Web SDK)
       const overrides = {
         metadata: {
           token: token
