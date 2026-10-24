@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import Vapi from '@vapi-ai/web';
 
-const VAPI_NUMBER = "+18563780329"; // Formato internazionale senza spazi
+const VAPI_PUBLIC_KEY = "pk_test_51UTqG6RvYSbh82ZlAClClgrJjpdsKGfy8SFsBEfQLEnAuavCH31elM6PsFeytRoB3XsRGCeH5cFhNXNZAZgwnHcg00Y2Kx8Xms";
+const VAPI_ASSISTANT_ID = "687814ce-7e70-4df1-85f9-f21d96c8db74";
 
 function ConsulenzaContent() {
   const router = useRouter();
@@ -12,11 +14,62 @@ function ConsulenzaContent() {
   const focus = searchParams.get('focus') || 'generico';
 
   const [nome, setNome] = useState('');
+  const [callAttiva, setCallAttiva] = useState(false);
+  const [inCaricamento, setInCaricamento] = useState(false);
+  const [errore, setErrore] = useState('');
+  
+  const vapiRef = useRef<Vapi | null>(null);
 
   useEffect(() => {
     const nomeSalvato = localStorage.getItem('luna2_nome');
     if (nomeSalvato) setNome(nomeSalvato);
+
+    // Inizializza Vapi con la chiave pubblica
+    const vapi = new Vapi(VAPI_PUBLIC_KEY);
+    vapiRef.current = vapi;
+
+    // Gestione eventi
+    vapi.on('call-start', () => {
+      setCallAttiva(true);
+      setInCaricamento(false);
+    });
+
+    vapi.on('call-end', () => {
+      setCallAttiva(false);
+      setInCaricamento(false);
+    });
+
+    vapi.on('error', (e) => {
+      console.error('Errore Vapi:', e);
+      setErrore('Si è verificato un problema con la chiamata. Riprova.');
+      setCallAttiva(false);
+      setInCaricamento(false);
+    });
+
+    return () => {
+      vapi.stop();
+    };
   }, []);
+
+  const avviaChiamata = async () => {
+    if (!vapiRef.current) return;
+    setInCaricamento(true);
+    setErrore('');
+    try {
+      // Avvia la chiamata passando l'ID dell'Assistente
+      await vapiRef.current.start(VAPI_ASSISTANT_ID);
+    } catch (e) {
+      console.error(e);
+      setErrore('Impossibile avviare la chiamata. Controlla il microfono.');
+      setInCaricamento(false);
+    }
+  };
+
+  const fermaChiamata = () => {
+    if (vapiRef.current) {
+      vapiRef.current.stop();
+    }
+  };
 
   const etichetteFocus: Record<string, string> = {
     generico: 'Consulto Generale',
@@ -59,45 +112,65 @@ function ConsulenzaContent() {
         background: 'rgba(255,255,255,0.03)', 
         border: '1px solid rgba(245,166,35,0.2)', 
         borderRadius: '10px', 
-        padding: '20px',
+        padding: '30px',
         marginBottom: '20px',
         textAlign: 'center'
       }}>
-        <p style={{ fontSize: '14px', color: 'var(--text-dim)', marginBottom: '12px' }}>
-          Chiama questo numero per iniziare:
+        <p style={{ fontSize: '14px', color: 'var(--text-dim)', marginBottom: '16px' }}>
+          {callAttiva ? 'Luna è in linea. Parla pure.' : 'Clicca per parlare con Luna.'}
         </p>
-        <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#F5A623', letterSpacing: '1px' }}>
-          +1 (856) 378 0329
-        </div>
-      </div>
 
-      <a 
-        href={`tel:${VAPI_NUMBER}`}
-        className="cta"
-        style={{ 
-          display: 'block', 
-          textAlign: 'center', 
-          textDecoration: 'none',
-          fontSize: '16px',
-          padding: '16px',
-          marginBottom: '12px'
-        }}
-      >
-        Chiama ora
-      </a>
+        {!callAttiva ? (
+          <button 
+            onClick={avviaChiamata}
+            disabled={inCaricamento}
+            className="cta"
+            style={{ 
+              fontSize: '16px',
+              padding: '16px 32px',
+              margin: '0 auto',
+              display: 'inline-block'
+            }}
+          >
+            {inCaricamento ? 'Sto connettendo...' : 'Parla con Luna'}
+          </button>
+        ) : (
+          <button 
+            onClick={fermaChiamata}
+            className="cta"
+            style={{ 
+              fontSize: '16px',
+              padding: '16px 32px',
+              margin: '0 auto',
+              display: 'inline-block',
+              background: 'transparent',
+              border: '1px solid #EF476F',
+              color: '#EF476F'
+            }}
+          >
+            Termina chiamata
+          </button>
+        )}
+
+        {errore && (
+          <p style={{ fontSize: '13px', color: '#EF476F', marginTop: '16px' }}>
+            {errore}
+          </p>
+        )}
+      </div>
 
       <div style={{ fontSize: '14px', lineHeight: '1.7', color: 'var(--text)', marginBottom: '20px', marginTop: '24px' }}>
         <p style={{ marginBottom: '12px' }}>
           <strong>Cosa include:</strong>
         </p>
         <ul style={{ paddingLeft: '20px', marginBottom: '16px' }}>
-          <li>15 minuti di conversazione al telefono</li>
+          <li>15 minuti di conversazione vocale</li>
           <li>Analisi del tuo tema natale e dei transiti attuali</li>
           <li>Risposte alle tue domande specifiche</li>
         </ul>
         {nome && (
           <p style={{ fontSize: '13px', color: 'var(--text-dim)', fontStyle: 'italic' }}>
-            Ciao {nome}, chiama quando vuoi. Luna ti risponderà personalmente.
+            Ciao {nome}, quando vuoi siamo pronti.
           </p>
         )}
       </div>
