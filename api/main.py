@@ -537,3 +537,417 @@ async def chat_endpoint(token: str, req: ChatRequest, focus: str = None):
         tipo_focus = focus.replace("compatibilita_", "") if focus != "compatibilita" else "generico"
         risposta = await rispondi_chat_compatibilita(dati_comp, tipo_focus, req.domanda, req.storico)
     elif focus and focus.startswith("tema"):
+        tema = calcola_tema_completo(str(profile["birth_date"]), str(profile["birth_time"])[:5], float(profile["birth_lat"]), float(profile["birth_lon"]), 1.0)
+        report = genera_report_interno(profile, tema, sb)
+        tipo_focus = focus.replace("tema_", "")
+        risposta = await rispondi_chat_tema(report, tipo_focus, req.domanda, req.storico)
+    else:
+        tema = calcola_tema_completo(str(profile["birth_date"]), str(profile["birth_time"])[:5], float(profile["birth_lat"]), float(profile["birth_lon"]), 1.0)
+        report = genera_report_interno(profile, tema, sb)
+        risposta = await rispondi_chat(report, req.domanda, req.storico)
+
+    if not risposta: raise HTTPException(status_code=503, detail="Il consulto non è disponibile. Riprova più tardi.")
+    
+    if not is_paying:
+        sb.table("profiles").update({"chat_questions_used": usate + 1}).eq("id", profile["id"]).execute()
+    try:
+        sb.table("chat_questions").insert({"profile_id": profile["id"], "question": req.domanda, "answer": risposta}).execute()
+    except Exception: pass
+    
+    return {"risposta": risposta, "domande_usate": usate + 1 if not is_paying else usate, "domande_limite": limite}
+
+@app.get("/copione-voce/{token}")
+async def get_copione_voce(token: str, focus: str = None):
+    sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+    res = sb.table("profiles").select("*").eq("access_token", token).execute()
+    if not res.data: raise HTTPException(status_code=404, detail="Profilo non trovato")
+    profile = res.data[0]
+    
+    if focus and focus.startswith("compatibilita"):
+        dati_comp = profile.get("ultima_compatibilita")
+        if not dati_comp:
+            raise HTTPException(status_code=400, detail="Nessun confronto recente trovato.")
+        
+        tipo_focus = focus.replace("compatibilita_", "") if focus != "compatibilita" else "generico"
+        copione = await genera_copione_voce_compatibilita(dati_comp, tipo_focus)
+    elif focus and focus.startswith("tema"):
+        tema = calcola_tema_completo(str(profile["birth_date"]), str(profile["birth_time"])[:5], float(profile["birth_lat"]), float(profile["birth_lon"]), 1.0)
+        report = genera_report_interno(profile, tema, sb)
+        tipo_focus = focus.replace("tema_", "")
+        copione = await genera_copione_voce_tema(report, tipo_focus)
+    else:
+        tema = calcola_tema_completo(str(profile["birth_date"]), str(profile["birth_time"])[:5], float(profile["birth_lat"]), float(profile["birth_lon"]), 1.0)
+        report = genera_report_interno(profile, tema, sb)
+        copione = await genera_copione_voce(report)
+
+    if not copione: raise HTTPException(status_code=503, detail="Il consulto non è disponibile. Riprova più tardi.")
+    return {"copione": copione}
+
+@app.post("/vapi/webhook")
+async def vapi_webhook(request: Request):
+    """
+    Endpoint chiamato da Vapi all'inizio della chiamata (assistant-request).
+    Restituisce il prompt personalizzato per il cliente, usando il token
+    passato nei metadati della chiamata Web SDK.
+    """
+    try:
+        body = await request.json()
+        print(f"=== VAPI: richiesta ricevuta ===")
+        
+        # Estrai il token del cliente dai metadati della chiamata
+        metadata = body.get("message", {}).get("call", {}).get("metadata", {})
+        if not metadata:
+            metadata = body.get("message", {}).get("assistantOverrides", {}).get("metadata", {})
+        
+        token = metadata.get("token")
+        
+        copione = "Sei Luna, un'astrologa italiana esperta. Rispondi in italiano con tono caldo e mistico. Parla del tema natale del cliente se disponibile, altrimenti chiedi il suo nome e i suoi dati di nascita."
+        first_message = "Ciao, sono Luna. Benvenuto al tuo consulto. Dimmi pure cosa ti sta a cuore."
+        
+        if token:
+            print(f"=== VAPI: token ricevuto: {token[:10]}... ===")
+            sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+            res = sb.table("profiles").select("*").eq("access_token", token).execute()
+            if res.data:
+                prof = res.data[0]
+                nome = prof.get("nome", "")
+                tema = calcola_tema_completo(str(prof["birth_date"]), str(prof["birth_time"])[:5], float(prof["birth_lat"]), float(prof["birth_lon"]), 1.0)
+                report = genera_report_interno(prof, tema, sb)
+                copione = await genera_copione_voce(report)
+                first_message = f"Ciao {nome}, sono Luna. Benvenuto al tuo consulto. Dimmi pure cosa ti sta a cuore."
+                print(f"=== VAPI: profilo trovato per {nome} ===")
+            else:
+                print(f"=== VAPI: nessun profilo trovato per il token ===")
+        else:
+            print(f"=== VAPI: nessun token ricevuto ===")
+        
+        # Formato corretto per Vapi (assistant-request)
+        return {
+            "assistant": {
+                "firstMessage": first_message,
+                "model": {
+                    "provider": "openai",
+                    "model": "gpt-4",
+                    "messages": [
+                        { "role": "system", "content": copione }
+                    ]
+                }
+            }
+        }
+    except Exception as e:
+        print(f"=== ERRORE VAPI webhook: {e} ===")
+        return {"assistant": {"firstMessage": "Ciao, sono Luna. Dimmi pure cosa ti sta a cuore."}}
+
+@app.post("/transits")
+def transits(req: TransitRequest):
+    tema = calcola_tema_completo(req.date, req.time, req.lat, req.lon, req.tz_offset)
+    tgt = datetime.strptime(req.target_date, "%Y-%m-%d") if req.target_date else datetime.now(timezone.utc)
+    jd_today = swe.julday(tgt.year, tgt.month, tgt.day, 12.0)
+    transits_now = {}
+    for nome, pid in PIANETI.items():
+        try: transits_now[nome] = lon_to_sign(calc_ut_safe(jd_today, pid))
+        except Exception: continue
+    aspetti_transito = []
+    for t_nome, t_pos in transits_now.items():
+        for n_nome, n_pos in tema["planets"].items():
+            diff = abs(t_pos["longitude"] - n_pos["longitude"])
+            diff = min(diff, 360 - diff)
+            for nome_asp, (ang, orb) in ASPETTI.items():
+                if abs(diff - ang) <= orb:
+                    aspetti_transito.append({"transito": t_nome, "natale": n_nome, "tipo": nome_asp, "orb": round(abs(diff - ang), 2)})
+    return {"target_date": tgt.strftime("%Y-%m-%d"), "transits": transits_now, "aspects_to_natal": aspetti_transito}
+
+@app.post("/telegram/webhook")
+async def telegram_webhook(request: Request):
+    if not TELEGRAM_TOKEN or not TELEGRAM_API: return {"ok": True}
+    try: update = await request.json()
+    except Exception: return {"ok": True}
+    message = update.get("message") or update.get("edited_message")
+    if not message: return {"ok": True}
+
+    chat_id = message["chat"]["id"]
+    text = (message.get("text") or "").strip()
+
+    if text.startswith("/start"):
+        parts = text.split(maxsplit=1)
+        if len(parts) < 2:
+            await send_telegram(chat_id, "Ciao! Per attivare il tuo oroscopo, apri il link dal sito Luna2.")
+            return {"ok": True}
+        token = parts[1].strip()
+        sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+        res = sb.table("profiles").select("*").eq("access_token", token).execute()
+        if not res.data:
+            await send_telegram(chat_id, "Non ho trovato il tuo profilo. Rifai l'iscrizione.")
+            return {"ok": True}
+        
+        prof = res.data[0]
+        nome = prof["nome"]
+        sb.table("profiles").update({"telegram_id": str(chat_id)}).eq("access_token", token).execute()
+        
+        await send_telegram(chat_id, f"Benvenuto <b>{nome}</b>! 🌙\n\nQuesto è il tuo contatto con le stelle. Profilo collegato correttamente.\n🌐 {SITE_URL}/sala?token={token}")
+        await asyncio.sleep(2)
+        
+        try:
+            if prof.get("ultimo_oroscopo_testo"):
+                oroscopo = prof["ultimo_oroscopo_testo"]
+            else:
+                tema = calcola_tema_completo(str(prof["birth_date"]), str(prof["birth_time"])[:5], float(prof["birth_lat"]), float(prof["birth_lon"]), 1.0)
+                report = genera_report_interno(prof, tema, sb)
+                oroscopo = await genera_oroscopo_settimanale(report)
+                if oroscopo:
+                    sb.table("profiles").update({"ultimo_oroscopo_testo": oroscopo}).eq("id", prof["id"]).execute()
+            
+            if oroscopo and not oroscopo.startswith("ERRORE"):
+                adesso = datetime.now(timezone.utc)
+                data_inizio = adesso.strftime("%d/%m")
+                data_fine = (adesso + timedelta(days=6)).strftime("%d/%m")
+                testo = f"<b>Oroscopo settimanale dal {data_inizio} al {data_fine}</b>\n\n{oroscopo}\n\n🌐 <a href='{SITE_URL}/sala?token={token}'>Approfondisci nella tua sala</a>"
+                await send_telegram(chat_id, testo)
+                sb.table("profiles").update({"ultimo_oroscopo_inviato": adesso.isoformat()}).eq("id", prof["id"]).execute()
+            else:
+                await send_telegram(chat_id, "Le stelle sono un po' confuse in questo momento. Riprova più tardi.")
+        except Exception as e:
+            print(f"=== ECCEZIONE OROSCOPO: {e} ===")
+            await send_telegram(chat_id, "C'è stato un problema con le stelle. Riprova più tardi.")
+
+        return {"ok": True}
+        
+    if text == "/stop":
+        await unlink_telegram_account(chat_id)
+        await send_telegram(chat_id, "Va bene. Usa /start TOKEN per riattivare.")
+        return {"ok": True}
+    await send_telegram(chat_id, "Comando non riconosciuto.")
+    return {"ok": True}
+
+# =========================================================
+# CRON
+# =========================================================
+
+@app.post("/cron/oroscopo-settimanale")
+async def cron_oroscopo_settimanale(request: Request):
+    try:
+        if not CRON_SECRET: raise HTTPException(status_code=500, detail="CRON_SECRET non configurato.")
+        if request.headers.get("x-cron-secret", "") != CRON_SECRET: raise HTTPException(status_code=403, detail="Non autorizzato.")
+        if not SUPABASE_URL or not SUPABASE_KEY: raise HTTPException(status_code=500, detail="Supabase non configurato.")
+
+        sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+        res = sb.table("profiles").select("*").execute()
+        utenti = [u for u in (res.data or []) if u.get("telegram_id")]
+        
+        adesso = datetime.now(timezone.utc)
+        inizio_settimana = adesso - timedelta(days=adesso.weekday(), hours=adesso.hour, minutes=adesso.minute, seconds=adesso.second)
+
+        inviati = 0
+        in_coda = 0
+        errori = 0
+
+        for u in utenti:
+            nome = u.get("nome", "?")
+            ultimo = u.get("ultimo_oroscopo_inviato")
+            if ultimo:
+                dt_ultimo = datetime.fromisoformat(ultimo.replace("Z", "+00:00"))
+                if dt_ultimo >= inizio_settimana:
+                    continue
+
+            try:
+                tema = calcola_tema_completo(str(u["birth_date"]), str(u["birth_time"])[:5], float(u["birth_lat"]), float(u["birth_lon"]), 1.0)
+                report = genera_report_interno(u, tema, sb)
+                oroscopo = await genera_oroscopo_settimanale(report)
+
+                if not oroscopo:
+                    sb.table("coda_invii").insert({"profile_id": u["id"], "tipo": "oroscopo", "contenuto": "", "tentativi": 0}).execute()
+                    in_coda += 1
+                    continue
+
+                sb.table("profiles").update({"ultimo_oroscopo_testo": oroscopo}).eq("id", u["id"]).execute()
+
+                data_inizio = adesso.strftime("%d/%m")
+                data_fine = (adesso + timedelta(days=6)).strftime("%d/%m")
+                testo = f"<b>Oroscopo settimanale dal {data_inizio} al {data_fine}</b>\n\n{oroscopo}\n\n🌐 <a href='{SITE_URL}/sala?token={u['access_token']}'>Approfondisci nella tua sala</a>"
+                
+                chat_id = int(u["telegram_id"])
+                await send_telegram(chat_id, testo)
+                
+                sb.table("profiles").update({"ultimo_oroscopo_inviato": adesso.isoformat()}).eq("id", u["id"]).execute()
+                inviati += 1
+            except Exception as e:
+                errori += 1
+                print(f"=== CRON: errore per {nome}: {e} ===")
+
+        return {"status": "ok", "inviati": inviati, "in_coda": in_coda, "errori": errori}
+    except HTTPException: raise
+    except Exception as e:
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Errore: {e}")
+
+@app.post("/cron/alert-mensili")
+async def cron_alert_mensili(request: Request):
+    try:
+        if not CRON_SECRET: raise HTTPException(status_code=500, detail="CRON_SECRET non configurato.")
+        if request.headers.get("x-cron-secret", "") != CRON_SECRET: raise HTTPException(status_code=403, detail="Non autorizzato.")
+        if not SUPABASE_URL or not SUPABASE_KEY: raise HTTPException(status_code=500, detail="Supabase non configurato.")
+
+        sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+        
+        res = sb.table("alerts").select("*, profiles(*)").eq("inviato", False).execute()
+        elementi = res.data or []
+
+        if not elementi: return {"status": "ok", "inviati": 0}
+
+        inviati = 0
+        for el in elementi:
+            prof = el.get("profiles")
+            if not prof or not prof.get("telegram_id"):
+                continue
+
+            try:
+                chat_id = int(prof["telegram_id"])
+                nome = prof.get("nome", "")
+                testo = f"Ciao <b>{nome}</b>, un segnale dalle stelle 🌙\n\n{el['descrizione']}\n\n🌐 <a href='{SITE_URL}/sala'>Approfondisci nella tua sala</a>"
+                await send_telegram(chat_id, testo)
+                
+                sb.table("alerts").update({"inviato": True}).eq("id", el["id"]).execute()
+                inviati += 1
+            except Exception as e:
+                print(f"=== Errore invio alert {el['id']}: {e} ===")
+
+        return {"status": "ok", "inviati": inviati}
+    except HTTPException: raise
+    except Exception as e:
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Errore: {e}")
+
+@app.post("/cron/auguri-compleanno")
+async def cron_auguri_compleanno(request: Request):
+    try:
+        if not CRON_SECRET: raise HTTPException(status_code=500, detail="CRON_SECRET non configurato.")
+        if request.headers.get("x-cron-secret", "") != CRON_SECRET: raise HTTPException(status_code=403, detail="Non autorizzato.")
+        if not SUPABASE_URL or not SUPABASE_KEY: raise HTTPException(status_code=500, detail="Supabase non configurato.")
+
+        sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+        
+        oggi = datetime.now(timezone.utc)
+        giorno = oggi.day
+        mese = oggi.month
+        anno = oggi.year
+        
+        print(f"=== CRON AUGURI: oggi è {giorno}/{mese}/{anno} ===")
+        
+        res = sb.table("profiles").select("*").execute()
+        totale_profili = len(res.data or [])
+        con_telegram = 0
+        compleanni_oggi = []
+        
+        for prof in res.data or []:
+            if prof.get("telegram_id"):
+                con_telegram += 1
+            if not prof.get("birth_date") or not prof.get("telegram_id"):
+                continue
+            bd = str(prof["birth_date"])[:10]
+            try:
+                anno_bd, mese_bd, giorno_bd = bd.split("-")
+                if int(giorno_bd) == giorno and int(mese_bd) == mese:
+                    compleanni_oggi.append(prof)
+                    print(f"=== CRON AUGURI: trovato compleanno per {prof.get('nome')} (nato il {bd}) ===")
+            except Exception as e:
+                print(f"=== CRON AUGURI: errore parsing data {bd}: {e} ===")
+                continue
+
+        print(f"=== CRON AUGURI: totale profili {totale_profili}, con telegram {con_telegram}, compleanni oggi {len(compleanni_oggi)} ===")
+
+        inviati = 0
+        for prof in compleanni_oggi:
+            try:
+                chat_id = int(prof["telegram_id"])
+                nome = prof.get("nome", "")
+                testo = f"🎂 <b>Buon compleanno, {nome}!</b> 🌙\n\nIl tuo sole torna nel punto in cui è iniziato tutto. Che questo nuovo anno ti porti luce, consapevolezza e tutto ciò che desideri.\n\n🌐 <a href='{SITE_URL}/sala'>Entra nella tua sala</a>"
+                await send_telegram(chat_id, testo)
+                sb.table("profiles").update({"birthday_sent_year": anno}).eq("id", prof["id"]).execute()
+                inviati += 1
+                print(f"=== CRON AUGURI: inviato a {nome} ===")
+            except Exception as e:
+                print(f"=== Errore invio auguri a {prof['nome']}: {e} ===")
+
+        return {"status": "ok", "inviati": inviati, "compleanni_trovati": len(compleanni_oggi)}
+    except HTTPException: raise
+    except Exception as e:
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Errore: {e}")
+
+@app.post("/cron/recupera-coda")
+async def cron_recupera_coda(request: Request):
+    try:
+        if not CRON_SECRET: raise HTTPException(status_code=500, detail="CRON_SECRET non configurato.")
+        if request.headers.get("x-cron-secret", "") != CRON_SECRET: raise HTTPException(status_code=403, detail="Non autorizzato.")
+
+        sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+        res = sb.table("coda_invii").select("*").lt("tentativi", 20).order("creato_il").limit(10).execute()
+        elementi = res.data or []
+
+        if not elementi: return {"status": "ok", "recuperati": 0}
+        recuperati = 0
+        falliti = 0
+
+        for el in elementi:
+            try:
+                prof_res = sb.table("profiles").select("*").eq("id", el["profile_id"]).execute()
+                if not prof_res.data:
+                    sb.table("coda_invii").delete().eq("id", el["id"]).execute()
+                    continue
+                u = prof_res.data[0]
+
+                ultimo = u.get("ultimo_oroscopo_inviato")
+                if ultimo:
+                    dt_ultimo = datetime.fromisoformat(ultimo.replace("Z", "+00:00"))
+                    adesso = datetime.now(timezone.utc)
+                    inizio_settimana = adesso - timedelta(days=adesso.weekday(), hours=adesso.hour, minutes=adesso.minute, seconds=adesso.second)
+                    if dt_ultimo >= inizio_settimana:
+                        sb.table("coda_invii").delete().eq("id", el["id"]).execute()
+                        continue
+
+                tema = calcola_tema_completo(str(u["birth_date"]), str(u["birth_time"])[:5], float(u["birth_lat"]), float(u["birth_lon"]), 1.0)
+                report = genera_report_interno(u, tema, sb)
+                oroscopo = await genera_oroscopo_settimanale(report)
+
+                if not oroscopo:
+                    sb.table("coda_invii").update({"tentativi": (el.get("tentativi", 0) + 1), "ultimo_tentativo": datetime.now(timezone.utc).isoformat()}).eq("id", el["id"]).execute()
+                    falliti += 1
+                    continue
+
+                sb.table("profiles").update({"ultimo_oroscopo_testo": oroscopo}).eq("id", u["id"]).execute()
+
+                nome = u.get("nome", "")
+                adesso = datetime.now(timezone.utc)
+                data_inizio = adesso.strftime("%d/%m")
+                data_fine = (adesso + timedelta(days=6)).strftime("%d/%m")
+                testo = f"<b>Oroscopo settimanale dal {data_inizio} al {data_fine}</b>\n\n{oroscopo}\n\n🌐 <a href='{SITE_URL}/sala?token={u['access_token']}'>Approfondisci nella tua sala</a>"
+                
+                chat_id = int(u["telegram_id"])
+                await send_telegram(chat_id, testo)
+                
+                sb.table("profiles").update({"ultimo_oroscopo_inviato": adesso.isoformat()}).eq("id", u["id"]).execute()
+                sb.table("coda_invii").delete().eq("id", el["id"]).execute()
+                recuperati += 1
+            except Exception as e:
+                falliti += 1
+                print(f"=== CRON CODA: errore: {e} ===")
+
+        return {"status": "ok", "recuperati": recuperati, "falliti": falliti}
+    except HTTPException: raise
+    except Exception as e:
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Errore: {e}")
+
+async def send_telegram(chat_id, text):
+    if not TELEGRAM_API: return
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            await client.post(f"{TELEGRAM_API}/sendMessage", json={"chat_id": chat_id, "text": text, "parse_mode": "HTML", "disable_web_page_preview": True})
+    except Exception as e:
+        print(f"Errore Telegram: {e}")
+
+async def unlink_telegram_account(chat_id):
+    sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+    try:
+        sb.table("profiles").update({"telegram_id": None}).eq("telegram_id", str(chat_id)).execute()
+    except Exception: pass
