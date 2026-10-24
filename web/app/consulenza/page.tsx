@@ -57,8 +57,13 @@ function ConsulenzaContent() {
     setInCaricamento(true);
     setErrore('');
     try {
-      // Avvia la chiamata passando l'ID dell'Assistente
-      await vapiRef.current.start(VAPI_ASSISTANT_ID);
+      // Recupera il token del cliente
+      const token = localStorage.getItem('luna2_token');
+      
+      // Avvia la chiamata passando l'ID e il token nei metadati
+      await vapiRef.current.start(VAPI_ASSISTANT_ID, {
+        metadata: { token: token }
+      });
     } catch (e) {
       console.error(e);
       setErrore('Impossibile avviare la chiamata. Controlla il microfono.');
