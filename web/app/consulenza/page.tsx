@@ -6,6 +6,7 @@ import Link from 'next/link';
 import Vapi from '@vapi-ai/web';
 
 const VAPI_PUBLIC_KEY = "73d30b26-4506-4edd-8037-a32959293655";
+const VAPI_ASSISTANT_ID = "687814ce-7e70-4df1-85f9-f21d96c8db74";
 const VAPI_WEBHOOK_URL = "https://luna2-api.onrender.com/vapi/webhook";
 
 function ConsulenzaContent() {
@@ -56,9 +57,8 @@ function ConsulenzaContent() {
     try {
       const token = localStorage.getItem('luna2_token');
       
-      // Passiamo un assistente transiente (inline) con server URL e metadati dentro assistantOverrides.
-      // Questo è l'unico modo per far chiamare il webhook alla Web SDK.
-      await vapiRef.current.start({
+      // Primo argomento: assistente transiente (senza assistantOverrides)
+      const assistenteTransiente = {
         name: "Luna - La tua astrologa",
         firstMessage: "Ciao, sono Luna. Benvenuto al tuo consulto. Dimmi pure cosa ti sta a cuore.",
         model: {
@@ -73,13 +73,17 @@ function ConsulenzaContent() {
         },
         server: {
           url: VAPI_WEBHOOK_URL
-        },
-        assistantOverrides: {
-          metadata: {
-            token: token
-          }
         }
-      });
+      };
+
+      // Secondo argomento: assistantOverrides con i metadati
+      const overrides = {
+        metadata: {
+          token: token
+        }
+      };
+
+      await vapiRef.current.start(assistenteTransiente, overrides);
     } catch (e) {
       console.error(e);
       setErrore('Impossibile avviare la chiamata. Controlla il microfono.');
