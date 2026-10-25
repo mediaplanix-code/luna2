@@ -56,8 +56,9 @@ function ConsulenzaContent() {
     try {
       const token = localStorage.getItem('luna2_token');
       
-      // Assistente transiente: specifichiamo esplicitamente role: "system"
-      const assistenteTransiente = {
+      // Passiamo l'assistente transiente. Il token va dentro variableValues
+      // per essere disponibile nel prompt dell'Assistente su Vapi .
+      await vapiRef.current.start({
         name: "Luna - La tua astrologa",
         firstMessage: "Ciao, sono Luna. Benvenuto al tuo consulto. Dimmi pure cosa ti sta a cuore.",
         model: {
@@ -66,23 +67,18 @@ function ConsulenzaContent() {
           messages: [
             {
               role: "system" as const,
-              content: "Sei Luna, un'astrologa italiana esperta. Rispondi in italiano con tono caldo e mistico."
+              content: "Sei Luna, un'astrologa italiana esperta. Rispondi in italiano con tono caldo e mistico. Il token del cliente è: {{token}}"
             }
           ]
         },
         server: {
           url: VAPI_WEBHOOK_URL
-        }
-      };
-
-      // Override passati come secondo argomento (documentazione Web SDK)
-      const overrides = {
-        metadata: {
+        },
+        // I valori dinamici vanno qui, non in metadata 
+        variableValues: {
           token: token
         }
-      };
-
-      await vapiRef.current.start(assistenteTransiente, overrides);
+      });
     } catch (e) {
       console.error(e);
       setErrore('Impossibile avviare la chiamata. Controlla il microfono.');
