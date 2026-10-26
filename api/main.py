@@ -8,9 +8,11 @@ import random
 import string
 import asyncio
 import re
+import json
 from datetime import datetime, timezone, timedelta
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 import swisseph as swe
 import httpx
@@ -21,7 +23,7 @@ from report import assembla_report
 from ai import genera_oroscopo_settimanale, rispondi_chat, genera_copione_voce, rispondi_chat_compatibilita, genera_copione_voce_compatibilita, genera_settori_tema, rispondi_chat_tema, genera_copione_voce_tema
 from compatibilita import router as compatibilita_router
 
-app = FastAPI(title="Luna2 Astro API", version="0.39.0")
+app = FastAPI(title="Luna2 Astro API", version="0.40.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -263,7 +265,7 @@ def root():
     return {
         "status": "ok",
         "service": "Luna2 Astro API",
-        "version": "0.39.0",
+        "version": "0.40.0",
         "supabase_configured": bool(SUPABASE_URL and SUPABASE_KEY),
         "telegram_configured": bool(TELEGRAM_TOKEN),
         "ai_provider": os.getenv("AI_PROVIDER", "groq"),
@@ -277,7 +279,7 @@ async def geocode(q: str = ""):
     if len(q) < 3: return {"features": []}
     url = "https://photon.komoot.io/api/"
     params = {"q": q, "limit": 5, "lang": "default"}
-    headers = {"User-Agent": "Luna2/0.39", "Accept": "application/json"}
+    headers = {"User-Agent": "Luna2/0.40", "Accept": "application/json"}
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.get(url, params=params, headers=headers)
@@ -585,14 +587,14 @@ async def get_copione_voce(token: str, focus: str = None):
     return {"copione": copione}
 
 # =========================================================
-# CUSTOM LLM PER VAPI (OpenAI-compatibile)
+# CUSTOM LLM PER VAPI (OpenAI-compatibile con STREAMING)
 # =========================================================
 
 @app.post("/vapi/llm/chat/completions")
 async def vapi_llm(request: Request):
     """
     Endpoint compatibile OpenAI che Vapi chiama come Custom LLM.
-    Cerca il token in TUTTO il testo (non solo con regex) e usa il profilo.
+    Restituisce la risposta in streaming (text/event-stream), come Vapi si aspetta.
     """
     try:
         body = await request.json()
@@ -611,7 +613,6 @@ async def vapi_llm(request: Request):
         for m in messages:
             content = m.get("content", "")
             if m.get("role") == "system" or "token" in content.lower():
-                # Cerca qualsiasi stringa esadecimale di 32 caratteri
                 match = re.search(r'\b([a-f0-9]{32})\b', content, re.IGNORECASE)
                 if match:
                     token = match.group(1)
@@ -619,6 +620,9 @@ async def vapi_llm(request: Request):
         
         print(f"=== VAPI LLM: token trovato: {token[:10] if token else 'NESSUNO'}... ===")
         print(f"=== VAPI LLM: messaggio utente: {user_message[:100]}... ===")
+        
+        # Genera la risposta
+        risposta = "Ciao, sono Luna. Dimmi pure cosa ti sta a cuore."
         
         if token:
             sb = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -631,31 +635,43 @@ async def vapi_llm(request: Request):
                 report = genera_report_interno(prof, tema, sb)
                 
                 risposta = await rispondi_chat_tema(report, "generico", user_message, messages[-6:])
-                
-                if risposta:
-                    return {
-                        "id": f"chatcmpl-{random.randint(1000, 9999)}",
-                        "object": "chat.completion",
-                        "created": int(datetime.now(timezone.utc).timestamp()),
-                        "model": "luna-custom",
-                        "choices": [{
-                            "index": 0,
-                            "message": {"role": "assistant", "content": risposta},
-                            "finish_reason": "stop"
-                        }]
-                    }
         
-        return {
-            "id": f"chatcmpl-{random.randint(1000, 9999)}",
-            "object": "chat.completion",
-            "created": int(datetime.now(timezone.utc).timestamp()),
-            "model": "luna-custom",
-            "choices": [{
-                "index": 0,
-                "message": {"role": "assistant", "content": "Ciao, sono Luna. Per personalizzare il consulto, assicurati di essere loggato sul sito. Dimmi pure cosa ti sta a cuore."},
-                "finish_reason": "stop"
-            }]
-        }
+        if not risposta:
+            risposta = "Ciao, sono Luna. C'è stato un piccolo problema. Riprova tra poco."
+        
+        # Restituisci in streaming (formato SSE)
+        async def stream_response():
+            # Invia un chunk con la risposta completa
+            chunk = {
+                "id": f"chatcmpl-{random.randint(1000, 9999)}",
+                "object": "chat.completion.chunk",
+                "created": int(datetime.now(timezone.utc).timestamp()),
+                "model": "luna-custom",
+                "choices": [{
+                    "index": 0,
+                    "delta": {"content": risposta},
+                    "finish_reason": None
+                }]
+            }
+            yield f"data: {json.dumps(chunk)}\n\n"
+            
+            # Invia il chunk finale
+            final_chunk = {
+                "id": f"chatcmpl-{random.randint(1000, 9999)}",
+                "object": "chat.completion.chunk",
+                "created": int(datetime.now(timezone.utc).timestamp()),
+                "model": "luna-custom",
+                "choices": [{
+                    "index": 0,
+                    "delta": {},
+                    "finish_reason": "stop"
+                }]
+            }
+            yield f"data: {json.dumps(final_chunk)}\n\n"
+            yield "data: [DONE]\n\n"
+        
+        return StreamingResponse(stream_response(), media_type="text/event-stream")
+        
     except Exception as e:
         print(f"=== ERRORE VAPI LLM: {e} ===")
         return {
