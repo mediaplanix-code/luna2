@@ -421,6 +421,23 @@ function SalaContent() {
         </Accordion>
       </div>
 
+      {/* ============ SOGNI (NUOVO BLOCCO) ============ */}
+      <div className="section-label" style={{ marginTop: '30px', fontSize: '15px' }}>I tuoi sogni</div>
+      <div className="accordion">
+        <Accordion title="🌙 Racconta un sogno a Luna" bare>
+          <p style={{ fontSize: '15px', lineHeight: '1.7', marginBottom: '16px' }}>
+            Hai fatto un sogno che ti è rimasto dentro? Raccontalo a Luna. Un&apos;interpretazione gratuita a settimana.
+          </p>
+          <Link
+            href="/sogni"
+            className="btn-line"
+            style={{ display: 'inline-block', width: '100%', textAlign: 'center', fontSize: '15px', marginTop: '10px' }}
+          >
+            Interpreta un sogno →
+          </Link>
+        </Accordion>
+      </div>
+
       <div className="section-label" style={{ marginTop: '30px', fontSize: '15px' }}>Compatibilità</div>
       <div className="accordion">
         <Accordion title="Scopri l'intesa con un'altra persona" bare>
