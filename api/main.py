@@ -20,7 +20,7 @@ from report import assembla_report
 from ai import genera_oroscopo_settimanale, rispondi_chat, genera_copione_voce, rispondi_chat_compatibilita, genera_copione_voce_compatibilita, genera_settori_tema, rispondi_chat_tema, genera_copione_voce_tema
 from compatibilita import router as compatibilita_router
 
-app = FastAPI(title="Luna2 Astro API", version="0.36.0")
+app = FastAPI(title="Luna2 Astro API", version="0.37.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -262,7 +262,7 @@ def root():
     return {
         "status": "ok",
         "service": "Luna2 Astro API",
-        "version": "0.36.0",
+        "version": "0.37.0",
         "supabase_configured": bool(SUPABASE_URL and SUPABASE_KEY),
         "telegram_configured": bool(TELEGRAM_TOKEN),
         "ai_provider": os.getenv("AI_PROVIDER", "groq"),
@@ -276,7 +276,7 @@ async def geocode(q: str = ""):
     if len(q) < 3: return {"features": []}
     url = "https://photon.komoot.io/api/"
     params = {"q": q, "limit": 5, "lang": "default"}
-    headers = {"User-Agent": "Luna2/0.36", "Accept": "application/json"}
+    headers = {"User-Agent": "Luna2/0.37", "Accept": "application/json"}
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.get(url, params=params, headers=headers)
@@ -583,60 +583,102 @@ async def get_copione_voce(token: str, focus: str = None):
     if not copione: raise HTTPException(status_code=503, detail="Il consulto non è disponibile. Riprova più tardi.")
     return {"copione": copione}
 
-@app.post("/vapi/webhook")
-async def vapi_webhook(request: Request):
+# =========================================================
+# CUSTOM LLM PER VAPI (OpenAI-compatibile)
+# =========================================================
+
+@app.post("/vapi/llm")
+async def vapi_llm(request: Request):
     """
-    Endpoint chiamato da Vapi all'inizio della chiamata (assistant-request).
-    Restituisce il prompt personalizzato per il cliente, usando il token
-    passato nei metadati della chiamata Web SDK.
+    Endpoint compatibile OpenAI che Vapi chiama come Custom LLM.
+    Riceve la conversazione, cerca il profilo, genera la risposta con i dati natali.
     """
     try:
         body = await request.json()
-        print(f"=== VAPI: richiesta ricevuta ===")
+        print(f"=== VAPI LLM: richiesta ricevuta ===")
         
-        # Estrai il token del cliente dai metadati della chiamata
-        metadata = body.get("message", {}).get("call", {}).get("metadata", {})
-        if not metadata:
-            metadata = body.get("message", {}).get("assistantOverrides", {}).get("metadata", {})
+        # Estrai i messaggi della conversazione
+        messages = body.get("messages", [])
         
-        token = metadata.get("token")
+        # Trova l'ultimo messaggio dell'utente
+        user_message = ""
+        for m in reversed(messages):
+            if m.get("role") == "user":
+                user_message = m.get("content", "")
+                break
         
-        copione = "Sei Luna, un'astrologa italiana esperta. Rispondi in italiano con tono caldo e mistico. Parla del tema natale del cliente se disponibile, altrimenti chiedi il suo nome e i suoi dati di nascita."
-        first_message = "Ciao, sono Luna. Benvenuto al tuo consulto. Dimmi pure cosa ti sta a cuore."
+        # Estrai il token del cliente (se presente nel primo messaggio di sistema o nei metadati)
+        # Per ora, cerchiamo il token in tutti i messaggi di sistema
+        token = None
+        for m in messages:
+            if m.get("role") == "system":
+                content = m.get("content", "")
+                # Cerca un pattern tipo "token: ..." o "cliente: ..."
+                import re
+                match = re.search(r'token[:\s]+([a-f0-9]{32})', content, re.IGNORECASE)
+                if match:
+                    token = match.group(1)
+                    break
         
+        print(f"=== VAPI LLM: token trovato: {token[:10] if token else 'NESSUNO'}... ===")
+        print(f"=== VAPI LLM: messaggio utente: {user_message[:100]}... ===")
+        
+        # Se abbiamo il token, cerca il profilo e genera la risposta con i dati
         if token:
-            print(f"=== VAPI: token ricevuto: {token[:10]}... ===")
             sb = create_client(SUPABASE_URL, SUPABASE_KEY)
             res = sb.table("profiles").select("*").eq("access_token", token).execute()
             if res.data:
                 prof = res.data[0]
                 nome = prof.get("nome", "")
+                
                 tema = calcola_tema_completo(str(prof["birth_date"]), str(prof["birth_time"])[:5], float(prof["birth_lat"]), float(prof["birth_lon"]), 1.0)
                 report = genera_report_interno(prof, tema, sb)
-                copione = await genera_copione_voce(report)
-                first_message = f"Ciao {nome}, sono Luna. Benvenuto al tuo consulto. Dimmi pure cosa ti sta a cuore."
-                print(f"=== VAPI: profilo trovato per {nome} ===")
-            else:
-                print(f"=== VAPI: nessun profilo trovato per il token ===")
-        else:
-            print(f"=== VAPI: nessun token ricevuto ===")
+                
+                # Genera la risposta con l'AI
+                risposta = await rispondi_chat_tema(report, "generico", user_message, messages[-6:])
+                
+                if risposta:
+                    return {
+                        "id": f"chatcmpl-{random.randint(1000, 9999)}",
+                        "object": "chat.completion",
+                        "created": int(datetime.now(timezone.utc).timestamp()),
+                        "model": "luna-custom",
+                        "choices": [{
+                            "index": 0,
+                            "message": {"role": "assistant", "content": risposta},
+                            "finish_reason": "stop"
+                        }]
+                    }
         
-        # Formato corretto per Vapi (assistant-request)
+        # Fallback: risposta generica
         return {
-            "assistant": {
-                "firstMessage": first_message,
-                "model": {
-                    "provider": "openai",
-                    "model": "gpt-4",
-                    "messages": [
-                        { "role": "system", "content": copione }
-                    ]
-                }
-            }
+            "id": f"chatcmpl-{random.randint(1000, 9999)}",
+            "object": "chat.completion",
+            "created": int(datetime.now(timezone.utc).timestamp()),
+            "model": "luna-custom",
+            "choices": [{
+                "index": 0,
+                "message": {"role": "assistant", "content": "Ciao, sono Luna. Per personalizzare il consulto, assicurati di essere loggato sul sito. Dimmi pure cosa ti sta a cuore."},
+                "finish_reason": "stop"
+            }]
         }
     except Exception as e:
-        print(f"=== ERRORE VAPI webhook: {e} ===")
-        return {"assistant": {"firstMessage": "Ciao, sono Luna. Dimmi pure cosa ti sta a cuore."}}
+        print(f"=== ERRORE VAPI LLM: {e} ===")
+        return {
+            "id": "chatcmpl-error",
+            "object": "chat.completion",
+            "created": int(datetime.now(timezone.utc).timestamp()),
+            "model": "luna-custom",
+            "choices": [{
+                "index": 0,
+                "message": {"role": "assistant", "content": "Ciao, sono Luna. C'è stato un piccolo problema. Riprova tra poco."},
+                "finish_reason": "stop"
+            }]
+        }
+
+# =========================================================
+# ALTRI ENDPOINT (transits, telegram, cron)
+# =========================================================
 
 @app.post("/transits")
 def transits(req: TransitRequest):
