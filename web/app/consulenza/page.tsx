@@ -56,8 +56,8 @@ function ConsulenzaContent() {
     try {
       const token = localStorage.getItem('luna2_token');
       
-      // Passiamo l'assistente tramite ID e gli override con variableValues.
-      // Il token sarà disponibile nel prompt come {{token}}.
+      // Passiamo l'ID dell'assistente e le variabili dinamiche.
+      // Vapi inietterà il token nel prompt {{token}} prima di chiamare il Custom LLM.
       const assistantOverrides = {
         variableValues: {
           token: token
