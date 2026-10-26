@@ -21,7 +21,7 @@ from report import assembla_report
 from ai import genera_oroscopo_settimanale, rispondi_chat, genera_copione_voce, rispondi_chat_compatibilita, genera_copione_voce_compatibilita, genera_settori_tema, rispondi_chat_tema, genera_copione_voce_tema
 from compatibilita import router as compatibilita_router
 
-app = FastAPI(title="Luna2 Astro API", version="0.38.0")
+app = FastAPI(title="Luna2 Astro API", version="0.39.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -263,7 +263,7 @@ def root():
     return {
         "status": "ok",
         "service": "Luna2 Astro API",
-        "version": "0.38.0",
+        "version": "0.39.0",
         "supabase_configured": bool(SUPABASE_URL and SUPABASE_KEY),
         "telegram_configured": bool(TELEGRAM_TOKEN),
         "ai_provider": os.getenv("AI_PROVIDER", "groq"),
@@ -277,7 +277,7 @@ async def geocode(q: str = ""):
     if len(q) < 3: return {"features": []}
     url = "https://photon.komoot.io/api/"
     params = {"q": q, "limit": 5, "lang": "default"}
-    headers = {"User-Agent": "Luna2/0.38", "Accept": "application/json"}
+    headers = {"User-Agent": "Luna2/0.39", "Accept": "application/json"}
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.get(url, params=params, headers=headers)
@@ -592,28 +592,27 @@ async def get_copione_voce(token: str, focus: str = None):
 async def vapi_llm(request: Request):
     """
     Endpoint compatibile OpenAI che Vapi chiama come Custom LLM.
-    Riceve la conversazione, cerca il profilo, genera la risposta con i dati natali.
+    Cerca il token in TUTTO il testo (non solo con regex) e usa il profilo.
     """
     try:
         body = await request.json()
         print(f"=== VAPI LLM: richiesta ricevuta ===")
         
-        # Estrai i messaggi della conversazione
         messages = body.get("messages", [])
         
-        # Trova l'ultimo messaggio dell'utente
         user_message = ""
         for m in reversed(messages):
             if m.get("role") == "user":
                 user_message = m.get("content", "")
                 break
         
-        # Estrai il token del cliente (se presente nel primo messaggio di sistema)
+        # Cerca il token in tutti i messaggi di sistema (in modo aggressivo)
         token = None
         for m in messages:
-            if m.get("role") == "system":
-                content = m.get("content", "")
-                match = re.search(r'token[:\s]+([a-f0-9]{32})', content, re.IGNORECASE)
+            content = m.get("content", "")
+            if m.get("role") == "system" or "token" in content.lower():
+                # Cerca qualsiasi stringa esadecimale di 32 caratteri
+                match = re.search(r'\b([a-f0-9]{32})\b', content, re.IGNORECASE)
                 if match:
                     token = match.group(1)
                     break
@@ -621,7 +620,6 @@ async def vapi_llm(request: Request):
         print(f"=== VAPI LLM: token trovato: {token[:10] if token else 'NESSUNO'}... ===")
         print(f"=== VAPI LLM: messaggio utente: {user_message[:100]}... ===")
         
-        # Se abbiamo il token, cerca il profilo e genera la risposta con i dati
         if token:
             sb = create_client(SUPABASE_URL, SUPABASE_KEY)
             res = sb.table("profiles").select("*").eq("access_token", token).execute()
@@ -632,7 +630,6 @@ async def vapi_llm(request: Request):
                 tema = calcola_tema_completo(str(prof["birth_date"]), str(prof["birth_time"])[:5], float(prof["birth_lat"]), float(prof["birth_lon"]), 1.0)
                 report = genera_report_interno(prof, tema, sb)
                 
-                # Genera la risposta con l'AI
                 risposta = await rispondi_chat_tema(report, "generico", user_message, messages[-6:])
                 
                 if risposta:
@@ -648,7 +645,6 @@ async def vapi_llm(request: Request):
                         }]
                     }
         
-        # Fallback: risposta generica
         return {
             "id": f"chatcmpl-{random.randint(1000, 9999)}",
             "object": "chat.completion",
