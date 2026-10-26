@@ -1,7 +1,7 @@
 import os
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from supabase import create_client
 
 from ai import _chiama_ai
@@ -11,8 +11,42 @@ router = APIRouter()
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
+
 class SognoRequest(BaseModel):
     sogno: str
+
+
+def _calcola_contesto_natale(profile: dict) -> str:
+    try:
+        from main import calcola_tema_completo, lon_to_sign
+        tema = calcola_tema_completo(
+            str(profile["birth_date"]),
+            str(profile["birth_time"])[:5],
+            float(profile["birth_lat"]),
+            float(profile["birth_lon"]),
+            1.0,
+        )
+        pianeti = tema.get("planets", {})
+        case = tema.get("planets_in_houses", {})
+        righe = []
+        for nome_p in ["Sole", "Luna", "Mercurio", "Venere", "Marte", "Giove", "Saturno", "Urano", "Nettuno", "Plutone"]:
+            p = pianeti.get(nome_p)
+            if not p:
+                continue
+            casa = case.get(nome_p)
+            riga = f"- {nome_p} in {p['segno']}"
+            if casa:
+                riga += f" in {casa}ª casa"
+            righe.append(riga)
+        asc = tema.get("ascendant")
+        if asc is not None:
+            asc_s = lon_to_sign(asc)
+            righe.append(f"- Ascendente in {asc_s['segno']}")
+        return "\n".join(righe)
+    except Exception as e:
+        print(f"=== Errore contesto natale sogno: {e} ===")
+        return ""
+
 
 @router.post("/sogni/{token}")
 async def interpreta_sogno(token: str, req: SognoRequest):
@@ -29,7 +63,6 @@ async def interpreta_sogno(token: str, req: SognoRequest):
     ultimo_sogno = profile.get("ultimo_sogno_gratuito")
     adesso = datetime.now(timezone.utc)
 
-    # Controlla se ha già usato il sogno gratuito questa settimana
     if ultimo_sogno:
         dt_ultimo = datetime.fromisoformat(ultimo_sogno.replace("Z", "+00:00"))
         if (adesso - dt_ultimo).days < 7:
@@ -42,8 +75,25 @@ async def interpreta_sogno(token: str, req: SognoRequest):
     if not sogno:
         raise HTTPException(status_code=400, detail="Scrivi il tuo sogno.")
 
-    prompt = f"""Sei Luna, un'astrologa e interprete dei sogni italiana. L'utente si chiama {nome}.
-Analizza questo sogno in modo simbolico, caldo e personale, senza essere freudiano o tecnico. 
+    contesto_natale = _calcola_contesto_natale(profile)
+
+    if contesto_natale:
+        prompt = f"""Sei Luna, un'astrologa e interprete dei sogni italiana. L'utente si chiama {nome}.
+Analizza questo sogno in modo simbolico, caldo e personale, LEGGENDOLO ATTRAVERSO il suo tema natale reale (sotto riportato).
+Non essere freudiano o tecnico. Massimo 150 parole. NON usare asterischi o markdown. Scrivi solo testo fluido.
+Collega esplicitamente almeno 1-2 simboli del sogno ai suoi pianeti o case (es. Luna, Nettuno, 12ª casa, Plutone, 4ª casa).
+Chiudi con una frase che lascia intendere che c'è un livello più profondo da scoprire con un consulto.
+
+PUNTI NATALI RILEVANTI PER I SOGNI:
+{contesto_natale}
+
+SOGNO:
+{sogno}
+
+Interpretazione:"""
+    else:
+        prompt = f"""Sei Luna, un'astrologa e interprete dei sogni italiana. L'utente si chiama {nome}.
+Analizza questo sogno in modo simbolico, caldo e personale, senza essere freudiano o tecnico.
 Massimo 150 parole. NON usare asterischi o markdown. Scrivi solo testo fluido.
 Chiudi con una frase che lascia intendere che c'è un livello più profondo da scoprire con un consulto.
 
