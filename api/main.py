@@ -7,6 +7,7 @@ import traceback
 import random
 import string
 import asyncio
+import re
 from datetime import datetime, timezone, timedelta
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,7 +21,7 @@ from report import assembla_report
 from ai import genera_oroscopo_settimanale, rispondi_chat, genera_copione_voce, rispondi_chat_compatibilita, genera_copione_voce_compatibilita, genera_settori_tema, rispondi_chat_tema, genera_copione_voce_tema
 from compatibilita import router as compatibilita_router
 
-app = FastAPI(title="Luna2 Astro API", version="0.37.0")
+app = FastAPI(title="Luna2 Astro API", version="0.38.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -262,7 +263,7 @@ def root():
     return {
         "status": "ok",
         "service": "Luna2 Astro API",
-        "version": "0.37.0",
+        "version": "0.38.0",
         "supabase_configured": bool(SUPABASE_URL and SUPABASE_KEY),
         "telegram_configured": bool(TELEGRAM_TOKEN),
         "ai_provider": os.getenv("AI_PROVIDER", "groq"),
@@ -276,7 +277,7 @@ async def geocode(q: str = ""):
     if len(q) < 3: return {"features": []}
     url = "https://photon.komoot.io/api/"
     params = {"q": q, "limit": 5, "lang": "default"}
-    headers = {"User-Agent": "Luna2/0.37", "Accept": "application/json"}
+    headers = {"User-Agent": "Luna2/0.38", "Accept": "application/json"}
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.get(url, params=params, headers=headers)
@@ -587,7 +588,7 @@ async def get_copione_voce(token: str, focus: str = None):
 # CUSTOM LLM PER VAPI (OpenAI-compatibile)
 # =========================================================
 
-@app.post("/vapi/llm")
+@app.post("/vapi/llm/chat/completions")
 async def vapi_llm(request: Request):
     """
     Endpoint compatibile OpenAI che Vapi chiama come Custom LLM.
@@ -607,14 +608,11 @@ async def vapi_llm(request: Request):
                 user_message = m.get("content", "")
                 break
         
-        # Estrai il token del cliente (se presente nel primo messaggio di sistema o nei metadati)
-        # Per ora, cerchiamo il token in tutti i messaggi di sistema
+        # Estrai il token del cliente (se presente nel primo messaggio di sistema)
         token = None
         for m in messages:
             if m.get("role") == "system":
                 content = m.get("content", "")
-                # Cerca un pattern tipo "token: ..." o "cliente: ..."
-                import re
                 match = re.search(r'token[:\s]+([a-f0-9]{32})', content, re.IGNORECASE)
                 if match:
                     token = match.group(1)
