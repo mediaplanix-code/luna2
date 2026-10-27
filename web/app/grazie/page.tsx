@@ -13,7 +13,6 @@ function GrazieContent() {
   const [nome, setNome] = useState('');
   const [stato, setStato] = useState<'loading' | 'ok' | 'errore'>('loading');
   const [messaggio, setMessaggio] = useState('');
-  const [secondiRimasti, setSecondiRimasti] = useState(0);
 
   useEffect(() => {
     const t = searchParams.get('token') || localStorage.getItem('luna2_token');
@@ -29,12 +28,12 @@ function GrazieContent() {
   useEffect(() => {
     if (!token) return;
 
+    // Qui confermiamo il pagamento (diamo i 15 minuti di "credito" al profilo)
     fetch(`${API_URL}/conferma-pagamento/${token}`, { method: 'POST' })
       .then(r => r.json())
       .then(d => {
         if (d.status === 'ok') {
           setStato('ok');
-          setSecondiRimasti(d.minuti * 60);
         } else {
           setStato('errore');
           setMessaggio('Pagamento ricevuto ma non è stato possibile attivare l\'accesso. Ricarica la pagina o contatta l\'assistenza.');
@@ -46,17 +45,20 @@ function GrazieContent() {
       });
   }, [token]);
 
-  // Timer locale: decrementa ogni secondo (solo per mostrare il countdown)
-  useEffect(() => {
-    if (stato !== 'ok' || secondiRimasti <= 0) return;
-    const id = setInterval(() => {
-      setSecondiRimasti(prev => (prev <= 1 ? 0 : prev - 1));
-    }, 1000);
-    return () => clearInterval(id);
-  }, [stato]);
-
-  const minuti = Math.floor(secondiRimasti / 60);
-  const secondi = secondiRimasti % 60;
+  // Funzione che fa partire il timer e porta l'utente dove vuole andare
+  const iniziaUso = (destinazione: string) => {
+    if (!token) return;
+    
+    // Chiamiamo un nuovo endpoint che fa partire il timer a questo preciso istante
+    fetch(`${API_URL}/inizia-accesso/${token}`, { method: 'POST' })
+      .then(() => {
+        router.push(destinazione);
+      })
+      .catch(() => {
+        // Se per qualche motivo la chiamata fallisce, navighiamo lo stesso
+        router.push(destinazione);
+      });
+  };
 
   if (stato === 'loading') {
     return (
@@ -100,53 +102,37 @@ function GrazieContent() {
         </h1>
         <p style={{ fontSize: '15px', color: 'var(--text-dim)', lineHeight: '1.6', maxWidth: '380px', margin: '0 auto' }}>
           {nome ? `Grazie ${nome}! ` : 'Grazie! '}
-          Il tuo accesso di 15 minuti è attivo. Puoi usare chat, voce e approfondimenti.
+          Il tuo credito di 15 minuti è pronto. Scegli da dove iniziare: il tempo inizierà a scorrere solo quando clicchi.
         </p>
       </div>
 
-      <div style={{
-        background: 'rgba(6,214,160,0.06)',
-        border: '1px solid rgba(6,214,160,0.3)',
-        borderRadius: '10px',
-        padding: '20px',
-        marginBottom: '30px',
-        textAlign: 'center',
-      }}>
-        <div style={{ fontSize: '12px', color: 'var(--text-dim)', marginBottom: '6px' }}>
-          Tempo rimasto
-        </div>
-        <div style={{ fontSize: '32px', fontWeight: 600, color: '#06D6A0', fontFamily: 'monospace' }}>
-          {String(minuti).padStart(2, '0')}:{String(secondi).padStart(2, '0')}
-        </div>
-      </div>
-
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        <Link
-          href="/chat"
+        <button
+          onClick={() => iniziaUso('/chat')}
           className="cta"
-          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontSize: '15px', padding: '16px', textDecoration: 'none' }}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontSize: '15px', padding: '16px', border: 'none', cursor: 'pointer' }}
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-          Vai alla chat
-        </Link>
+          Inizia la chat
+        </button>
 
-        <Link
-          href="/sala"
+        <button
+          onClick={() => iniziaUso('/sala')}
           className="cta"
-          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontSize: '15px', padding: '16px', background: 'transparent', border: '1px solid var(--text-dim)', color: 'var(--text-dim)', textDecoration: 'none' }}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontSize: '15px', padding: '16px', background: 'transparent', border: '1px solid var(--text-dim)', color: 'var(--text-dim)', cursor: 'pointer' }}
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
           Torna alla sala
-        </Link>
+        </button>
 
-        <Link
-          href="/consulenza"
+        <button
+          onClick={() => iniziaUso('/consulenza')}
           className="cta"
-          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontSize: '15px', padding: '16px', background: 'transparent', border: '1px solid #F5A623', color: '#F5A623', textDecoration: 'none' }}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontSize: '15px', padding: '16px', background: 'transparent', border: '1px solid #F5A623', color: '#F5A623', cursor: 'pointer' }}
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
           Parla con Luna
-        </Link>
+        </button>
       </div>
 
       <div className="footer" style={{ marginTop: '40px' }}>
