@@ -4,6 +4,8 @@ import { useEffect, useRef, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
+const API_URL = "https://luna2-api.onrender.com";
+
 function ChatContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -18,6 +20,7 @@ function ChatContent() {
   const [domandeUsate, setDomandeUsate] = useState(0);
   const [domandeLimite, setDomandeLimite] = useState(3);
   const [bloccato, setBloccato] = useState(false);
+  const [credito, setCredito] = useState(0);
 
   const fondoRef = useRef<HTMLDivElement>(null);
 
@@ -29,14 +32,14 @@ function ChatContent() {
     }
     setToken(t);
 
-    fetch(`https://luna2-api.onrender.com/sala/${t}`)
+    fetch(`${API_URL}/sala/${t}`)
       .then(r => r.json())
       .then(d => {
         if (d.profile) {
           const usate = d.profile.chat_questions_used || 0;
           setDomandeUsate(usate);
-          setDomandeLimite(3);
-          if (usate >= 3) setBloccato(true);
+          setCredito(d.profile.credito_secondi || 0);
+          if (usate >= 3 && (d.profile.credito_secondi || 0) <= 0) setBloccato(true);
         }
       })
       .catch(() => {});
@@ -56,17 +59,22 @@ function ChatContent() {
     setRisposta('');
 
     try {
-      const url = `https://luna2-api.onrender.com/chat/${token}${focus ? `?focus=${focus}` : ''}`;
+      // Avvia il timer "a lampo" sul server
+      await fetch(`${API_URL}/avvia-timer/${token}`, { method: 'POST' });
+
+      const url = `${API_URL}/chat/${token}${focus ? `?focus=${focus}` : ''}`;
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          domanda: testo,
-          storico: [],
-        }),
+        body: JSON.stringify({ domanda: testo, storico: [] }),
       });
 
       const data = await res.json();
+
+      // Ferma il timer e scala i secondi
+      const stopRes = await fetch(`${API_URL}/ferma-timer/${token}`, { method: 'POST' });
+      const stopData = await stopRes.json();
+      if (stopData.credito_secondi !== undefined) setCredito(stopData.credito_secondi);
 
       if (res.status === 402) {
         setBloccato(true);
@@ -77,9 +85,11 @@ function ChatContent() {
       if (!res.ok) throw new Error(data.detail || `Errore ${res.status}`);
 
       setRisposta(data.risposta || '');
-      const nuoveUsate = (domandeUsate || 0) + 1;
-      setDomandeUsate(nuoveUsate);
-      if (nuoveUsate >= 3) setBloccato(true);
+      if (!data.ha_credito) {
+        const nuoveUsate = (domandeUsate || 0) + 1;
+        setDomandeUsate(nuoveUsate);
+        if (nuoveUsate >= 3 && credito <= 0) setBloccato(true);
+      }
     } catch (err: any) {
       setErrore(err.message || 'Errore di rete');
     } finally {
@@ -94,6 +104,7 @@ function ChatContent() {
   }
 
   const rimaste = Math.max(0, domandeLimite - domandeUsate);
+  const haCredito = credito > 0;
   
   const isCompatibilita = focus && focus.startsWith('compatibilita');
   const isTema = focus && focus.startsWith('tema');
@@ -102,60 +113,33 @@ function ChatContent() {
   
   if (isCompatibilita) {
     const argomento = focus.replace('compatibilita_', '');
-    const mappaArgomenti: Record<string, string> = {
-      'amore': 'Amore',
-      'lavoro': 'Lavoro',
-      'salute': 'Salute',
-      'crescita': 'Crescita Personale',
-      'previsioni': 'Previsioni',
-      'generico': 'Generale'
-    };
-    const nomeArgomento = mappaArgomenti[argomento] || 'Compatibilità';
-    titolo = `Approfondimento ${nomeArgomento}${nomeB ? ` tra te e ${nomeB}` : ''}`;
+    const mappaArgomenti: Record<string, string> = { 'amore': 'Amore', 'lavoro': 'Lavoro', 'salute': 'Salute', 'crescita': 'Crescita Personale', 'previsioni': 'Previsioni', 'generico': 'Generale' };
+    titolo = `Approfondimento ${mappaArgomenti[argomento] || 'Compatibilità'}${nomeB ? ` tra te e ${nomeB}` : ''}`;
   } else if (isTema) {
     const argomento = focus.replace('tema_', '');
-    const mappaArgomenti: Record<string, string> = {
-      'amore': 'Amore',
-      'lavoro': 'Lavoro',
-      'salute': 'Salute',
-      'crescita': 'Crescita Personale',
-      'previsioni': 'Previsioni'
-    };
-    const nomeArgomento = mappaArgomenti[argomento] || 'Tema Natale';
-    titolo = `Approfondimento ${nomeArgomento}`;
+    const mappaArgomenti: Record<string, string> = { 'amore': 'Amore', 'lavoro': 'Lavoro', 'salute': 'Salute', 'crescita': 'Crescita Personale', 'previsioni': 'Previsioni' };
+    titolo = `Approfondimento ${mappaArgomenti[argomento] || 'Tema Natale'}`;
   }
 
-  // Link di ritorno corretto
   const backLink = isCompatibilita ? "/compatibilita" : "/sala";
   const backText = isCompatibilita ? "← Compatibilità" : "← Sala";
 
   return (
     <div className="canvas">
       <div className="topbar">
-        <Link href={backLink} className="back">
-          {backText}
-        </Link>
+        <Link href={backLink} className="back">{backText}</Link>
         <div className="brand">✦ Luna Astrologica</div>
       </div>
 
-      <h1 style={{
-        fontFamily: 'Georgia, serif',
-        fontSize: '22px',
-        fontWeight: 400,
-        textAlign: 'center',
-        marginBottom: '6px'
-      }}>
+      <h1 style={{ fontFamily: 'Georgia, serif', fontSize: '22px', fontWeight: 400, textAlign: 'center', marginBottom: '6px' }}>
         {titolo}
       </h1>
-      <p style={{
-        textAlign: 'center',
-        fontSize: '12px',
-        color: 'var(--text-dim)',
-        marginBottom: '22px'
-      }}>
-        {bloccato
+      <p style={{ textAlign: 'center', fontSize: '12px', color: 'var(--text-dim)', marginBottom: '22px' }}>
+        {bloccato && !haCredito
           ? 'Hai esaurito le domande gratuite.'
-          : `Ti restano ${rimaste} domande gratuite.`}
+          : haCredito 
+            ? 'Stai usando il tuo credito a tempo.' 
+            : `Ti restano ${rimaste} domande gratuite.`}
       </p>
 
       {!bloccato && !risposta && (
@@ -168,59 +152,23 @@ function ChatContent() {
               placeholder="Scrivi qui la tua domanda…"
               rows={4}
               disabled={invio}
-              style={{
-                width: '100%',
-                padding: '12px',
-                borderRadius: '8px',
-                border: '1px solid rgba(245,166,35,0.25)',
-                background: 'rgba(255,255,255,0.03)',
-                color: 'var(--text)',
-                fontSize: '14px',
-                fontFamily: 'inherit',
-                resize: 'vertical',
-              }}
+              style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid rgba(245,166,35,0.25)', background: 'rgba(255,255,255,0.03)', color: 'var(--text)', fontSize: '14px', fontFamily: 'inherit', resize: 'vertical' }}
             />
           </div>
-
-          <button
-            type="submit"
-            disabled={invio || !domanda.trim()}
-            className="cta"
-            style={{ marginTop: '14px' }}
-          >
+          <button type="submit" disabled={invio || !domanda.trim()} className="cta" style={{ marginTop: '14px' }}>
             {invio ? 'Sto consultando il cielo…' : 'Chiedi'}
           </button>
-
-          {errore && (
-            <div className="error" style={{ marginTop: '14px' }}>
-              {errore}
-            </div>
-          )}
+          {errore && <div className="error" style={{ marginTop: '14px' }}>{errore}</div>}
         </form>
       )}
 
       {risposta && (
         <div>
-          <div style={{
-            padding: '16px',
-            background: 'rgba(255,255,255,0.03)',
-            border: '1px solid rgba(245,166,35,0.2)',
-            borderRadius: '10px',
-            color: 'var(--text)',
-            fontSize: '14px',
-            lineHeight: '1.6',
-            whiteSpace: 'pre-wrap',
-          }}>
+          <div style={{ padding: '16px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(245,166,35,0.2)', borderRadius: '10px', color: 'var(--text)', fontSize: '14px', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
             {risposta}
           </div>
-
-          {!bloccato ? (
-            <button
-              type="button"
-              onClick={nuovaDomanda}
-              className="cta"
-              style={{ marginTop: '14px' }}
-            >
+          {(!bloccato || haCredito) ? (
+            <button type="button" onClick={nuovaDomanda} className="cta" style={{ marginTop: '14px' }}>
               Fai un&apos;altra domanda
             </button>
           ) : (
@@ -233,13 +181,26 @@ function ChatContent() {
         </div>
       )}
 
-      {bloccato && !risposta && (
+      {bloccato && !haCredito && !risposta && (
         <div style={{ marginTop: '16px', textAlign: 'center' }}>
           <Link href={`/consulenza${focus ? `?focus=${focus}` : ''}`} className="cta" style={{ display: 'inline-block' }}>
             Prenota un consulto · €19
           </Link>
         </div>
       )}
+
+      {/* BARRA IN BASSO */}
+      <div style={{ marginTop: '30px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--text-dim)', marginBottom: '6px' }}>
+          <span>Credito residuo</span>
+          <span style={{ color: credito <= 120 ? '#EF476F' : credito <= 300 ? '#F5A623' : '#06D6A0', fontWeight: 600 }}>
+            {Math.floor(credito / 60)}:{(credito % 60).toString().padStart(2, '0')}
+          </span>
+        </div>
+        <div style={{ width: '100%', height: '8px', background: 'rgba(255,255,255,0.08)', borderRadius: '6px', overflow: 'hidden' }}>
+          <div style={{ width: `${Math.min(100, (credito / 990) * 100)}%`, height: '100%', background: credito <= 120 ? '#EF476F' : credito <= 300 ? '#F5A623' : '#06D6A0', transition: 'width 1s linear' }} />
+        </div>
+      </div>
 
       <div ref={fondoRef} />
 
@@ -251,7 +212,7 @@ function ChatContent() {
         </div>
       )}
 
-      <div className="footer">
+      <div className="footer" style={{ marginTop: '40px' }}>
         <Link href="/privacy">Privacy</Link>·
         <Link href="/disclaimer">Disclaimer</Link>·
         <Link href="/faq">?</Link>
