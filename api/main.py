@@ -22,7 +22,7 @@ from ai import genera_oroscopo_settimanale, rispondi_chat, genera_copione_voce, 
 from compatibilita import router as compatibilita_router
 from sogni import router as sogni_router
 
-app = FastAPI(title="Luna2 Astro API", version="0.44.0")
+app = FastAPI(title="Luna2 Astro API", version="0.45.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -249,6 +249,17 @@ def genera_alert_futuri(profile_id: str, tema: dict, sb):
         print(f"=== ERRORE generazione alert: {e} ===")
         return []
 
+def accesso_attivo(profile: dict) -> bool:
+    """Restituisce True se il cliente ha un accesso a 15 minuti ancora valido."""
+    scadenza = profile.get("accesso_scadenza")
+    if not scadenza:
+        return False
+    try:
+        dt_scadenza = datetime.fromisoformat(str(scadenza).replace("Z", "+00:00"))
+        return dt_scadenza > datetime.now(timezone.utc)
+    except Exception:
+        return False
+
 @app.on_event("startup")
 async def on_startup():
     if not TELEGRAM_TOKEN or not TELEGRAM_API: return
@@ -266,7 +277,7 @@ def root():
     return {
         "status": "ok",
         "service": "Luna2 Astro API",
-        "version": "0.44.0",
+        "version": "0.45.0",
         "supabase_configured": bool(SUPABASE_URL and SUPABASE_KEY),
         "telegram_configured": bool(TELEGRAM_TOKEN),
         "ai_provider": os.getenv("AI_PROVIDER", "groq"),
@@ -279,7 +290,7 @@ async def geocode(q: str = ""):
     if len(q) < 3: return {"features": []}
     url = "https://photon.komoot.io/api/"
     params = {"q": q, "limit": 5, "lang": "default"}
-    headers = {"User-Agent": "Luna2/0.44", "Accept": "application/json"}
+    headers = {"User-Agent": "Luna2/0.45", "Accept": "application/json"}
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.get(url, params=params, headers=headers)
@@ -376,6 +387,69 @@ async def recupera_token(req: RecuperoRequest):
     except HTTPException: raise
     except Exception as e: raise HTTPException(status_code=500, detail=str(e))
 
+# =========================================================
+# PAGAMENTO
+# =========================================================
+
+@app.post("/conferma-pagamento/{token}")
+async def conferma_pagamento(token: str):
+    """Chiamato dal frontend dopo il ritorno dal Payment Link Stripe.
+    Sblocca 15 minuti di accesso a tutto."""
+    try:
+        sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+        res = sb.table("profiles").select("*").eq("access_token", token).execute()
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Profilo non trovato")
+        profile = res.data[0]
+        
+        adesso = datetime.now(timezone.utc)
+        nuova_scadenza = adesso + timedelta(minutes=15)
+        
+        sb.table("profiles").update({
+            "is_paying": True,
+            "accesso_scadenza": nuova_scadenza.isoformat(),
+        }).eq("id", profile["id"]).execute()
+        
+        return {
+            "status": "ok",
+            "accesso_scadenza": nuova_scadenza.isoformat(),
+            "minuti": 15,
+        }
+    except HTTPException: raise
+    except Exception as e:
+        print(f"=== ERRORE conferma pagamento: {e} ===")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/stato-accesso/{token}")
+async def stato_accesso(token: str):
+    """Restituisce se l'accesso a 15 minuti è attivo e quanti secondi restano."""
+    sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+    res = sb.table("profiles").select("accesso_scadenza, is_paying").eq("access_token", token).execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Profilo non trovato")
+    profile = res.data[0]
+    
+    scadenza = profile.get("accesso_scadenza")
+    if not scadenza:
+        return {"attivo": False, "secondi_rimasti": 0, "is_paying": profile.get("is_paying", False)}
+    
+    try:
+        dt_scadenza = datetime.fromisoformat(str(scadenza).replace("Z", "+00:00"))
+        adesso = datetime.now(timezone.utc)
+        secondi = int((dt_scadenza - adesso).total_seconds())
+        return {
+            "attivo": secondi > 0,
+            "secondi_rimasti": max(0, secondi),
+            "is_paying": profile.get("is_paying", False),
+            "accesso_scadenza": scadenza,
+        }
+    except Exception:
+        return {"attivo": False, "secondi_rimasti": 0, "is_paying": profile.get("is_paying", False)}
+
+# =========================================================
+# SALA
+# =========================================================
+
 @app.get("/sala/{token}")
 async def get_sala(token: str):
     sb = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -424,6 +498,7 @@ async def get_sala(token: str):
             "chat_questions_used": profile.get("chat_questions_used", 0),
             "chat_questions_limit": 3,
             "is_paying": profile.get("is_paying", False),
+            "accesso_scadenza": profile.get("accesso_scadenza"),
             "telegram_id": profile.get("telegram_id"),
             "compatibilita_usate": profile.get("compatibilita_usate", 0),
             "ultima_compatibilita": profile.get("ultima_compatibilita"),
@@ -528,8 +603,10 @@ async def chat_endpoint(token: str, req: ChatRequest, focus: str = None):
     
     usate = profile.get("chat_questions_used", 0)
     limite = 3
-    is_paying = profile.get("is_paying", False)
-    if not is_paying and usate >= limite:
+    pagante_attivo = accesso_attivo(profile)
+    
+    # Se NON ha accesso attivo e ha esaurito le gratuite -> blocca
+    if not pagante_attivo and usate >= limite:
         raise HTTPException(status_code=402, detail=f"Hai esaurito le {limite} domande gratuite.")
     
     if focus and focus.startswith("compatibilita"):
@@ -551,13 +628,20 @@ async def chat_endpoint(token: str, req: ChatRequest, focus: str = None):
 
     if not risposta: raise HTTPException(status_code=503, detail="Il consulto non è disponibile. Riprova più tardi.")
     
-    if not is_paying:
+    # Incrementa il contatore solo se NON ha accesso attivo
+    if not pagante_attivo:
         sb.table("profiles").update({"chat_questions_used": usate + 1}).eq("id", profile["id"]).execute()
+    
     try:
         sb.table("chat_questions").insert({"profile_id": profile["id"], "question": req.domanda, "answer": risposta}).execute()
     except Exception: pass
     
-    return {"risposta": risposta, "domande_usate": usate + 1 if not is_paying else usate, "domande_limite": limite}
+    return {
+        "risposta": risposta,
+        "domande_usate": usate if pagante_attivo else usate + 1,
+        "domande_limite": limite,
+        "accesso_attivo": pagante_attivo,
+    }
 
 @app.get("/copione-voce/{token}")
 async def get_copione_voce(token: str, focus: str = None):
