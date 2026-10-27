@@ -22,7 +22,7 @@ from ai import genera_oroscopo_settimanale, rispondi_chat, genera_copione_voce, 
 from compatibilita import router as compatibilita_router
 from sogni import router as sogni_router
 
-app = FastAPI(title="Luna2 Astro API", version="0.45.0")
+app = FastAPI(title="Luna2 Astro API", version="0.46.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -277,7 +277,7 @@ def root():
     return {
         "status": "ok",
         "service": "Luna2 Astro API",
-        "version": "0.45.0",
+        "version": "0.46.0",
         "supabase_configured": bool(SUPABASE_URL and SUPABASE_KEY),
         "telegram_configured": bool(TELEGRAM_TOKEN),
         "ai_provider": os.getenv("AI_PROVIDER", "groq"),
@@ -290,7 +290,7 @@ async def geocode(q: str = ""):
     if len(q) < 3: return {"features": []}
     url = "https://photon.komoot.io/api/"
     params = {"q": q, "limit": 5, "lang": "default"}
-    headers = {"User-Agent": "Luna2/0.45", "Accept": "application/json"}
+    headers = {"User-Agent": "Luna2/0.46", "Accept": "application/json"}
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.get(url, params=params, headers=headers)
@@ -388,13 +388,13 @@ async def recupera_token(req: RecuperoRequest):
     except Exception as e: raise HTTPException(status_code=500, detail=str(e))
 
 # =========================================================
-# PAGAMENTO
+# PAGAMENTO E ACCESSO A 15 MINUTI
 # =========================================================
 
 @app.post("/conferma-pagamento/{token}")
 async def conferma_pagamento(token: str):
     """Chiamato dal frontend dopo il ritorno dal Payment Link Stripe.
-    Sblocca 15 minuti di accesso a tutto."""
+    Sblocca il credito di 15 minuti, ma NON fa partire il timer."""
     try:
         sb = create_client(SUPABASE_URL, SUPABASE_KEY)
         res = sb.table("profiles").select("*").eq("access_token", token).execute()
@@ -402,22 +402,42 @@ async def conferma_pagamento(token: str):
             raise HTTPException(status_code=404, detail="Profilo non trovato")
         profile = res.data[0]
         
-        adesso = datetime.now(timezone.utc)
-        nuova_scadenza = adesso + timedelta(minutes=15)
-        
         sb.table("profiles").update({
             "is_paying": True,
-            "accesso_scadenza": nuova_scadenza.isoformat(),
         }).eq("id", profile["id"]).execute()
         
         return {
             "status": "ok",
-            "accesso_scadenza": nuova_scadenza.isoformat(),
             "minuti": 15,
         }
     except HTTPException: raise
     except Exception as e:
         print(f"=== ERRORE conferma pagamento: {e} ===")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/inizia-accesso/{token}")
+async def inizia_accesso(token: str):
+    """Chiamato quando il cliente clicca per iniziare a usare il servizio.
+    Fa partire i 15 minuti da questo preciso istante."""
+    try:
+        sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+        res = sb.table("profiles").select("*").eq("access_token", token).execute()
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Profilo non trovato")
+        profile = res.data[0]
+        
+        # Se ha già un accesso attivo, non resettiamo il timer
+        if not accesso_attivo(profile):
+            adesso = datetime.now(timezone.utc)
+            nuova_scadenza = adesso + timedelta(minutes=15)
+            sb.table("profiles").update({
+                "accesso_scadenza": nuova_scadenza.isoformat(),
+            }).eq("id", profile["id"]).execute()
+        
+        return {"status": "ok"}
+    except HTTPException: raise
+    except Exception as e:
+        print(f"=== ERRORE inizia accesso: {e} ===")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/stato-accesso/{token}")
