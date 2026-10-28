@@ -39,7 +39,7 @@ function ChatContent() {
           const usate = d.profile.chat_questions_used || 0;
           setDomandeUsate(usate);
           setCredito(d.profile.credito_secondi || 0);
-          if (usate >= 3 && (d.profile.credito_secondi || 0) <= 0) setBloccato(true);
+          if (usate >= 3 && (d.profile.credito_secondi || 0) < 30) setBloccato(true);
         }
       })
       .catch(() => {});
@@ -59,9 +59,6 @@ function ChatContent() {
     setRisposta('');
 
     try {
-      // Avvia il timer "a lampo" sul server
-      await fetch(`${API_URL}/avvia-timer/${token}`, { method: 'POST' });
-
       const url = `${API_URL}/chat/${token}${focus ? `?focus=${focus}` : ''}`;
       const res = await fetch(url, {
         method: 'POST',
@@ -70,11 +67,6 @@ function ChatContent() {
       });
 
       const data = await res.json();
-
-      // Ferma il timer e scala i secondi
-      const stopRes = await fetch(`${API_URL}/ferma-timer/${token}`, { method: 'POST' });
-      const stopData = await stopRes.json();
-      if (stopData.credito_secondi !== undefined) setCredito(stopData.credito_secondi);
 
       if (res.status === 402) {
         setBloccato(true);
@@ -85,10 +77,14 @@ function ChatContent() {
       if (!res.ok) throw new Error(data.detail || `Errore ${res.status}`);
 
       setRisposta(data.risposta || '');
+      if (data.credito_secondi !== undefined) setCredito(data.credito_secondi);
+      
       if (!data.ha_credito) {
         const nuoveUsate = (domandeUsate || 0) + 1;
         setDomandeUsate(nuoveUsate);
-        if (nuoveUsate >= 3 && credito <= 0) setBloccato(true);
+        if (nuoveUsate >= 3 && credito < 30) setBloccato(true);
+      } else {
+        if (data.credito_secondi < 30) setBloccato(true);
       }
     } catch (err: any) {
       setErrore(err.message || 'Errore di rete');
@@ -104,7 +100,7 @@ function ChatContent() {
   }
 
   const rimaste = Math.max(0, domandeLimite - domandeUsate);
-  const haCredito = credito > 0;
+  const haCredito = credito >= 30;
   
   const isCompatibilita = focus && focus.startsWith('compatibilita');
   const isTema = focus && focus.startsWith('tema');
