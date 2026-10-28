@@ -171,6 +171,8 @@ function SalaContent() {
   const houses = data.chart.houses;
   const aspects = data.chart.aspects;
   const ascLon = data.chart.ascendant?.longitude;
+  const credito = data.profile.credito_secondi || 0;
+  const haCredito = credito >= 30;
 
   const soleSegno = planets.Sole?.segno || 'Ariete';
   const lunaSegno = planets.Luna?.segno || 'Ariete';
@@ -263,7 +265,7 @@ function SalaContent() {
         </Accordion>
       </div>
 
-      {/* SEGNALI DALLE STELLE (UNICO BLOCCO, TESTO PUNTEGGIATO) */}
+      {/* SEGNALI DALLE STELLE */}
       {segnali.length > 0 && (
         <>
           <div className="section-label" style={{ fontSize: '15px' }}>Segnali dalle stelle</div>
@@ -484,7 +486,7 @@ function SalaContent() {
           style={{ flex: 1, fontSize: '15px', padding: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
-          Prenota consulto
+          {haCredito ? 'Parla con Luna' : 'Prenota consulto'}
         </button>
         <button 
           onClick={() => router.push('/chat')}
@@ -500,12 +502,12 @@ function SalaContent() {
       <div style={{ marginTop: '30px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--text-dim)', marginBottom: '6px' }}>
           <span>Credito residuo</span>
-          <span style={{ color: (data.profile.credito_secondi || 0) <= 120 ? '#EF476F' : (data.profile.credito_secondi || 0) <= 300 ? '#F5A623' : '#06D6A0', fontWeight: 600 }}>
-            {Math.floor((data.profile.credito_secondi || 0) / 60)}:{((data.profile.credito_secondi || 0) % 60).toString().padStart(2, '0')}
+          <span style={{ color: credito <= 120 ? '#EF476F' : credito <= 300 ? '#F5A623' : '#06D6A0', fontWeight: 600 }}>
+            {Math.floor(credito / 60)}:{(credito % 60).toString().padStart(2, '0')}
           </span>
         </div>
         <div style={{ width: '100%', height: '8px', background: 'rgba(255,255,255,0.08)', borderRadius: '6px', overflow: 'hidden' }}>
-          <div style={{ width: `${Math.min(100, ((data.profile.credito_secondi || 0) / 990) * 100)}%`, height: '100%', background: (data.profile.credito_secondi || 0) <= 120 ? '#EF476F' : (data.profile.credito_secondi || 0) <= 300 ? '#F5A623' : '#06D6A0', transition: 'width 1s linear' }} />
+          <div style={{ width: `${Math.min(100, (credito / 990) * 100)}%`, height: '100%', background: credito <= 120 ? '#EF476F' : credito <= 300 ? '#F5A623' : '#06D6A0', transition: 'width 1s linear' }} />
         </div>
       </div>
 
