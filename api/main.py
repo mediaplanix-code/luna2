@@ -22,7 +22,7 @@ from ai import genera_oroscopo_settimanale, rispondi_chat, genera_copione_voce, 
 from compatibilita import router as compatibilita_router
 from sogni import router as sogni_router
 
-app = FastAPI(title="Luna2 Astro API", version="0.47.0")
+app = FastAPI(title="Luna2 Astro API", version="0.48.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -266,7 +266,7 @@ def root():
     return {
         "status": "ok",
         "service": "Luna2 Astro API",
-        "version": "0.47.0",
+        "version": "0.48.0",
         "supabase_configured": bool(SUPABASE_URL and SUPABASE_KEY),
         "telegram_configured": bool(TELEGRAM_TOKEN),
         "ai_provider": os.getenv("AI_PROVIDER", "groq"),
@@ -279,7 +279,7 @@ async def geocode(q: str = ""):
     if len(q) < 3: return {"features": []}
     url = "https://photon.komoot.io/api/"
     params = {"q": q, "limit": 5, "lang": "default"}
-    headers = {"User-Agent": "Luna2/0.47", "Accept": "application/json"}
+    headers = {"User-Agent": "Luna2/0.48", "Accept": "application/json"}
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.get(url, params=params, headers=headers)
@@ -382,7 +382,7 @@ async def recupera_token(req: RecuperoRequest):
 
 @app.post("/conferma-pagamento/{token}")
 async def conferma_pagamento(token: str):
-    """Chiamato dal frontend dopo il pagamento. Aggiunge 990 secondi (16.5 min) al saldo."""
+    """Aggiunge 990 secondi (16.5 min) al saldo del cliente."""
     try:
         sb = create_client(SUPABASE_URL, SUPABASE_KEY)
         res = sb.table("profiles").select("*").eq("access_token", token).execute()
@@ -390,7 +390,6 @@ async def conferma_pagamento(token: str):
             raise HTTPException(status_code=404, detail="Profilo non trovato")
         profile = res.data[0]
         
-        # Aggiungiamo il credito al saldo esistente (se c'è) o partiamo da zero
         credito_attuale = profile.get("credito_secondi") or 0
         nuovo_credito = credito_attuale + 990
         
@@ -405,83 +404,16 @@ async def conferma_pagamento(token: str):
         print(f"=== ERRORE conferma pagamento: {e} ===")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/avvia-timer/{token}")
-async def avvia_timer(token: str):
-    """Il client lo chiama prima di inviare un messaggio in chat. Fa partire il cronometro."""
-    try:
-        sb = create_client(SUPABASE_URL, SUPABASE_KEY)
-        res = sb.table("profiles").select("*").eq("access_token", token).execute()
-        if not res.data:
-            raise HTTPException(status_code=404, detail="Profilo non trovato")
-        profile = res.data[0]
-        
-        adesso = datetime.now(timezone.utc)
-        sb.table("profiles").update({
-            "timer_avviato_il": adesso.isoformat()
-        }).eq("id", profile["id"]).execute()
-        
-        return {"status": "ok"}
-    except HTTPException: raise
-    except Exception as e:
-        print(f"=== ERRORE avvia timer: {e} ===")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/ferma-timer/{token}")
-async def ferma_timer(token: str):
-    """Il client lo chiama quando l'AI ha finito di rispondere. Ferma il cronometro e scala i secondi."""
-    try:
-        sb = create_client(SUPABASE_URL, SUPABASE_KEY)
-        res = sb.table("profiles").select("*").eq("access_token", token).execute()
-        if not res.data:
-            raise HTTPException(status_code=404, detail="Profilo non trovato")
-        profile = res.data[0]
-        
-        inizio_iso = profile.get("timer_avviato_il")
-        if not inizio_iso:
-            return {"status": "ok", "credito_secondi": profile.get("credito_secondi", 0)}
-        
-        inizio = datetime.fromisoformat(str(inizio_iso).replace("Z", "+00:00"))
-        adesso = datetime.now(timezone.utc)
-        secondi_trascorsi = int((adesso - inizio).total_seconds())
-        
-        credito_attuale = profile.get("credito_secondi") or 0
-        nuovo_credito = max(0, credito_attuale - secondi_trascorsi)
-        
-        sb.table("profiles").update({
-            "credito_secondi": nuovo_credito,
-            "timer_avviato_il": None
-        }).eq("id", profile["id"]).execute()
-        
-        return {"status": "ok", "credito_secondi": nuovo_credito, "consumati": secondi_trascorsi}
-    except HTTPException: raise
-    except Exception as e:
-        print(f"=== ERRORE ferma timer: {e} ===")
-        raise HTTPException(status_code=500, detail=str(e))
-
 @app.get("/stato-credito/{token}")
 async def stato_credito(token: str):
-    """Restituisce il saldo residuo e se il timer è in funzione."""
     sb = create_client(SUPABASE_URL, SUPABASE_KEY)
-    res = sb.table("profiles").select("credito_secondi, timer_avviato_il, is_paying").eq("access_token", token).execute()
+    res = sb.table("profiles").select("credito_secondi, is_paying").eq("access_token", token).execute()
     if not res.data:
         raise HTTPException(status_code=404, detail="Profilo non trovato")
     profile = res.data[0]
-    
-    credito = profile.get("credito_secondi") or 0
-    
-    # Se il timer è avviato, sottraiamo i secondi in corso (per far vedere il saldo scendere in tempo reale)
-    if profile.get("timer_avviato_il"):
-        try:
-            inizio = datetime.fromisoformat(str(profile["timer_avviato_il"]).replace("Z", "+00:00"))
-            secondi_in_corso = int((datetime.now(timezone.utc) - inizio).total_seconds())
-            credito = max(0, credito - secondi_in_corso)
-        except Exception:
-            pass
-            
     return {
-        "credito_secondi": credito,
-        "is_paying": profile.get("is_paying", False),
-        "timer_attivo": bool(profile.get("timer_avviato_il"))
+        "credito_secondi": profile.get("credito_secondi") or 0,
+        "is_paying": profile.get("is_paying", False)
     }
 
 # =========================================================
@@ -642,9 +574,8 @@ async def chat_endpoint(token: str, req: ChatRequest, focus: str = None):
     usate = profile.get("chat_questions_used", 0)
     limite = 3
     credito = profile.get("credito_secondi") or 0
-    ha_credito = credito > 0
+    ha_credito = credito >= 30  # Deve avere almeno 30 secondi per fare una domanda
     
-    # Se NON ha credito e ha esaurito le gratuite -> blocca
     if not ha_credito and usate >= limite:
         raise HTTPException(status_code=402, detail=f"Hai esaurito le {limite} domande gratuite.")
     
@@ -667,8 +598,11 @@ async def chat_endpoint(token: str, req: ChatRequest, focus: str = None):
 
     if not risposta: raise HTTPException(status_code=503, detail="Il consulto non è disponibile. Riprova più tardi.")
     
-    # Incrementa il contatore solo se NON ha credito
-    if not ha_credito:
+    # Scaliamo 30 secondi se ha credito, altrimenti incrementiamo le domande gratuite
+    if ha_credito:
+        nuovo_credito = max(0, credito - 30)
+        sb.table("profiles").update({"credito_secondi": nuovo_credito}).eq("id", profile["id"]).execute()
+    else:
         sb.table("profiles").update({"chat_questions_used": usate + 1}).eq("id", profile["id"]).execute()
     
     try:
@@ -680,6 +614,7 @@ async def chat_endpoint(token: str, req: ChatRequest, focus: str = None):
         "domande_usate": usate if ha_credito else usate + 1,
         "domande_limite": limite,
         "ha_credito": ha_credito,
+        "credito_secondi": nuovo_credito if ha_credito else credito,
     }
 
 @app.get("/copione-voce/{token}")
