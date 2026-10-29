@@ -17,6 +17,7 @@ function SogniContent() {
   const [errore, setErrore] = useState('');
   const [bloccato, setBloccato] = useState(false);
   const [credito, setCredito] = useState(0);
+  const [isPaying, setIsPaying] = useState(false);
 
   useEffect(() => {
     const tokenDaUrl = searchParams.get('token');
@@ -27,7 +28,11 @@ function SogniContent() {
     const n = localStorage.getItem('luna2_nome');
     if (n) setNome(n);
     
-    fetch(`${API_URL}/stato-credito/${t}`).then(r => r.json()).then(d => setCredito(d.credito_secondi || 0)).catch(() => {});
+    // Prendiamo sia il credito che lo stato is_paying
+    fetch(`${API_URL}/stato-credito/${t}`).then(r => r.json()).then(d => {
+      setCredito(d.credito_secondi || 0);
+      setIsPaying(d.is_paying || false);
+    }).catch(() => {});
   }, [router, searchParams]);
 
   const interpreta = async () => {
@@ -62,6 +67,7 @@ function SogniContent() {
   };
 
   const haCredito = credito >= 30;
+  const mostraBarra = credito > 0 || isPaying;
 
   return (
     <div className="canvas">
@@ -116,18 +122,19 @@ function SogniContent() {
         </div>
       )}
 
-      {/* BARRA IN BASSO */}
-      <div style={{ marginTop: '30px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--text-dim)', marginBottom: '6px' }}>
-          <span>Credito residuo</span>
-          <span style={{ color: credito <= 120 ? '#EF476F' : credito <= 300 ? '#F5A623' : '#06D6A0', fontWeight: 600 }}>
-            {Math.floor(credito / 60)}:{(credito % 60).toString().padStart(2, '0')}
-          </span>
+      {mostraBarra && (
+        <div style={{ marginTop: '30px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--text-dim)', marginBottom: '6px' }}>
+            <span>Credito residuo</span>
+            <span style={{ color: credito <= 120 ? '#EF476F' : credito <= 300 ? '#F5A623' : '#06D6A0', fontWeight: 600 }}>
+              {Math.floor(credito / 60)}:{(credito % 60).toString().padStart(2, '0')}
+            </span>
+          </div>
+          <div style={{ width: '100%', height: '8px', background: 'rgba(255,255,255,0.08)', borderRadius: '6px', overflow: 'hidden' }}>
+            <div style={{ width: `${Math.min(100, (credito / 990) * 100)}%`, height: '100%', background: credito <= 120 ? '#EF476F' : credito <= 300 ? '#F5A623' : '#06D6A0', transition: 'width 1s linear' }} />
+          </div>
         </div>
-        <div style={{ width: '100%', height: '8px', background: 'rgba(255,255,255,0.08)', borderRadius: '6px', overflow: 'hidden' }}>
-          <div style={{ width: `${Math.min(100, (credito / 990) * 100)}%`, height: '100%', background: credito <= 120 ? '#EF476F' : credito <= 300 ? '#F5A623' : '#06D6A0', transition: 'width 1s linear' }} />
-        </div>
-      </div>
+      )}
 
       <div className="footer" style={{ marginTop: '40px' }}>
         <Link href="/privacy">Privacy</Link>·
