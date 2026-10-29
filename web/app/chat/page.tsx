@@ -21,6 +21,7 @@ function ChatContent() {
   const [domandeLimite, setDomandeLimite] = useState(3);
   const [bloccato, setBloccato] = useState(false);
   const [credito, setCredito] = useState(0);
+  const [isPaying, setIsPaying] = useState(false);
 
   const fondoRef = useRef<HTMLDivElement>(null);
 
@@ -39,6 +40,7 @@ function ChatContent() {
           const usate = d.profile.chat_questions_used || 0;
           setDomandeUsate(usate);
           setCredito(d.profile.credito_secondi || 0);
+          setIsPaying(d.profile.is_paying || false);
           if (usate >= 3 && (d.profile.credito_secondi || 0) < 30) setBloccato(true);
         }
       })
@@ -120,6 +122,9 @@ function ChatContent() {
   const backLink = isCompatibilita ? "/compatibilita" : "/sala";
   const backText = isCompatibilita ? "← Compatibilità" : "← Sala";
 
+  // Mostra la barra solo se ha del credito o ha mai pagato
+  const mostraBarra = credito > 0 || isPaying;
+
   return (
     <div className="canvas">
       <div className="topbar">
@@ -185,18 +190,20 @@ function ChatContent() {
         </div>
       )}
 
-      {/* BARRA IN BASSO */}
-      <div style={{ marginTop: '30px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--text-dim)', marginBottom: '6px' }}>
-          <span>Credito residuo</span>
-          <span style={{ color: credito <= 120 ? '#EF476F' : credito <= 300 ? '#F5A623' : '#06D6A0', fontWeight: 600 }}>
-            {Math.floor(credito / 60)}:{(credito % 60).toString().padStart(2, '0')}
-          </span>
+      {/* BARRA IN BASSO (solo se c'è credito o ha pagato) */}
+      {mostraBarra && (
+        <div style={{ marginTop: '30px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--text-dim)', marginBottom: '6px' }}>
+            <span>Credito residuo</span>
+            <span style={{ color: credito <= 120 ? '#EF476F' : credito <= 300 ? '#F5A623' : '#06D6A0', fontWeight: 600 }}>
+              {Math.floor(credito / 60)}:{(credito % 60).toString().padStart(2, '0')}
+            </span>
+          </div>
+          <div style={{ width: '100%', height: '8px', background: 'rgba(255,255,255,0.08)', borderRadius: '6px', overflow: 'hidden' }}>
+            <div style={{ width: `${Math.min(100, (credito / 990) * 100)}%`, height: '100%', background: credito <= 120 ? '#EF476F' : credito <= 300 ? '#F5A623' : '#06D6A0', transition: 'width 1s linear' }} />
+          </div>
         </div>
-        <div style={{ width: '100%', height: '8px', background: 'rgba(255,255,255,0.08)', borderRadius: '6px', overflow: 'hidden' }}>
-          <div style={{ width: `${Math.min(100, (credito / 990) * 100)}%`, height: '100%', background: credito <= 120 ? '#EF476F' : credito <= 300 ? '#F5A623' : '#06D6A0', transition: 'width 1s linear' }} />
-        </div>
-      </div>
+      )}
 
       <div ref={fondoRef} />
 
