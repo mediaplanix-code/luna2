@@ -63,6 +63,8 @@ function ConsulenzaContent() {
     return <div className="canvas"><div className="topbar"><div className="brand">✦ Luna Astrologica</div></div><p style={{ textAlign: 'center', marginTop: '40px', color: 'var(--text-dim)' }}>Caricamento...</p></div>;
   }
 
+  const haCredito = credito >= 30;
+
   return (
     <div className="canvas">
       <div className="topbar">
@@ -73,9 +75,13 @@ function ConsulenzaContent() {
       <h1 style={{ fontFamily: 'Georgia, serif', fontSize: '22px', fontWeight: 400, textAlign: 'center', marginBottom: '6px' }}>{etichetta}</h1>
       <p style={{ textAlign: 'center', fontSize: '12px', color: 'var(--text-dim)', marginBottom: '22px' }}>15 minuti di accesso a tutto: chat, voce e approfondimenti.</p>
 
-      {credito > 0 ? (
-        <div style={{ background: 'rgba(6,214,160,0.06)', border: '1px solid rgba(6,214,160,0.3)', borderRadius: '10px', padding: '24px 20px', marginBottom: '20px' }}>
-          <p style={{ fontSize: '14px', color: 'var(--text)', textAlign: 'center', marginBottom: '16px' }}>Hai un credito attivo. Puoi usare chat, voce e approfondimenti.</p>
+      {haCredito ? (
+        <div style={{ background: 'rgba(6,214,160,0.06)', border: '1px solid rgba(6,214,160,0.3)', borderRadius: '10px', padding: '24px 20px', marginBottom: '20px', textAlign: 'center' }}>
+          <p style={{ fontSize: '14px', color: 'var(--text)', marginBottom: '16px' }}>Hai un credito attivo.</p>
+          {/* Qui andrà il pulsante per far partire VAPI. Per ora mettiamo un messaggio di "Voce in arrivo" */}
+          <p style={{ fontSize: '13px', color: 'var(--text-dim)', fontStyle: 'italic', marginBottom: '16px' }}>
+            Il consulto vocale sarà disponibile a breve.
+          </p>
           <button onClick={vaiAlPagamento} className="cta" style={{ width: '100%', fontSize: '14px', padding: '12px', background: 'transparent', border: '1px solid #F5A623', color: '#F5A623' }}>+ Aggiungi altri 15 minuti (19€)</button>
         </div>
       ) : (
@@ -96,18 +102,20 @@ function ConsulenzaContent() {
         </ul>
       </div>
 
-      {/* BARRA IN BASSO */}
-      <div style={{ marginTop: '30px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--text-dim)', marginBottom: '6px' }}>
-          <span>Credito residuo</span>
-          <span style={{ color: credito <= 120 ? '#EF476F' : credito <= 300 ? '#F5A623' : '#06D6A0', fontWeight: 600 }}>
-            {Math.floor(credito / 60)}:{(credito % 60).toString().padStart(2, '0')}
-          </span>
+      {/* BARRA IN BASSO (solo se ha credito) */}
+      {haCredito && (
+        <div style={{ marginTop: '30px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--text-dim)', marginBottom: '6px' }}>
+            <span>Credito residuo</span>
+            <span style={{ color: credito <= 120 ? '#EF476F' : credito <= 300 ? '#F5A623' : '#06D6A0', fontWeight: 600 }}>
+              {Math.floor(credito / 60)}:{(credito % 60).toString().padStart(2, '0')}
+            </span>
+          </div>
+          <div style={{ width: '100%', height: '8px', background: 'rgba(255,255,255,0.08)', borderRadius: '6px', overflow: 'hidden' }}>
+            <div style={{ width: `${Math.min(100, (credito / 990) * 100)}%`, height: '100%', background: credito <= 120 ? '#EF476F' : credito <= 300 ? '#F5A623' : '#06D6A0', transition: 'width 1s linear' }} />
+          </div>
         </div>
-        <div style={{ width: '100%', height: '8px', background: 'rgba(255,255,255,0.08)', borderRadius: '6px', overflow: 'hidden' }}>
-          <div style={{ width: `${Math.min(100, (credito / 990) * 100)}%`, height: '100%', background: credito <= 120 ? '#EF476F' : credito <= 300 ? '#F5A623' : '#06D6A0', transition: 'width 1s linear' }} />
-        </div>
-      </div>
+      )}
 
       <div className="footer" style={{ marginTop: '40px' }}>
         <Link href="/privacy">Privacy</Link>·
