@@ -78,10 +78,29 @@ function ConsulenzaContent() {
       {haCredito ? (
         <div style={{ background: 'rgba(6,214,160,0.06)', border: '1px solid rgba(6,214,160,0.3)', borderRadius: '10px', padding: '24px 20px', marginBottom: '20px', textAlign: 'center' }}>
           <p style={{ fontSize: '14px', color: 'var(--text)', marginBottom: '16px' }}>Hai un credito attivo.</p>
-          {/* Qui andrà il pulsante per far partire VAPI. Per ora mettiamo un messaggio di "Voce in arrivo" */}
-          <p style={{ fontSize: '13px', color: 'var(--text-dim)', fontStyle: 'italic', marginBottom: '16px' }}>
-            Il consulto vocale sarà disponibile a breve.
-          </p>
+          
+          <button 
+            disabled 
+            className="cta" 
+            style={{ 
+              width: '100%', 
+              fontSize: '16px', 
+              padding: '16px', 
+              marginBottom: '16px',
+              background: 'rgba(255,255,255,0.05)',
+              border: '1px solid var(--text-dim)',
+              color: 'var(--text-dim)',
+              cursor: 'not-allowed',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px'
+            }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+            Voce in arrivo (presto disponibile)
+          </button>
+
           <button onClick={vaiAlPagamento} className="cta" style={{ width: '100%', fontSize: '14px', padding: '12px', background: 'transparent', border: '1px solid #F5A623', color: '#F5A623' }}>+ Aggiungi altri 15 minuti (19€)</button>
         </div>
       ) : (
@@ -102,7 +121,6 @@ function ConsulenzaContent() {
         </ul>
       </div>
 
-      {/* BARRA IN BASSO (solo se ha credito) */}
       {haCredito && (
         <div style={{ marginTop: '30px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--text-dim)', marginBottom: '6px' }}>
