@@ -173,6 +173,10 @@ function SalaContent() {
   const ascLon = data.chart.ascendant?.longitude;
   const credito = data.profile.credito_secondi || 0;
   const haCredito = credito >= 30;
+  const isPaying = data.profile.is_paying || false;
+  
+  // Se ha credito > 0 o ha mai pagato (is_paying), mostriamo la barra. Altrimenti no (prima iscrizione).
+  const mostraBarra = credito > 0 || isPaying;
 
   const soleSegno = planets.Sole?.segno || 'Ariete';
   const lunaSegno = planets.Luna?.segno || 'Ariete';
@@ -265,7 +269,6 @@ function SalaContent() {
         </Accordion>
       </div>
 
-      {/* SEGNALI DALLE STELLE */}
       {segnali.length > 0 && (
         <>
           <div className="section-label" style={{ fontSize: '15px' }}>Segnali dalle stelle</div>
@@ -423,7 +426,6 @@ function SalaContent() {
         </Accordion>
       </div>
 
-      {/* ============ SOGNI ============ */}
       <div className="section-label" style={{ marginTop: '30px', fontSize: '15px' }}>I tuoi sogni</div>
       <div className="accordion">
         <Accordion title="🌙 Racconta un sogno a Luna" bare>
@@ -498,18 +500,20 @@ function SalaContent() {
         </button>
       </div>
 
-      {/* BARRA IN BASSO */}
-      <div style={{ marginTop: '30px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--text-dim)', marginBottom: '6px' }}>
-          <span>Credito residuo</span>
-          <span style={{ color: credito <= 120 ? '#EF476F' : credito <= 300 ? '#F5A623' : '#06D6A0', fontWeight: 600 }}>
-            {Math.floor(credito / 60)}:{(credito % 60).toString().padStart(2, '0')}
-          </span>
+      {/* BARRA IN BASSO (solo se ha credito o ha mai pagato) */}
+      {mostraBarra && (
+        <div style={{ marginTop: '30px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--text-dim)', marginBottom: '6px' }}>
+            <span>Credito residuo</span>
+            <span style={{ color: credito <= 120 ? '#EF476F' : credito <= 300 ? '#F5A623' : '#06D6A0', fontWeight: 600 }}>
+              {Math.floor(credito / 60)}:{(credito % 60).toString().padStart(2, '0')}
+            </span>
+          </div>
+          <div style={{ width: '100%', height: '8px', background: 'rgba(255,255,255,0.08)', borderRadius: '6px', overflow: 'hidden' }}>
+            <div style={{ width: `${Math.min(100, (credito / 990) * 100)}%`, height: '100%', background: credito <= 120 ? '#EF476F' : credito <= 300 ? '#F5A623' : '#06D6A0', transition: 'width 1s linear' }} />
+          </div>
         </div>
-        <div style={{ width: '100%', height: '8px', background: 'rgba(255,255,255,0.08)', borderRadius: '6px', overflow: 'hidden' }}>
-          <div style={{ width: `${Math.min(100, (credito / 990) * 100)}%`, height: '100%', background: credito <= 120 ? '#EF476F' : credito <= 300 ? '#F5A623' : '#06D6A0', transition: 'width 1s linear' }} />
-        </div>
-      </div>
+      )}
 
       <div className="footer" style={{ fontSize: '12px' }}>
         <Link href="/privacy">Privacy</Link>·
