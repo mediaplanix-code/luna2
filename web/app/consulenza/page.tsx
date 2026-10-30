@@ -7,7 +7,7 @@ import Vapi from '@vapi-ai/web';
 
 const STRIPE_PAYMENT_LINK = "https://buy.stripe.com/test_fZu14pfFefK76BRgk8e3e00";
 const API_URL = "https://luna2-api.onrender.com";
-const VAPI_PUBLIC_KEY = "LA_TUA_PUBLIC_KEY_QUI"; // <-- INSERISCI QUI LA TUA PUBLIC KEY
+const VAPI_PUBLIC_KEY = "5ca95508-9fa5-4cba-82dc-7860f7962780"; // <-- INSERISCI QUI LA TUA PUBLIC KEY
 const VAPI_ASSISTANT_ID = "03b6ee79-4490-4c12-bd38-f00bfa2e6340";
 
 function ConsulenzaContent() {
