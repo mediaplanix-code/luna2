@@ -22,7 +22,7 @@ from ai import genera_oroscopo_settimanale, rispondi_chat, genera_copione_voce, 
 from compatibilita import router as compatibilita_router
 from sogni import router as sogni_router
 
-app = FastAPI(title="Luna2 Astro API", version="0.49.0")
+app = FastAPI(title="Luna2 Astro API", version="0.48.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -266,7 +266,7 @@ def root():
     return {
         "status": "ok",
         "service": "Luna2 Astro API",
-        "version": "0.49.0",
+        "version": "0.48.0",
         "supabase_configured": bool(SUPABASE_URL and SUPABASE_KEY),
         "telegram_configured": bool(TELEGRAM_TOKEN),
         "ai_provider": os.getenv("AI_PROVIDER", "groq"),
@@ -279,7 +279,7 @@ async def geocode(q: str = ""):
     if len(q) < 3: return {"features": []}
     url = "https://photon.komoot.io/api/"
     params = {"q": q, "limit": 5, "lang": "default"}
-    headers = {"User-Agent": "Luna2/0.49", "Accept": "application/json"}
+    headers = {"User-Agent": "Luna2/0.48", "Accept": "application/json"}
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.get(url, params=params, headers=headers)
@@ -415,50 +415,6 @@ async def stato_credito(token: str):
         "credito_secondi": profile.get("credito_secondi") or 0,
         "is_paying": profile.get("is_paying", False)
     }
-
-@app.post("/avvia-voce/{token}")
-async def avvia_voce(token: str):
-    try:
-        sb = create_client(SUPABASE_URL, SUPABASE_KEY)
-        res = sb.table("profiles").select("*").eq("access_token", token).execute()
-        if not res.data: raise HTTPException(status_code=404, detail="Profilo non trovato")
-        profile = res.data[0]
-        
-        adesso = datetime.now(timezone.utc)
-        sb.table("profiles").update({"timer_avviato_il": adesso.isoformat()}).eq("id", profile["id"]).execute()
-        return {"status": "ok"}
-    except HTTPException: raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/ferma-voce/{token}")
-async def ferma_voce(token: str):
-    try:
-        sb = create_client(SUPABASE_URL, SUPABASE_KEY)
-        res = sb.table("profiles").select("*").eq("access_token", token).execute()
-        if not res.data: raise HTTPException(status_code=404, detail="Profilo non trovato")
-        profile = res.data[0]
-        
-        inizio_iso = profile.get("timer_avviato_il")
-        if not inizio_iso:
-            return {"status": "ok", "credito_secondi": profile.get("credito_secondi", 0)}
-        
-        inizio = datetime.fromisoformat(str(inizio_iso).replace("Z", "+00:00"))
-        adesso = datetime.now(timezone.utc)
-        secondi_trascorsi = int((adesso - inizio).total_seconds())
-        
-        credito_attuale = profile.get("credito_secondi") or 0
-        nuovo_credito = max(0, credito_attuale - secondi_trascorsi)
-        
-        sb.table("profiles").update({
-            "credito_secondi": nuovo_credito,
-            "timer_avviato_il": None
-        }).eq("id", profile["id"]).execute()
-        
-        return {"status": "ok", "credito_secondi": nuovo_credito, "consumati": secondi_trascorsi}
-    except HTTPException: raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 # =========================================================
 # SALA
@@ -618,7 +574,7 @@ async def chat_endpoint(token: str, req: ChatRequest, focus: str = None):
     usate = profile.get("chat_questions_used", 0)
     limite = 3
     credito = profile.get("credito_secondi") or 0
-    ha_credito = credito >= 30
+    ha_credito = credito >= 30  # Deve avere almeno 30 secondi per fare una domanda
     
     if not ha_credito and usate >= limite:
         raise HTTPException(status_code=402, detail=f"Hai esaurito le {limite} domande gratuite.")
@@ -642,6 +598,7 @@ async def chat_endpoint(token: str, req: ChatRequest, focus: str = None):
 
     if not risposta: raise HTTPException(status_code=503, detail="Il consulto non è disponibile. Riprova più tardi.")
     
+    # Scaliamo 30 secondi se ha credito, altrimenti incrementiamo le domande gratuite
     if ha_credito:
         nuovo_credito = max(0, credito - 30)
         sb.table("profiles").update({"credito_secondi": nuovo_credito}).eq("id", profile["id"]).execute()
@@ -681,4 +638,62 @@ async def get_copione_voce(token: str, focus: str = None):
         copione = await genera_copione_voce_tema(report, tipo_focus)
     else:
         tema = calcola_tema_completo(str(profile["birth_date"]), str(profile["birth_time"])[:5], float(profile["birth_lat"]), float(profile["birth_lon"]), 1.0)
-        report = genera_report_interno(profile
+        report = genera_report_interno(profile, tema, sb)
+        copione = await genera_copione_voce(report)
+
+    if not copione: raise HTTPException(status_code=503, detail="Il consulto non è disponibile. Riprova più tardi.")
+    return {"copione": copione}
+
+# =========================================================
+# TOOL PER VAPI (Tool Calling)
+# =========================================================
+
+@app.post("/tool/dati-cliente")
+async def tool_dati_cliente(req: ToolRequest):
+    try:
+        sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+        res = sb.table("profiles").select("*").eq("access_token", req.token).execute()
+        if not res.data:
+            return {"error": "Cliente non trovato."}
+        
+        profile = res.data[0]
+        nome = profile.get("nome", "")
+        
+        tema = calcola_tema_completo(
+            str(profile["birth_date"]), str(profile["birth_time"])[:5],
+            float(profile["birth_lat"]), float(profile["birth_lon"]), 1.0,
+        )
+        report = genera_report_interno(profile, tema, sb)
+        
+        dati = {
+            "nome": nome,
+            "sole": tema["planets"].get("Sole"),
+            "luna": tema["planets"].get("Luna"),
+            "ascendente": lon_to_sign(tema["ascendant"]),
+            "mc": lon_to_sign(tema["mc"]),
+            "transiti": report.get("transiti", []),
+            "riepilogo": report.get("riepilogo_testuale", "")
+        }
+        
+        return dati
+        
+    except Exception as e:
+        print(f"=== ERRORE TOOL DATI CLIENTE: {e} ===")
+        return {"error": f"Errore: {type(e).__name__}"}
+
+# =========================================================
+# ALTRI ENDPOINT (transits, telegram, cron)
+# =========================================================
+
+@app.post("/transits")
+def transits(req: TransitRequest):
+    tema = calcola_tema_completo(req.date, req.time, req.lat, req.lon, req.tz_offset)
+    tgt = datetime.strptime(req.target_date, "%Y-%m-%d") if req.target_date else datetime.now(timezone.utc)
+    jd_today = swe.julday(tgt.year, tgt.month, tgt.day, 12.0)
+    transits_now = {}
+    for nome, pid in PIANETI.items():
+        try: transits_now[nome] = lon_to_sign(calc_ut_safe(jd_today, pid))
+        except Exception: continue
+    aspetti_transito = []
+    for t_nome, t_pos in transits_now.items():
+        for n_nome, n_pos in
