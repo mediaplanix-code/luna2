@@ -99,7 +99,7 @@ function ConsulenzaContent() {
     try {
       const assistantOverrides = {
         variableValues: {
-          token_cliente: token,
+          token: token,
           nome: nome
         }
       };
