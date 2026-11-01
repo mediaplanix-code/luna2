@@ -1,13 +1,14 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import Vapi from '@vapi-ai/web';
 
 const STRIPE_PAYMENT_LINK = "https://buy.stripe.com/test_fZu14pfFefK76BRgk8e3e00";
 const API_URL = "https://luna2-api.onrender.com";
-const VAPI_PUBLIC_KEY = "5ca95508-9fa5-4cba-82dc-7860f7962780";
-const VAPI_ASSISTANT_ID = "7a6e8b6e-1683-4247-bfb8-024cc92d02e7";
+const VAPI_PUBLIC_KEY = "5ca95508-9fa5-4cba-82dc-7860f7962780"; // La tua chiave
+const VAPI_ASSISTANT_ID = "03b6ee79-4490-4c12-bd38-f00bfa2e6340"; // Il nuovo ID dell'assistente pulito (o quello che hai creato ora)
 
 function ConsulenzaContent() {
   const router = useRouter();
@@ -20,6 +21,9 @@ function ConsulenzaContent() {
   const [inCaricamento, setInCaricamento] = useState(true);
   const [errore, setErrore] = useState('');
   const [chiamataAttiva, setChiamataAttiva] = useState(false);
+  const [inAvvio, setInAvvio] = useState(false);
+
+  const vapiRef = useRef<Vapi | null>(null);
 
   useEffect(() => {
     const n = localStorage.getItem('luna2_nome');
@@ -27,6 +31,38 @@ function ConsulenzaContent() {
     const t = localStorage.getItem('luna2_token');
     if (!t) { router.push('/form'); return; }
     setToken(t);
+
+    // Inizializza VAPI
+    const vapi = new Vapi(VAPI_PUBLIC_KEY);
+    vapiRef.current = vapi;
+
+    vapi.on('call-start', () => {
+      setChiamataAttiva(true);
+      setInAvvio(false);
+      // Avvia il timer sul server (se l'endpoint esiste)
+      fetch(`${API_URL}/avvia-voce/${t}`, { method: 'POST' }).catch(() => {});
+    });
+
+    vapi.on('call-end', () => {
+      setChiamataAttiva(false);
+      setInAvvio(false);
+      // Ferma il timer e scala i secondi
+      fetch(`${API_URL}/ferma-voce/${t}`, { method: 'POST' })
+        .then(r => r.json())
+        .then(d => { if (d.credito_secondi !== undefined) setCredito(d.credito_secondi); })
+        .catch(() => {});
+    });
+
+    vapi.on('error', (e) => {
+      console.error('Errore Vapi:', e);
+      setErrore('Errore di connessione con la voce. Riprova.');
+      setChiamataAttiva(false);
+      setInAvvio(false);
+    });
+
+    return () => {
+      vapi.stop();
+    };
   }, [router]);
 
   useEffect(() => {
@@ -45,58 +81,43 @@ function ConsulenzaContent() {
   const vaiAlPagamento = () => { window.location.href = STRIPE_PAYMENT_LINK; };
 
   const avviaChiamata = async () => {
-    if (!token) return;
+    if (!vapiRef.current || !token) return;
     setErrore('');
-    setChiamataAttiva(true);
+    setInAvvio(true);
 
     try {
-      // 1. Recupera i dati per il contesto
-      const resDati = await fetch(`${API_URL}/tool/dati-cliente`, {
+      // 1. Recupera i dati dal server per il contesto
+      const res = await fetch(`${API_URL}/tool/dati-cliente`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: token })
       });
-      const dati = await resDati.json();
-      const testoContesto = dati.nome 
-        ? `Il cliente si chiama ${dati.nome}. Sole in ${dati.sole?.segno}, Luna in ${dati.luna?.segno}, Ascendente in ${dati.ascendente?.segno}.`
-        : 'Dati non disponibili.';
-
-      // 2. Chiamata diretta a VAPI
-      const vapiRes = await fetch('https://api.vapi.ai/call/web', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${VAPI_PUBLIC_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          assistantId: VAPI_ASSISTANT_ID,
-          assistantOverrides: {
-            variableValues: {
-              contesto: testoContesto
-            }
-          }
-        })
-      });
-
-      if (!vapiRes.ok) {
-        const errData = await vapiRes.json();
-        // Stampiamo l'errore esatto in console
-        console.error("ERRORE VAPI DETTAGLIATO:", errData);
-        setErrore(`Errore VAPI: ${errData.message || errData.error || 'Errore sconosciuto'}`);
-        setChiamataAttiva(false);
-        return;
+      
+      const dati = await res.json();
+      
+      let testoContesto = "I dati del cliente non sono disponibili.";
+      if (dati && dati.nome) {
+        testoContesto = `Il cliente si chiama ${dati.nome}. Il suo Sole è in ${dati.sole?.segno}, la Luna in ${dati.luna?.segno}, l'Ascendente in ${dati.ascendente?.segno}.`;
       }
 
-      // Se arriva qui, la chiamata è partita
-      // Nota: per far sentire l'audio, dobbiamo usare la libreria VAPI.
-      // Ma per il debug, questo ci dice se il server risponde 200.
-      setErrore('Chiamata creata con successo, ma per l\'audio serve la libreria.');
-
+      // 2. Passiamo i dati a VAPI come variabile 'contesto'
+      const assistantOverrides = {
+        variableValues: {
+          contesto: testoContesto
+        }
+      };
+      
+      // 3. Avviamo la chiamata vocale vera e propria
+      await vapiRef.current.start(VAPI_ASSISTANT_ID, assistantOverrides);
     } catch (e: any) {
       console.error(e);
-      setErrore('Errore di rete. Controlla la connessione.');
-      setChiamataAttiva(false);
+      setErrore('Impossibile avviare la chiamata. Controlla il microfono.');
+      setInAvvio(false);
     }
+  };
+
+  const fermaChiamata = () => {
+    if (vapiRef.current) vapiRef.current.stop();
   };
 
   if (inCaricamento) {
@@ -119,14 +140,20 @@ function ConsulenzaContent() {
       {haCredito ? (
         <div style={{ background: 'rgba(6,214,160,0.06)', border: '1px solid rgba(6,214,160,0.3)', borderRadius: '10px', padding: '24px 20px', marginBottom: '20px', textAlign: 'center' }}>
           <p style={{ fontSize: '14px', color: 'var(--text)', marginBottom: '16px' }}>
-            {chiamataAttiva ? 'Connessione in corso...' : 'Hai un credito attivo. Puoi parlare con Luna.'}
+            {chiamataAttiva ? 'Luna è in linea. Parla pure.' : inAvvio ? 'Sto connettendo...' : 'Hai un credito attivo. Puoi parlare con Luna.'}
           </p>
 
-          <button onClick={avviaChiamata} className="cta" style={{ fontSize: '16px', padding: '16px', width: '100%', marginBottom: '16px' }}>
-            Parla con Luna
-          </button>
+          {!chiamataAttiva ? (
+            <button onClick={avviaChiamata} disabled={inAvvio} className="cta" style={{ fontSize: '16px', padding: '16px', width: '100%', marginBottom: '16px', opacity: inAvvio ? 0.5 : 1 }}>
+              {inAvvio ? 'Connessione in corso...' : 'Parla con Luna'}
+            </button>
+          ) : (
+            <button onClick={fermaChiamata} className="cta" style={{ fontSize: '16px', padding: '16px', width: '100%', marginBottom: '16px', background: 'transparent', border: '1px solid #EF476F', color: '#EF476F' }}>
+              Termina chiamata
+            </button>
+          )}
 
-          {errore && <p style={{ fontSize: '13px', color: '#EF476F', marginBottom: '16px', textAlign: 'left', whiteSpace: 'pre-wrap' }}>{errore}</p>}
+          {errore && <p style={{ fontSize: '13px', color: '#EF476F', marginBottom: '16px' }}>{errore}</p>}
           
           <button onClick={vaiAlPagamento} className="cta" style={{ width: '100%', fontSize: '14px', padding: '12px', background: 'transparent', border: '1px solid #F5A623', color: '#F5A623' }}>
             + Aggiungi altri 15 minuti (19€)
