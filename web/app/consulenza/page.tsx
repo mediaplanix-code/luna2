@@ -1,43 +1,46 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import Vapi from '@vapi-ai/web';
 
-const STRIPE_PAYMENT_LINK = "https://buy.stripe.com/test_fZu14pfFefK76BRgk8e3e00";
 const API_URL = "https://luna2-api.onrender.com";
-const VAPI_PUBLIC_KEY = "INSERISCI_QUI_LA_TUA_PUBLIC_KEY"; // <-- METTI LA TUA PUBLIC KEY
+const VAPI_PUBLIC_KEY = "LA_TUA_PUBLIC_KEY_QUI"; // <-- INCOLLA QUI LA TUA PUBLIC KEY DI VAPI
 const VAPI_ASSISTANT_ID = "03b6ee79-4490-4c12-bd38-f00bfa2e6340";
 
 function ConsulenzaContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const focus = searchParams.get('focus') || 'generico';
-  const pagato = searchParams.get('pagato');
-
   const [nome, setNome] = useState('');
   const [token, setToken] = useState<string | null>(null);
   const [isCallActive, setIsCallActive] = useState(false);
   const [vapi, setVapi] = useState<any>(null);
+  const [errore, setErrore] = useState('');
 
   useEffect(() => {
-    // Prende il token dall'URL (es. ?token=xyz)
+    // 1. Prende il token dall'URL
     const urlToken = searchParams.get('token');
     if (urlToken) {
       setToken(urlToken);
+      // Recupera il nome per mostrarlo a schermo (opzionale)
       fetch(`${API_URL}/sala/${urlToken}`)
         .then(res => res.json())
         .then(data => setNome(data.profile.nome))
         .catch(() => {});
+    } else {
+      setErrore("Attenzione: Nessun token trovato nell'URL. Sei sicuro di essere loggato?");
     }
 
-    // Inizializza Vapi
+    // 2. Inizializza Vapi
     const vapiInstance = new Vapi(VAPI_PUBLIC_KEY);
     setVapi(vapiInstance);
 
     vapiInstance.on('call-start', () => setIsCallActive(true));
     vapiInstance.on('call-end', () => setIsCallActive(false));
+    vapiInstance.on('error', (e: any) => {
+      console.error("Errore Vapi:", e);
+      setErrore("Errore di connessione con la voce.");
+      setIsCallActive(false);
+    });
 
     return () => {
       vapiInstance.stop();
@@ -45,9 +48,15 @@ function ConsulenzaContent() {
   }, [searchParams]);
 
   const startCall = async () => {
-    if (!vapi || !token) return;
+    if (!vapi) return;
+    if (!token) {
+      setErrore("Manca il token, impossibile avviare la chiamata.");
+      return;
+    }
     
-    // Passiamo il token di nascosto a Vapi tramite variableValues
+    setErrore('');
+    
+    // 3. Passiamo il token a Vapi in modo invisibile
     vapi.start(VAPI_ASSISTANT_ID, {
       variableValues: {
         token_cliente: token
@@ -62,12 +71,19 @@ function ConsulenzaContent() {
   return (
     <div className="min-h-screen bg-black text-white p-8 flex flex-col items-center justify-center">
       <h1 className="text-3xl mb-4">Consulenza con Luna</h1>
+      
+      {errore && (
+        <div className="bg-red-900 text-white p-4 rounded mb-4">
+          {errore}
+        </div>
+      )}
+
       {nome && <p className="text-xl mb-8">Ciao {nome}, sono pronta ad ascoltarti.</p>}
 
       {!isCallActive ? (
         <button 
           onClick={startCall}
-          className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-4 px-8 rounded-full text-xl"
+          className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-4 px-8 rounded-full text-xl transition-all"
         >
           🎤 Inizia a parlare
         </button>
