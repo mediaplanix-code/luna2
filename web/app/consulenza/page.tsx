@@ -7,8 +7,8 @@ import Vapi from '@vapi-ai/web';
 
 const STRIPE_PAYMENT_LINK = "https://buy.stripe.com/test_fZu14pfFefK76BRgk8e3e00";
 const API_URL = "https://luna2-api.onrender.com";
-const VAPI_PUBLIC_KEY = "5ca95508-9fa5-4cba-82dc-7860f7962780"; // La tua chiave
-const VAPI_ASSISTANT_ID = "7a6e8b6e-1683-4247-bfb8-024cc92d02e7"; // Il nuovo ID dell'assistente pulito (o quello che hai creato ora)
+const VAPI_PUBLIC_KEY = "5ca95508-9fa5-4cba-82dc-7860f7962780"; 
+const VAPI_ASSISTANT_ID = "7a6e8b6e-1683-4247-bfb8-024cc92d02e7";
 
 function ConsulenzaContent() {
   const router = useRouter();
@@ -32,21 +32,27 @@ function ConsulenzaContent() {
     if (!t) { router.push('/form'); return; }
     setToken(t);
 
-    // Inizializza VAPI
+    // Piccolo trucco per forzare l'audio sul vivavoce (per telefoni)
+    try {
+      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioContext) {
+        const audioCtx = new AudioContext();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+      }
+    } catch (e) {}
+
     const vapi = new Vapi(VAPI_PUBLIC_KEY);
     vapiRef.current = vapi;
 
     vapi.on('call-start', () => {
       setChiamataAttiva(true);
       setInAvvio(false);
-      // Avvia il timer sul server (se l'endpoint esiste)
       fetch(`${API_URL}/avvia-voce/${t}`, { method: 'POST' }).catch(() => {});
     });
 
     vapi.on('call-end', () => {
       setChiamataAttiva(false);
       setInAvvio(false);
-      // Ferma il timer e scala i secondi
       fetch(`${API_URL}/ferma-voce/${t}`, { method: 'POST' })
         .then(r => r.json())
         .then(d => { if (d.credito_secondi !== undefined) setCredito(d.credito_secondi); })
@@ -86,7 +92,6 @@ function ConsulenzaContent() {
     setInAvvio(true);
 
     try {
-      // 1. Recupera i dati dal server per il contesto
       const res = await fetch(`${API_URL}/tool/dati-cliente`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -94,20 +99,17 @@ function ConsulenzaContent() {
       });
       
       const dati = await res.json();
-      
       let testoContesto = "I dati del cliente non sono disponibili.";
       if (dati && dati.nome) {
         testoContesto = `Il cliente si chiama ${dati.nome}. Il suo Sole è in ${dati.sole?.segno}, la Luna in ${dati.luna?.segno}, l'Ascendente in ${dati.ascendente?.segno}.`;
       }
 
-      // 2. Passiamo i dati a VAPI come variabile 'contesto'
       const assistantOverrides = {
         variableValues: {
           contesto: testoContesto
         }
       };
       
-      // 3. Avviamo la chiamata vocale vera e propria
       await vapiRef.current.start(VAPI_ASSISTANT_ID, assistantOverrides);
     } catch (e: any) {
       console.error(e);
@@ -136,33 +138,50 @@ function ConsulenzaContent() {
       <h1 style={{ fontFamily: 'Georgia, serif', fontSize: '22px', fontWeight: 400, textAlign: 'center', marginBottom: '6px' }}>
         {focus === 'generico' ? 'Consulto Generale' : 'Approfondimento'}
       </h1>
+      <p style={{ textAlign: 'center', fontSize: '12px', color: 'var(--text-dim)', marginBottom: '22px' }}>
+        {chiamataAttiva ? 'Luna è in linea. Parla pure.' : inAvvio ? 'Sto connettendo le stelle...' : haCredito ? 'Hai un credito attivo. Puoi parlare con Luna.' : 'Sblocca l'accesso per parlare.'}
+      </p>
 
       {haCredito ? (
         <div style={{ background: 'rgba(6,214,160,0.06)', border: '1px solid rgba(6,214,160,0.3)', borderRadius: '10px', padding: '24px 20px', marginBottom: '20px', textAlign: 'center' }}>
-          <p style={{ fontSize: '14px', color: 'var(--text)', marginBottom: '16px' }}>
-            {chiamataAttiva ? 'Luna è in linea. Parla pure.' : inAvvio ? 'Sto connettendo...' : 'Hai un credito attivo. Puoi parlare con Luna.'}
-          </p>
-
+          
           {!chiamataAttiva ? (
-            <button onClick={avviaChiamata} disabled={inAvvio} className="cta" style={{ fontSize: '16px', padding: '16px', width: '100%', marginBottom: '16px', opacity: inAvvio ? 0.5 : 1 }}>
+            <button onClick={avviaChiamata} disabled={inAvvio} className="cta" style={{ fontSize: '16px', padding: '16px', width: '100%', marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', opacity: inAvvio ? 0.5 : 1 }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
               {inAvvio ? 'Connessione in corso...' : 'Parla con Luna'}
             </button>
           ) : (
-            <button onClick={fermaChiamata} className="cta" style={{ fontSize: '16px', padding: '16px', width: '100%', marginBottom: '16px', background: 'transparent', border: '1px solid #EF476F', color: '#EF476F' }}>
+            <button onClick={fermaChiamata} className="cta" style={{ fontSize: '16px', padding: '16px', width: '100%', marginBottom: '16px', background: 'transparent', border: '1px solid #EF476F', color: '#EF476F', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
               Termina chiamata
             </button>
           )}
 
           {errore && <p style={{ fontSize: '13px', color: '#EF476F', marginBottom: '16px' }}>{errore}</p>}
-          
+
           <button onClick={vaiAlPagamento} className="cta" style={{ width: '100%', fontSize: '14px', padding: '12px', background: 'transparent', border: '1px solid #F5A623', color: '#F5A623' }}>
             + Aggiungi altri 15 minuti (19€)
           </button>
         </div>
       ) : (
-        <div style={{ textAlign: 'center', padding: '30px', background: 'rgba(255,255,255,0.03)', borderRadius: '10px' }}>
-          <p style={{ marginBottom: '20px' }}>Sblocca 15 minuti per 19€.</p>
-          <button onClick={vaiAlPagamento} className="cta" style={{ display: 'inline-block' }}>Paga ora</button>
+        <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(245,166,35,0.2)', borderRadius: '10px', padding: '30px 20px', marginBottom: '20px', textAlign: 'center' }}>
+          {errore && <p style={{ fontSize: '13px', color: '#EF476F', marginBottom: '16px' }}>{errore}</p>}
+          <p style={{ fontSize: '14px', color: 'var(--text-dim)', marginBottom: '20px' }}>{nome ? `Ciao ${nome}, ` : ''}sblocca 15 minuti di accesso completo per 19€.</p>
+          <button onClick={vaiAlPagamento} className="cta" style={{ fontSize: '16px', padding: '16px 32px', margin: '0 auto', display: 'inline-block' }}>Paga 19€ e inizia</button>
+        </div>
+      )}
+
+      {/* BARRA IN BASSO (appare solo se hai credito) */}
+      {haCredito && (
+        <div style={{ marginTop: '30px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--text-dim)', marginBottom: '6px' }}>
+            <span>Credito residuo</span>
+            <span style={{ color: credito <= 120 ? '#EF476F' : credito <= 300 ? '#F5A623' : '#06D6A0', fontWeight: 600 }}>
+              {Math.floor(credito / 60)}:{(credito % 60).toString().padStart(2, '0')}
+            </span>
+          </div>
+          <div style={{ width: '100%', height: '8px', background: 'rgba(255,255,255,0.08)', borderRadius: '6px', overflow: 'hidden' }}>
+            <div style={{ width: `${Math.min(100, (credito / 990) * 100)}%`, height: '100%', background: credito <= 120 ? '#EF476F' : credito <= 300 ? '#F5A623' : '#06D6A0', transition: 'width 1s linear' }} />
+          </div>
         </div>
       )}
 
