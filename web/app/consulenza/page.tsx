@@ -1,13 +1,12 @@
 'use client';
 
-import { useState, useEffect, Suspense, useRef } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import Vapi from '@vapi-ai/web';
 
 const STRIPE_PAYMENT_LINK = "https://buy.stripe.com/test_fZu14pfFefK76BRgk8e3e00";
 const API_URL = "https://luna2-api.onrender.com";
-const VAPI_PUBLIC_KEY = "5ca95508-9fa5-4cba-82dc-7860f7962780"; // <-- INCOLLA QUI LA TUA PUBLIC KEY (senza spazi)
+const VAPI_PUBLIC_KEY = "5ca95508-9fa5-4cba-82dc-7860f7962780";
 const VAPI_ASSISTANT_ID = "03b6ee79-4490-4c12-bd38-f00bfa2e6340";
 
 function ConsulenzaContent() {
@@ -22,41 +21,12 @@ function ConsulenzaContent() {
   const [errore, setErrore] = useState('');
   const [chiamataAttiva, setChiamataAttiva] = useState(false);
 
-  const vapiRef = useRef<Vapi | null>(null);
-
   useEffect(() => {
     const n = localStorage.getItem('luna2_nome');
     if (n) setNome(n);
     const t = localStorage.getItem('luna2_token');
     if (!t) { router.push('/form'); return; }
     setToken(t);
-
-    // Inizializza VAPI
-    const vapi = new Vapi(VAPI_PUBLIC_KEY);
-    vapiRef.current = vapi;
-
-    vapi.on('call-start', () => {
-      setChiamataAttiva(true);
-      fetch(`${API_URL}/avvia-voce/${t}`, { method: 'POST' }).catch(() => {});
-    });
-
-    vapi.on('call-end', () => {
-      setChiamataAttiva(false);
-      fetch(`${API_URL}/ferma-voce/${t}`, { method: 'POST' })
-        .then(r => r.json())
-        .then(d => { if (d.credito_secondi !== undefined) setCredito(d.credito_secondi); })
-        .catch(() => {});
-    });
-
-    vapi.on('error', (e) => {
-      console.error('Errore Vapi:', e);
-      setErrore('Errore di connessione con la voce. Riprova.');
-      setChiamataAttiva(false);
-    });
-
-    return () => {
-      vapi.stop();
-    };
   }, [router]);
 
   useEffect(() => {
@@ -75,19 +45,58 @@ function ConsulenzaContent() {
   const vaiAlPagamento = () => { window.location.href = STRIPE_PAYMENT_LINK; };
 
   const avviaChiamata = async () => {
-    if (!vapiRef.current || !token) return;
+    if (!token) return;
     setErrore('');
-    try {
-      // CHIAMATA NUDISSIMA: niente overrides, niente variabili. Solo ID.
-      await vapiRef.current.start(VAPI_ASSISTANT_ID);
-    } catch (e) {
-      console.error(e);
-      setErrore('Impossibile avviare la chiamata. Controlla il microfono.');
-    }
-  };
+    setChiamataAttiva(true);
 
-  const fermaChiamata = () => {
-    if (vapiRef.current) vapiRef.current.stop();
+    try {
+      // 1. Recupera i dati per il contesto
+      const resDati = await fetch(`${API_URL}/tool/dati-cliente`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: token })
+      });
+      const dati = await resDati.json();
+      const testoContesto = dati.nome 
+        ? `Il cliente si chiama ${dati.nome}. Sole in ${dati.sole?.segno}, Luna in ${dati.luna?.segno}, Ascendente in ${dati.ascendente?.segno}.`
+        : 'Dati non disponibili.';
+
+      // 2. Chiamata diretta a VAPI
+      const vapiRes = await fetch('https://api.vapi.ai/call/web', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${VAPI_PUBLIC_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          assistantId: VAPI_ASSISTANT_ID,
+          assistantOverrides: {
+            variableValues: {
+              contesto: testoContesto
+            }
+          }
+        })
+      });
+
+      if (!vapiRes.ok) {
+        const errData = await vapiRes.json();
+        // Stampiamo l'errore esatto in console
+        console.error("ERRORE VAPI DETTAGLIATO:", errData);
+        setErrore(`Errore VAPI: ${errData.message || errData.error || 'Errore sconosciuto'}`);
+        setChiamataAttiva(false);
+        return;
+      }
+
+      // Se arriva qui, la chiamata è partita
+      // Nota: per far sentire l'audio, dobbiamo usare la libreria VAPI.
+      // Ma per il debug, questo ci dice se il server risponde 200.
+      setErrore('Chiamata creata con successo, ma per l\'audio serve la libreria.');
+
+    } catch (e: any) {
+      console.error(e);
+      setErrore('Errore di rete. Controlla la connessione.');
+      setChiamataAttiva(false);
+    }
   };
 
   if (inCaricamento) {
@@ -110,20 +119,14 @@ function ConsulenzaContent() {
       {haCredito ? (
         <div style={{ background: 'rgba(6,214,160,0.06)', border: '1px solid rgba(6,214,160,0.3)', borderRadius: '10px', padding: '24px 20px', marginBottom: '20px', textAlign: 'center' }}>
           <p style={{ fontSize: '14px', color: 'var(--text)', marginBottom: '16px' }}>
-            {chiamataAttiva ? 'Luna è in linea. Parla pure.' : 'Hai un credito attivo. Puoi parlare con Luna.'}
+            {chiamataAttiva ? 'Connessione in corso...' : 'Hai un credito attivo. Puoi parlare con Luna.'}
           </p>
 
-          {!chiamataAttiva ? (
-            <button onClick={avviaChiamata} className="cta" style={{ fontSize: '16px', padding: '16px', width: '100%', marginBottom: '16px' }}>
-              Parla con Luna
-            </button>
-          ) : (
-            <button onClick={fermaChiamata} className="cta" style={{ fontSize: '16px', padding: '16px', width: '100%', marginBottom: '16px', background: 'transparent', border: '1px solid #EF476F', color: '#EF476F' }}>
-              Termina chiamata
-            </button>
-          )}
+          <button onClick={avviaChiamata} className="cta" style={{ fontSize: '16px', padding: '16px', width: '100%', marginBottom: '16px' }}>
+            Parla con Luna
+          </button>
 
-          {errore && <p style={{ fontSize: '13px', color: '#EF476F', marginBottom: '16px' }}>{errore}</p>}
+          {errore && <p style={{ fontSize: '13px', color: '#EF476F', marginBottom: '16px', textAlign: 'left', whiteSpace: 'pre-wrap' }}>{errore}</p>}
           
           <button onClick={vaiAlPagamento} className="cta" style={{ width: '100%', fontSize: '14px', padding: '12px', background: 'transparent', border: '1px solid #F5A623', color: '#F5A623' }}>
             + Aggiungi altri 15 minuti (19€)
