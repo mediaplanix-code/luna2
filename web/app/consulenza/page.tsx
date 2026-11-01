@@ -7,7 +7,7 @@ import Link from 'next/link';
 const STRIPE_PAYMENT_LINK = "https://buy.stripe.com/test_fZu14pfFefK76BRgk8e3e00";
 const API_URL = "https://luna2-api.onrender.com";
 const VAPI_PUBLIC_KEY = "5ca95508-9fa5-4cba-82dc-7860f7962780";
-const VAPI_ASSISTANT_ID = "03b6ee79-4490-4c12-bd38-f00bfa2e6340";
+const VAPI_ASSISTANT_ID = "7a6e8b6e-1683-4247-bfb8-024cc92d02e7";
 
 function ConsulenzaContent() {
   const router = useRouter();
