@@ -94,15 +94,30 @@ function ConsulenzaContent() {
 
   const vaiAlPagamento = () => { window.location.href = STRIPE_PAYMENT_LINK; };
 
-  const avviaChiamata = async () => {
+   const avviaChiamata = async () => {
     if (!vapiRef.current || !token) return;
     try {
+      // 1. Chiediamo i dati al nostro server
+      const res = await fetch(`${API_URL}/tool/dati-cliente`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: token })
+      });
+      const dati = await res.json();
+      
+      // 2. Trasformiamo i dati in un testo semplice
+      const testoDati = dati.nome 
+        ? `Il cliente si chiama ${dati.nome}. Il suo Sole è in ${dati.sole?.segno}, la Luna in ${dati.luna?.segno}, l'Ascendente in ${dati.ascendente?.segno}.`
+        : 'Dati non disponibili.';
+
+      // 3. Passiamo il testo a VAPI
       const assistantOverrides = {
         variableValues: {
-          token: token,
-          nome: nome
+          nome: dati.nome || '',
+          contesto: testoDati
         }
       };
+      
       await vapiRef.current.start(VAPI_ASSISTANT_ID, assistantOverrides);
     } catch (e) {
       console.error(e);
