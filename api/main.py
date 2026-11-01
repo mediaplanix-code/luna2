@@ -649,12 +649,35 @@ async def get_copione_voce(token: str, focus: str = None):
 # =========================================================
 
 @app.post("/tool/dati-cliente")
-async def tool_dati_cliente(req: ToolRequest):
+async def tool_dati_cliente(request: Request):
     try:
+        body = await request.json()
+        
+        # Estraiamo il toolCallId e il token da come Vapi li manda davvero
+        tool_calls = body.get("message", {}).get("toolCallList", [])
+        if not tool_calls:
+            return {"results": []}
+            
+        tool_call_id = tool_calls[0].get("id", "call_default")
+        arguments = tool_calls[0].get("arguments", {})
+        
+        # Se Vapi manda gli argomenti come stringa JSON, li decodifichiamo
+        if isinstance(arguments, str):
+            import json
+            try:
+                arguments = json.loads(arguments)
+            except:
+                arguments = {}
+
+        token = arguments.get("token")
+        if not token:
+            return {"results": [{"toolCallId": tool_call_id, "result": "Errore: Token mancante."}]}
+
         sb = create_client(SUPABASE_URL, SUPABASE_KEY)
-        res = sb.table("profiles").select("*").eq("access_token", req.token).execute()
+        res = sb.table("profiles").select("*").eq("access_token", token).execute()
+        
         if not res.data:
-            return {"error": "Cliente non trovato."}
+            return {"results": [{"toolCallId": tool_call_id, "result": "Cliente non trovato."}]}
         
         profile = res.data[0]
         nome = profile.get("nome", "")
@@ -665,21 +688,14 @@ async def tool_dati_cliente(req: ToolRequest):
         )
         report = genera_report_interno(profile, tema, sb)
         
-        dati = {
-            "nome": nome,
-            "sole": tema["planets"].get("Sole"),
-            "luna": tema["planets"].get("Luna"),
-            "ascendente": lon_to_sign(tema["ascendant"]),
-            "mc": lon_to_sign(tema["mc"]),
-            "transiti": report.get("transiti", []),
-            "riepilogo": report.get("riepilogo_testuale", "")
-        }
+        # Risposta su una singola riga, come pretende Vapi
+        dati_str = f"Nome: {nome}. Sole: {tema['planets'].get('Sole', {}).get('segno', '')}. Luna: {tema['planets'].get('Luna', {}).get('segno', '')}. Ascendente: {lon_to_sign(tema['ascendant'])['segno']}. Riepilogo: {report.get('riepilogo_testuale', '')}"
         
-        return dati
+        return {"results": [{"toolCallId": tool_call_id, "result": dati_str}]}
         
     except Exception as e:
         print(f"=== ERRORE TOOL DATI CLIENTE: {e} ===")
-        return {"error": f"Errore: {type(e).__name__}"}
+        return {"results": [{"toolCallId": "call_default", "result": "Errore interno del server."}]}
 
 # =========================================================
 # ALTRI ENDPOINT (transits, telegram, cron)
