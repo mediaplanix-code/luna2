@@ -7,7 +7,7 @@ import Vapi from '@vapi-ai/web';
 
 const STRIPE_PAYMENT_LINK = "https://buy.stripe.com/test_fZu14pfFefK76BRgk8e3e00";
 const API_URL = "https://luna2-api.onrender.com";
-const VAPI_PUBLIC_KEY = "5ca95508-9fa5-4cba-82dc-7860f7962780"; // <-- INSERISCI QUI LA TUA PUBLIC KEY
+const VAPI_PUBLIC_KEY = "LA_TUA_PUBLIC_KEY_QUI"; // <-- INSERISCI QUI LA TUA PUBLIC KEY
 const VAPI_ASSISTANT_ID = "03b6ee79-4490-4c12-bd38-f00bfa2e6340";
 
 function ConsulenzaContent() {
@@ -44,13 +44,11 @@ function ConsulenzaContent() {
 
     vapi.on('call-start', () => {
       setChiamataAttiva(true);
-      // Avvia il timer sul server
       fetch(`${API_URL}/avvia-voce/${t}`, { method: 'POST' }).catch(() => {});
     });
 
     vapi.on('call-end', () => {
       setChiamataAttiva(false);
-      // Ferma il timer e scala i secondi
       fetch(`${API_URL}/ferma-voce/${t}`, { method: 'POST' })
         .then(r => r.json())
         .then(d => { if (d.credito_secondi !== undefined) setCredito(d.credito_secondi); })
@@ -94,27 +92,29 @@ function ConsulenzaContent() {
 
   const vaiAlPagamento = () => { window.location.href = STRIPE_PAYMENT_LINK; };
 
-   const avviaChiamata = async () => {
+  const avviaChiamata = async () => {
     if (!vapiRef.current || !token) return;
     try {
-      // 1. Chiediamo i dati al nostro server
+      setErrore('');
+      
+      // 1. Recuperiamo i dati dal server
       const res = await fetch(`${API_URL}/tool/dati-cliente`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: token })
       });
+      
       const dati = await res.json();
       
-      // 2. Trasformiamo i dati in un testo semplice
-      const testoDati = dati.nome 
-        ? `Il cliente si chiama ${dati.nome}. Il suo Sole è in ${dati.sole?.segno}, la Luna in ${dati.luna?.segno}, l'Ascendente in ${dati.ascendente?.segno}.`
-        : 'Dati non disponibili.';
+      let testoContesto = "I dati del cliente non sono disponibili.";
+      if (dati && dati.nome) {
+        testoContesto = `Il cliente si chiama ${dati.nome}. Il suo Sole è in ${dati.sole?.segno}, la Luna in ${dati.luna?.segno}, l'Ascendente in ${dati.ascendente?.segno}.`;
+      }
 
-      // 3. Passiamo il testo a VAPI
+      // 2. Passiamo i dati a VAPI come variabile 'contesto'
       const assistantOverrides = {
         variableValues: {
-          nome: dati.nome || '',
-          contesto: testoDati
+          contesto: testoContesto
         }
       };
       
@@ -164,6 +164,8 @@ function ConsulenzaContent() {
               Termina chiamata
             </button>
           )}
+
+          {errore && <p style={{ fontSize: '13px', color: '#EF476F', marginBottom: '16px' }}>{errore}</p>}
 
           <button onClick={vaiAlPagamento} className="cta" style={{ width: '100%', fontSize: '14px', padding: '12px', background: 'transparent', border: '1px solid #F5A623', color: '#F5A623' }}>+ Aggiungi altri 15 minuti (19€)</button>
         </div>
