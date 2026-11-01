@@ -32,7 +32,6 @@ function ConsulenzaContent() {
     if (!t) { router.push('/form'); return; }
     setToken(t);
 
-    // Piccolo trucco per forzare l'audio sul vivavoce (per telefoni)
     try {
       const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
       if (AudioContext) {
@@ -123,7 +122,14 @@ function ConsulenzaContent() {
   };
 
   if (inCaricamento) {
-    return <div className="canvas"><div className="topbar"><div className="brand">✦ Luna Astrologica</div></div><p style={{ textAlign: 'center', marginTop: '40px', color: 'var(--text-dim)' }}>Caricamento...</p></div>;
+    return (
+      <div className="canvas">
+        <div className="topbar">
+          <div className="brand">✦ Luna Astrologica</div>
+        </div>
+        <p style={{ textAlign: 'center', marginTop: '40px', color: 'var(--text-dim)' }}>Caricamento...</p>
+      </div>
+    );
   }
 
   const haCredito = credito >= 30;
@@ -138,8 +144,9 @@ function ConsulenzaContent() {
       <h1 style={{ fontFamily: 'Georgia, serif', fontSize: '22px', fontWeight: 400, textAlign: 'center', marginBottom: '6px' }}>
         {focus === 'generico' ? 'Consulto Generale' : 'Approfondimento'}
       </h1>
+      
       <p style={{ textAlign: 'center', fontSize: '12px', color: 'var(--text-dim)', marginBottom: '22px' }}>
-        {chiamataAttiva ? 'Luna è in linea. Parla pure.' : inAvvio ? 'Sto connettendo le stelle...' : haCredito ? 'Hai un credito attivo. Puoi parlare con Luna.' : 'Sblocca l'accesso per parlare.'}
+        {chiamataAttiva ? 'Luna è in linea. Parla pure.' : inAvvio ? 'Sto connettendo le stelle...' : haCredito ? 'Hai un credito attivo. Puoi parlare con Luna.' : 'Sblocca l\'accesso per parlare.'}
       </p>
 
       {haCredito ? (
@@ -170,7 +177,6 @@ function ConsulenzaContent() {
         </div>
       )}
 
-      {/* BARRA IN BASSO (appare solo se hai credito) */}
       {haCredito && (
         <div style={{ marginTop: '30px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--text-dim)', marginBottom: '6px' }}>
