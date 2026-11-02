@@ -1068,3 +1068,61 @@ async def unlink_telegram_account(chat_id):
     try:
         sb.table("profiles").update({"telegram_id": None}).eq("telegram_id", str(chat_id)).execute()
     except Exception: pass
+
+# =========================================================
+# CRON PER LA GENERAZIONE DEI LIBRI
+# =========================================================
+
+@app.post("/cron/genera-libri")
+async def cron_genera_libri(request: Request):
+    try:
+        if not CRON_SECRET: raise HTTPException(status_code=500, detail="CRON_SECRET non configurato.")
+        if request.headers.get("x-cron-secret", "") != CRON_SECRET: raise HTTPException(status_code=403, detail="Non autorizzato.")
+        if not SUPABASE_URL or not SUPABASE_KEY: raise HTTPException(status_code=500, detail="Supabase non configurato.")
+
+        sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+        
+        # 1. Prendiamo un libro in attesa
+        res = sb.table("libri_in_coda").select("*").eq("stato", "in_attesa").limit(1).execute()
+        if not res.data:
+            return {"status": "ok", "message": "Nessun libro in coda."}
+        
+        libro_da_generare = res.data[0]
+        profile_id = libro_da_generare["profile_id"]
+
+        # 2. Segniamo che stiamo iniziando a generarlo
+        sb.table("libri_in_coda").update({"stato": "in_generazione"}).eq("id", libro_da_generare["id"]).execute()
+
+        # 3. Prendiamo i dati del profilo
+        prof_res = sb.table("profiles").select("*").eq("id", profile_id).execute()
+        if not prof_res.data:
+            sb.table("libri_in_coda").update({"stato": "errore"}).eq("id", libro_da_generare["id"]).execute()
+            return {"status": "error", "message": "Profilo non trovato."}
+        
+        profile = prof_res.data[0]
+
+        # 4. Prepariamo il report (usiamo la funzione esistente nel tuo main.py)
+        tema = calcola_tema_completo(
+            str(profile["birth_date"]), str(profile["birth_time"])[:5],
+            float(profile["birth_lat"]), float(profile["birth_lon"]), 1.0,
+        )
+        report = genera_report_interno(profile, tema, sb)
+
+        # 5. Chiamiamo il motore per generare il PDF
+        from libro import genera_libro_completo
+        percorso_pdf = await genera_libro_completo(profile, report)
+
+        # 6. (FUTURO) Qui caricheremo il PDF su Supabase Storage e invieremo l'email.
+        # Per ora, simuliamo il completamento.
+        
+        sb.table("libri_in_coda").update({
+            "stato": "completato",
+            "url_pdf": percorso_pdf # Per ora salviamo solo il percorso temporaneo
+        }).eq("id", libro_da_generare["id"]).execute()
+
+        return {"status": "ok", "message": "Libro generato con successo.", "path": percorso_pdf}
+
+    except HTTPException: raise
+    except Exception as e:
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Errore: {e}")
