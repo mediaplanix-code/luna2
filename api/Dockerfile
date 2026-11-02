@@ -2,10 +2,15 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Librerie di sistema richieste da pysweph
+# Librerie di sistema richieste da pysweph e weasyprint
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     wget \
+    libpango-1.0-0 \
+    libpangocairo-1.0-0 \
+    libgdk-pixbuf-2.0-0 \
+    libffi-dev \
+    shared-mime-info \
     && rm -rf /var/lib/apt/lists/*
 
 # Scarica i file delle effemeridi Swiss Ephemeris dal repository ufficiale GitHub
