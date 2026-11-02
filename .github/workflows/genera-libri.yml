@@ -1,0 +1,16 @@
+name: Genera Libri
+on:
+  schedule:
+    - cron: '*/15 * * * *' # Ogni 15 minuti
+  workflow_dispatch: {}
+
+jobs:
+  genera:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Chiama endpoint genera libri
+        run: |
+          curl -sS -X POST "https://luna2-api.onrender.com/cron/genera-libri" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            --max-time 600
