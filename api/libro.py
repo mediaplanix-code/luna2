@@ -4,52 +4,66 @@ from weasyprint import HTML
 from ai import _chiama_ai
 
 async def genera_libro_completo(profile: dict, report: dict) -> str:
-    """Genera il PDF del libro con tutti i contenuti del sito."""
-    
     nome = profile.get("nome", "Cliente")
     data_nascita = str(profile.get("birth_date", ""))
     luogo_nascita = profile.get("birth_city", "")
     
-    # 1. INTRODUZIONE
-    prompt_intro = f"""Sei un'astrologa italiana. Scrivi l'introduzione per un libro astrologico personalizzato per {nome}, nato il {data_nascita} a {luogo_nascita}.
-Tono: caldo, elegante, misterioso. Spiega che questo libro è un viaggio nel suo 2027.
-Massimo 200 parole. Non usare markdown o asterischi."""
-    intro = await _chiama_ai(prompt_intro, max_tokens=500) or "Benvenuto nel tuo viaggio astrale."
+    # --- 1. INTRO ---
+    prompt_intro = f"Sei un'astrologa italiana. Scrivi l'introduzione del libro per {nome} (nato il {data_nascita} a {luogo_nascita}). Tono caldo e misterioso, max 200 parole."
+    intro = await _chiama_ai(prompt_intro, max_tokens=500) or "Benvenuto."
 
-    # 2. PARTE I - IDENTITÀ
+    # --- 2. IDENTITÀ (con simboli) ---
     riepilogo = report.get("riepilogo_testuale", "")
-    prompt_identita = f"""Sei un'astrologa italiana. Scrivi la Parte I del libro di {nome}: "La Tua Identità Astrologica". 
-Analizza il suo Sole, la sua Luna e il suo Ascendente.
-Basati su questi dati: {riepilogo}
-Tono: elegante, empatico. Massimo 400 parole. Non usare markdown."""
-    identita = await _chiama_ai(prompt_identita, max_tokens=800) or "I tuoi pianeti raccontano una storia unica."
+    prompt_id = f"Scrivi la Parte I (Identità: Sole, Luna, Ascendente) per {nome}. Dati: {riepilogo}. Max 400 parole. Usa i simboli astrologici (☉ Luna ☽ Ascendente ↑) all'inizio dei paragrafi."
+    identita = await _chiama_ai(prompt_id, max_tokens=800) or "La tua identità."
 
-    # 3. PARTE II - LA CARTA (Pianeti e Case)
-    # Creiamo una tabella HTML con i pianeti per il libro
+    # --- 3. CARTA NATALE (con tabella e ruota) ---
     tabella_pianeti = "<table class='dati'><tr><th>Pianeta</th><th>Segno</th><th>Casa</th></tr>"
     for nome_p, dati_p in profile.get("planets", {}).items():
         casa = profile.get("planets_in_houses", {}).get(nome_p, "-")
-        tabella_pianeti += f"<tr><td>{nome_p}</td><td>{dati_p.get('segno', '')}</td><td>{casa}ª</td></tr>"
+        # Simboli per i pianeti
+        simboli = {"Sole": "☉", "Luna": "☽", "Mercurio": "☿", "Venere": "♀", "Marte": "♂", "Giove": "♃", "Saturno": "♄", "Urano": "♅", "Nettuno": "♆", "Plutone": "♇", "NodoNord": "☊", "Chirone": "⚷"}
+        sym = simboli.get(nome_p, "✦")
+        tabella_pianeti += f"<tr><td><span class='simbolo'>{sym}</span> {nome_p}</td><td>{dati_p.get('segno', '')}</td><td>{casa}ª</td></tr>"
     tabella_pianeti += "</table>"
 
-    prompt_carta = f"""Sei un'astrologa italiana. Scrivi la Parte II del libro di {nome}: "La Struttura della Tua Carta Natale".
-Spiega l'importanza delle case astrologiche e leggi la tabella dei suoi pianeti che trovi qui sotto.
-Tono: profondo, didattico ma affascinante. Massimo 300 parole. Non usare markdown."""
-    carta = await _chiama_ai(prompt_carta, max_tokens=600) or "Le tue case astrologiche rivelano i tuoi ambiti di vita."
+    prompt_carta = f"Scrivi la Parte II (La Carta Natale) per {nome}. Spiega le case e i pianeti. Max 300 parole."
+    carta = await _chiama_ai(prompt_carta, max_tokens=600) or "Le tue case."
 
-    # 4. PARTE III - TRANSITI 2027
+    # --- 4. TRANSITI 2027 ---
     transiti = report.get("transiti", [])
-    transiti_testo = ""
-    for t in transiti[:5]: # Prendiamo i primi 5 transiti
-        transiti_testo += f"- {t.get('transito')} in {t.get('aspetto')} a {t.get('punto_natale')}\n"
+    transiti_testo = "\n".join([f"- {t.get('transito')} in {t.get('aspetto')} a {t.get('punto_natale')}" for t in transiti[:5]])
+    prompt_transiti = f"Scrivi la Parte III (Transiti 2027) per {nome}. Ecco i transiti: {transiti_testo}. Tono rassicurante. Max 400 parole."
+    transiti_2027 = await _chiama_ai(prompt_transiti, max_tokens=800) or "I tuoi transiti."
 
-    prompt_transiti = f"""Sei un'astrologa italiana. Scrivi la Parte III del libro di {nome}: "Il Tuo 2027: Il Quadro Generale".
-Spiega i transiti lenti che lo aspettano quest'anno.
-Ecco i transiti calcolati: {transiti_testo}
-Tono: rassicurante, mai catastrofico. Massimo 400 parole. Non usare markdown."""
-    transiti_2027 = await _chiama_ai(prompt_transiti, max_tokens=800) or "I transiti del 2027 ti guideranno attraverso nuove consapevolezze."
+    # --- 5. I 12 MESI (Generiamo un testo generico ma personalizzato per ogni mese) ---
+    mesi_nomi = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"]
+    capitoli_mesi = ""
+    
+    for mese in mesi_nomi:
+        prompt_mese = f"Scrivi il capitolo per il mese di {mese} 2027 per {nome}. Tono: ispirazionale, focalizzato sulle opportunità e sulla crescita. Max 150 parole."
+        testo_mese = await _chiama_ai(prompt_mese, max_tokens=300) or f"Il mese di {mese} porta nuove energie."
+        capitoli_mesi += f"""
+        <div class="capitolo">
+            <h2>{mese} 2027</h2>
+            <p>{testo_mese}</p>
+        </div>
+        """
 
-    # 5. COMPONIAMO L'HTML
+    # --- 6. AMBITI DI VITA ---
+    ambiti = ["Amore e Relazioni", "Lavoro e Carriera", "Salute e Benessere", "Crescita Personale"]
+    capitoli_ambiti = ""
+    for ambito in ambiti:
+        prompt_ambito = f"Scrivi un capitolo sull'ambito '{ambito}' per {nome} nel 2027. Tono: empatico e costruttivo. Max 200 parole."
+        testo_ambito = await _chiama_ai(prompt_ambito, max_tokens=400) or f"L'ambito {ambito} è in evoluzione."
+        capitoli_ambiti += f"""
+        <div class="capitolo">
+            <h2>{ambito}</h2>
+            <p>{testo_ambito}</p>
+        </div>
+        """
+
+    # --- 7. COMPONIAMO L'HTML ---
     template_path = os.path.join(os.path.dirname(__file__), "template_libro.html")
     with open(template_path, "r", encoding="utf-8") as f:
         html_content = f.read()
@@ -63,7 +77,7 @@ Tono: rassicurante, mai catastrofico. Massimo 400 parole. Non usare markdown."""
     </div>
     
     <div class="capitolo">
-        <h2>Parte I - La Tua Identità Astrologica</h2>
+        <h2>Parte I - La Tua Identità</h2>
         <p>{identita}</p>
     </div>
     
@@ -71,12 +85,20 @@ Tono: rassicurante, mai catastrofico. Massimo 400 parole. Non usare markdown."""
         <h2>Parte II - La Struttura della Tua Carta</h2>
         <p>{carta}</p>
         {tabella_pianeti}
+        
+        <div class="ruota-container">
+            <div class="ruota-placeholder">Qui andrà la Ruota Zodiacale</div>
+        </div>
     </div>
     
     <div class="capitolo">
         <h2>Parte III - Il Tuo 2027</h2>
         <p>{transiti_2027}</p>
     </div>
+    
+    {capitoli_mesi}
+    
+    {capitoli_ambiti}
     """
     
     html_content = html_content.replace("<!-- QUI L'AI INSERIRÀ I CAPITOLI -->", corpo_libro)
