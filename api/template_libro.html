@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        /* IMPORTIAMO FONT ELEGANTI DA GOOGLE FONTS */
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap');
+
+        @page {
+            size: A4;
+            margin: 0; /* Togliamo i margini per far arrivare lo sfondo fino in fondo */
+        }
+        
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #0d1321; /* Blu notte profondo */
+            color: #e2c792; /* Oro tenue */
+            font-family: 'Playfair Display', serif;
+        }
+
+        /* =========================================
+           COPERTINA
+           ========================================= */
+        .copertina {
+            page-break-after: always;
+            width: 100vw;
+            height: 100vh;
+            background-color: #0d1321;
+            /* Creiamo un effetto "pelle" e "costellazioni" con gradienti CSS */
+            background-image: 
+                radial-gradient(circle at 50% 50%, rgba(28, 42, 75, 0.8) 0%, rgba(13, 19, 33, 1) 80%),
+                radial-gradient(white, rgba(255,255,255,.2) 2px, transparent 3px),
+                radial-gradient(white, rgba(255,255,255,.15) 1px, transparent 2px),
+                radial-gradient(white, rgba(255,255,255,.1) 2px, transparent 3px);
+            background-size: 100% 100%, 550px 550px, 350px 350px, 250px 250px;
+            background-position: 0 0, 0 0, 40px 60px, 130px 270px;
+            
+            position: relative;
+            box-sizing: border-box;
+            /* Finta rilegatura a sinistra */
+            border-left: 20px solid #060910;
+            box-shadow: inset 15px 0 20px -10px rgba(0,0,0,0.8);
+        }
+
+        /* Cornice dorata */
+        .cornice {
+            position: absolute;
+            top: 40px;
+            bottom: 40px;
+            left: 40px;
+            right: 40px;
+            border: 2px solid #b89752; /* Oro scuro */
+            /* Dettaglio angoli (semplificato) */
+            box-shadow: inset 0 0 0 6px #0d1321, inset 0 0 0 8px #b89752;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 40px;
+        }
+
+        .titolo-libro {
+            font-family: 'Cinzel', serif;
+            font-size: 42pt;
+            color: #ffd700; /* Oro brillante */
+            margin-bottom: 20px;
+            line-height: 1.1;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+        }
+
+        .sottotitolo-libro {
+            font-family: 'Playfair Display', serif;
+            font-size: 16pt;
+            font-style: italic;
+            color: #e2c792;
+            margin-bottom: 80px;
+            letter-spacing: 1px;
+        }
+
+        /* Simbolo decorativo centrale (usiamo un carattere Unicode) */
+        .simbolo-centrale {
+            font-size: 60pt;
+            color: #b89752;
+            margin-bottom: 80px;
+            opacity: 0.7;
+        }
+
+        .preparato-per {
+            font-family: 'Cinzel', serif;
+            font-size: 12pt;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            color: #a0a0a0;
+            margin-bottom: 10px;
+        }
+
+        .nome-cliente {
+            font-family: 'Playfair Display', serif;
+            font-size: 32pt;
+            font-style: italic;
+            color: #ffffff;
+            border-bottom: 1px solid #b89752;
+            padding-bottom: 10px;
+            min-width: 60%;
+        }
+
+        /* =========================================
+           PAGINE INTERNE
+           ========================================= */
+        .capitolo {
+            page-break-before: always;
+            padding: 3cm;
+            background-color: #0d1321;
+        }
+
+        h2.titolo-capitolo {
+            font-family: 'Cinzel', serif;
+            font-size: 24pt;
+            color: #ffd700;
+            text-align: center;
+            margin-bottom: 40px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        h3.sottotitolo {
+            font-family: 'Cinzel', serif;
+            font-size: 16pt;
+            color: #e2c792;
+            margin-top: 30px;
+            margin-bottom: 15px;
+        }
+
+        p {
+            font-size: 12pt;
+            line-height: 1.8;
+            text-align: justify;
+            margin-bottom: 15px;
+        }
+
+        .intro {
+            font-style: italic;
+            text-align: center;
+            color: #a0a0a0;
+            margin-bottom: 40px;
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- COPERTINA -->
+    <div class="copertina">
+        <div class="cornice">
+            <div class="titolo-libro">Il Tuo<br>Cielo 2027</div>
+            <div class="sottotitolo-libro">La tua mappa astrologica personale</div>
+            
+            <div class="simbolo-centrale">✦</div> <!-- Simbolo stella -->
+            
+            <div class="preparato-per">Preparato per</div>
+            <div class="nome-cliente">{{NOME_CLIENTE}}</div>
+        </div>
+    </div>
+
+    <!-- CONTENUTO DINAMICO (verrà generato dall'AI) -->
+    <div id="contenuto">
+        <!-- QUI L'AI INSERIRÀ I CAPITOLI -->
+    </div>
+
+</body>
+</html>
