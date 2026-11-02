@@ -7,157 +7,69 @@
 
         @page {
             size: A4;
-            margin: 2cm 2.5cm; /* Margini standard per libri */
-            @bottom-center {
-                content: counter(page);
-                font-family: 'Cinzel', serif;
-                font-size: 10pt;
-                color: #b89752;
-            }
-            @top-center {
-                content: "Il Tuo Cielo 2027";
-                font-family: 'Cinzel', serif;
-                font-size: 9pt;
-                color: #a0a0a0;
-                letter-spacing: 2px;
-            }
+            margin: 2cm 2.5cm;
+            @bottom-center { content: counter(page); font-family: 'Cinzel', serif; font-size: 10pt; color: #b89752; }
+            @top-center { content: "Il Tuo Cielo 2027"; font-family: 'Cinzel', serif; font-size: 9pt; color: #a0a0a0; letter-spacing: 2px; }
         }
         
-        /* Copertina senza margini e senza numeri */
-        @page cover {
-            margin: 0;
-            @bottom-center { content: none; }
-            @top-center { content: none; }
-        }
+        @page cover { margin: 0; @bottom-center { content: none; } @top-center { content: none; } }
 
-        body {
-            margin: 0;
-            padding: 0;
-            font-family: 'Playfair Display', serif;
-            background-color: #fcfbf7;
-        }
+        body { margin: 0; padding: 0; font-family: 'Playfair Display', serif; background-color: #fcfbf7; }
 
-        /* =========================================
-           COPERTINA
-           ========================================= */
-        .copertina {
-            page: cover; /* Usa la regola speciale per la copertina */
-            page-break-after: always;
-            width: 100%;
-            height: 100vh;
-            background-color: #0d1321;
-            background-image: radial-gradient(circle at 50% 50%, rgba(28, 42, 75, 0.8) 0%, rgba(13, 19, 33, 1) 80%);
-            box-sizing: border-box;
-            border-left: 20px solid #060910;
-            box-shadow: inset 15px 0 20px -10px rgba(0,0,0,0.8);
-            position: relative;
-        }
-
-        .cornice {
-            position: absolute;
-            top: 40px; bottom: 40px; left: 40px; right: 40px;
-            border: 2px solid #b89752;
-            box-shadow: inset 0 0 0 6px #0d1321, inset 0 0 0 8px #b89752;
-            display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 40px;
-        }
-
+        /* COPERTINA */
+        .copertina { page: cover; page-break-after: always; width: 100%; height: 100vh; background-color: #0d1321; background-image: radial-gradient(circle at 50% 50%, rgba(28, 42, 75, 0.8) 0%, rgba(13, 19, 33, 1) 80%); box-sizing: border-box; border-left: 20px solid #060910; position: relative; }
+        .cornice { position: absolute; top: 40px; bottom: 40px; left: 40px; right: 40px; border: 2px solid #b89752; box-shadow: inset 0 0 0 6px #0d1321, inset 0 0 0 8px #b89752; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 40px; }
         .titolo-libro { font-family: 'Cinzel', serif; font-size: 42pt; color: #ffd700; margin-bottom: 20px; text-transform: uppercase; letter-spacing: 3px; }
         .sottotitolo-libro { font-size: 16pt; font-style: italic; color: #e2c792; margin-bottom: 80px; }
         .simbolo-centrale { font-size: 60pt; color: #b89752; margin-bottom: 80px; }
         .preparato-per { font-family: 'Cinzel', serif; font-size: 12pt; text-transform: uppercase; letter-spacing: 4px; color: #a0a0a0; margin-bottom: 10px; }
         .nome-cliente { font-size: 32pt; font-style: italic; color: #ffffff; border-bottom: 1px solid #b89752; padding-bottom: 10px; min-width: 60%; }
 
-        /* =========================================
-           PAGINE INTERNE
-           ========================================= */
-        .capitolo {
-            page-break-before: always;
-            color: #1a1a1a;
-        }
+        /* PAGINE INTERNE */
+        .capitolo { page-break-before: always; color: #1a1a1a; }
+        .capitolo h2 { font-family: 'Cinzel', serif; font-size: 22pt; color: #0d1321; text-align: center; border-bottom: 2px solid #b89752; padding-bottom: 10px; margin-bottom: 30px; text-transform: uppercase; letter-spacing: 2px; }
+        .capitolo p { font-size: 11pt; line-height: 1.7; text-align: justify; margin-bottom: 15px; }
 
-        .capitolo h2 {
-            font-family: 'Cinzel', serif;
-            font-size: 22pt;
-            color: #0d1321;
-            text-align: center;
-            border-bottom: 2px solid #b89752;
-            padding-bottom: 10px;
-            margin-bottom: 30px;
-            text-transform: uppercase;
-            letter-spacing: 2px;
+        /* BLOCCHI ARMONIOSI PER L'IDENTITÀ */
+        .box-identita {
+            background: #ffffff;
+            border: 1px solid #e0d5c1;
+            border-left: 5px solid #b89752;
+            border-radius: 4px;
+            padding: 20px;
+            margin-bottom: 25px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.03);
         }
-
-        .capitolo h3 {
+        .box-identita .simbolo-grande {
+            font-size: 30pt;
+            color: #b89752;
+            float: left;
+            margin-right: 15px;
+            margin-top: -5px;
+        }
+        .box-identita .titolo-box {
             font-family: 'Cinzel', serif;
             font-size: 14pt;
-            color: #b89752;
-            margin-top: 25px;
-            margin-bottom: 10px;
-        }
-
-        .capitolo p {
-            font-size: 11pt;
-            line-height: 1.7;
-            text-align: justify;
-            margin-bottom: 15px;
-        }
-
-        .capitolo .intro {
-            font-style: italic;
-            text-align: center;
-            color: #555;
-            margin-bottom: 40px;
-        }
-
-        /* Stile per i simboli astrologici nel testo */
-        .simbolo { font-family: 'Segoe UI Symbol', 'Arial Unicode MS', sans-serif; font-size: 14pt; color: #b89752; }
-
-        /* Tabella dati astrologici */
-        table.dati {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 20px 0;
-            font-size: 10pt;
-        }
-        table.dati th, table.dati td {
-            border-bottom: 1px solid #ddd;
-            padding: 6px;
-            text-align: left;
-        }
-        table.dati th {
-            font-family: 'Cinzel', serif;
             color: #0d1321;
+            margin-bottom: 8px;
+            display: block;
         }
 
-        /* Spazio per la ruota */
-        .ruota-container {
-            text-align: center;
-            margin: 30px 0;
-        }
-        .ruota-placeholder {
-            width: 400px;
-            height: 400px;
-            border: 2px dashed #b89752;
-            border-radius: 50%;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            color: #b89752;
-            font-family: 'Cinzel', serif;
-            font-size: 12pt;
-        }
+        /* TABELLA */
+        table.dati { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 10pt; background: #fff; }
+        table.dati th, table.dati td { border-bottom: 1px solid #ddd; padding: 8px; text-align: left; }
+        table.dati th { font-family: 'Cinzel', serif; color: #0d1321; background: #f8f6f0; }
 
-        .indice {
-            page-break-after: always;
-        }
+        .ruota-container { text-align: center; margin: 30px 0; }
+        .ruota-placeholder { width: 400px; height: 400px; border: 2px dashed #b89752; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; color: #b89752; font-family: 'Cinzel', serif; }
+
+        .indice { page-break-after: always; }
         .indice h2 { font-family: 'Cinzel', serif; font-size: 22pt; color: #0d1321; text-align: center; border-bottom: 2px solid #b89752; padding-bottom: 10px; margin-bottom: 30px; }
         .indice ul { list-style: none; padding: 0; }
         .indice li { font-size: 13pt; margin-bottom: 12px; color: #1a1a1a; border-bottom: 1px dotted #ccc; padding-bottom: 5px; }
     </style>
 </head>
 <body>
-
-    <!-- COPERTINA -->
     <div class="copertina">
         <div class="cornice">
             <div class="titolo-libro">Il Tuo<br>Cielo 2027</div>
@@ -168,7 +80,6 @@
         </div>
     </div>
 
-    <!-- INDICE -->
     <div class="indice capitolo">
         <h2>Indice</h2>
         <ul>
@@ -178,14 +89,9 @@
             <li>Parte III - Il tuo 2027: il quadro generale</li>
             <li>Parte IV - I dodici mesi del 2027</li>
             <li>Parte V - I grandi ambiti della tua vita</li>
-            <li>Parte VI - La tua bussola astrologica 2027</li>
         </ul>
     </div>
 
-    <!-- CONTENUTO DINAMICO -->
-    <div id="contenuto">
-        <!-- QUI L'AI INSERIRÀ I CAPITOLI -->
-    </div>
-
+    <div id="contenuto"></div>
 </body>
 </html>
