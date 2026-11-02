@@ -1126,3 +1126,26 @@ async def cron_genera_libri(request: Request):
     except Exception as e:
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Errore: {e}")
+
+# =========================================================
+# SCARICA LIBRO
+# =========================================================
+
+@app.get("/scarica-libro/{profile_id}")
+async def scarica_libro(profile_id: str):
+    try:
+        from fastapi.responses import FileResponse
+        sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+        res = sb.table("libri_in_coda").select("*").eq("profile_id", profile_id).eq("stato", "completato").execute()
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Libro non trovato o non ancora completato.")
+        
+        percorso_pdf = res.data[0].get("url_pdf")
+        if not percorso_pdf or not os.path.exists(percorso_pdf):
+            raise HTTPException(status_code=404, detail="File PDF non trovato sul server.")
+            
+        return FileResponse(percorso_pdf, media_type="application/pdf", filename="Il_Tuo_Cielo_2027.pdf")
+    except HTTPException: raise
+    except Exception as e:
+        print(f"=== ERRORE scarica libro: {e} ===")
+        raise HTTPException(status_code=500, detail=str(e))
