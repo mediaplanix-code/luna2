@@ -871,6 +871,32 @@ async def cron_oroscopo_settimanale(request: Request):
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Errore: {e}")
 
+@app.post("/acquista-libro/{token}")
+async def acquista_libro(token: str):
+    try:
+        sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+        res = sb.table("profiles").select("*").eq("access_token", token).execute()
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Profilo non trovato")
+        profile = res.data[0]
+
+        # Controlla se c'è già un libro in coda o completato per questo utente
+        existing = sb.table("libri_in_coda").select("*").eq("profile_id", profile["id"]).execute()
+        if existing.data:
+            return {"status": "ok", "message": "Libro già in coda o completato."}
+
+        # Inserisce il libro in coda
+        sb.table("libri_in_coda").insert({
+            "profile_id": profile["id"],
+            "stato": "in_attesa"
+        }).execute()
+
+        return {"status": "ok", "message": "Libro messo in coda con successo."}
+    except HTTPException: raise
+    except Exception as e:
+        print(f"=== ERRORE acquista libro: {e} ===")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/cron/alert-mensili")
 async def cron_alert_mensili(request: Request):
     try:
