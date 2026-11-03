@@ -1110,7 +1110,8 @@ async def cron_genera_libri(request: Request):
 
         # 5. Chiamiamo il motore per generare il PDF
         from libro import genera_libro_completo
-        percorso_pdf = await genera_libro_completo(profile, report)
+        settori = await genera_settori_tema(report)
+percorso_pdf = await genera_libro_completo(profile, report, tema, settori)
 
         # 6. (FUTURO) Qui caricheremo il PDF su Supabase Storage e invieremo l'email.
         # Per ora, simuliamo il completamento.
