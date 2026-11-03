@@ -1,5 +1,6 @@
 import os
 import math
+import asyncio
 from datetime import datetime
 from weasyprint import HTML
 from ai import _chiama_ai
@@ -49,6 +50,8 @@ async def genera_libro_completo(profile: dict, report: dict, tema: dict, settori
     for nome_p, dati_p in tema.get("planets", {}).items():
         segno = dati_p.get('segno', '')
         grado = round(dati_p.get('grado', 0), 2)
+        # Aggiungiamo una piccola pausa per non far arrabbiare Groq
+        await asyncio.sleep(1) 
         prompt_sig = f"In una frase brevissima (max 10 parole), spiega il significato di {nome_p} in {segno}."
         significato = pulisci_testo(await _chiama_ai(prompt_sig, max_tokens=50))
         tab_pianeti += f"<tr><td>{nome_p}</td><td>{segno} {grado}°</td><td>{significato}</td></tr>"
@@ -68,6 +71,7 @@ async def genera_libro_completo(profile: dict, report: dict, tema: dict, settori
 
     # IDENTITÀ
     riepilogo = report.get("riepilogo_testuale", "")
+    await asyncio.sleep(1)
     prompt_id = f"Scrivi la Parte I (Identità) per {nome}. Dati: {riepilogo}. Dividi in 3 parti [SEP]. Max 150 parole a parte."
     identita_raw = await _chiama_ai(prompt_id, max_tokens=900) or "Testo"
     parti_id = identita_raw.split("[SEP]")
@@ -76,6 +80,7 @@ async def genera_libro_completo(profile: dict, report: dict, tema: dict, settori
 
     # TRANSITI
     transiti_testo = "\n".join([f"- {t.get('transito')} in {t.get('aspetto')} a {t.get('punto_natale')}" for t in report.get("transiti", [])[:5]])
+    await asyncio.sleep(1)
     prompt_transiti = f"Scrivi la Parte II (Transiti 2027) per {nome}. Transiti: {transiti_testo}. Dividi in 3 blocchi [SEP]. Max 150 parole per blocco."
     transiti_raw = await _chiama_ai(prompt_transiti, max_tokens=900) or "Transiti"
     parti_transiti = transiti_raw.split("[SEP]")
@@ -86,18 +91,20 @@ async def genera_libro_completo(profile: dict, report: dict, tema: dict, settori
     for i, t_txt in enumerate(parti_transiti[:3]):
         transiti_blocchi += f"<div class='box-identita'><span class='titolo-box'>{titoli_transiti[i]}</span><p>{pulisci_testo(t_txt)}</p></div>"
 
-    # MESI
+    # MESI (con pausa di sicurezza)
     mesi_nomi = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"]
     capitoli_mesi = ""
     for mese in mesi_nomi:
+        await asyncio.sleep(2) # Pausa di 2 secondi tra un mese e l'altro
         prompt_mese = f"Scrivi un testo di almeno 150 parole per il mese di {mese} 2027 per {nome} (Sole in {segno_sole}). Parla dell'energia del mese. Tono: ispirazionale."
         testo_mese = pulisci_testo(await _chiama_ai(prompt_mese, max_tokens=400))
         capitoli_mesi += f"<div class='capitolo'><h2>{mese} 2027</h2><p>{testo_mese}</p></div>"
 
-    # SETTORI
+    # SETTORI (con pausa)
     settori_html = ""
     if settori:
         for chiave, titolo in [("amore", "Amore e Relazioni"), ("lavoro", "Lavoro e Carriera"), ("salute", "Salute e Benessere"), ("crescita", "Crescita Personale")]:
+            await asyncio.sleep(2)
             testo_settore = settori.get(chiave, "")
             if testo_settore:
                 settori_html += f"<div class='capitolo'><h2>{titolo}</h2><p>{pulisci_testo(testo_settore)}</p></div>"
@@ -120,28 +127,20 @@ async def genera_libro_completo(profile: dict, report: dict, tema: dict, settori
     
     html_content = html_content.replace('<div id="contenuto"></div>', f'<div id="contenuto">{corpo_libro}</div>')
     
-    # Generiamo il PDF in memoria (o in un file temporaneo)
+    # Generiamo il PDF
     nome_file = f"libro_{profile['id']}_{datetime.now().strftime('%Y%m%d%H%M%S')}.pdf"
     percorso_temp = os.path.join("/tmp", nome_file)
     HTML(string=html_content).write_pdf(percorso_temp)
     
-    # --- CARICAMENTO SU SUPABASE STORAGE ---
+    # Carichiamo su Supabase
     supabase_url = os.getenv("SUPABASE_URL")
     supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
     sb = create_client(supabase_url, supabase_key)
     
-    # Apriamo il file e carichiamolo nel bucket 'libri'
     with open(percorso_temp, "rb") as f:
-        sb.storage.from_("libri").upload(
-            path=nome_file, 
-            file=f, 
-            file_options={"content-type": "application/pdf"}
-        )
+        sb.storage.from_("libri").upload(path=nome_file, file=f, file_options={"content-type": "application/pdf"})
     
-    # Otteniamo l'URL pubblico
     url_pubblico = sb.storage.from_("libri").get_public_url(nome_file)
-    
-    # Puliamo il file temporaneo
     os.remove(percorso_temp)
     
     return url_pubblico
