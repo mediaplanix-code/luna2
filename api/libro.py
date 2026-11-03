@@ -3,13 +3,13 @@ import math
 from datetime import datetime
 from weasyprint import HTML
 from ai import _chiama_ai
+from supabase import create_client
 
 def pulisci_testo(testo: str) -> str:
     if not testo: return ""
     return testo.replace("**", "").replace("*", "").replace("#", "").replace("_", "").strip()
 
 def genera_ruota_svg() -> str:
-    """Genera un SVG elegante della ruota zodiacale."""
     segni = ["♈", "♉", "♊", "♋", "♌", "♍", "♎", "♏", "♐", "♑", "♒", "♓"]
     svg = f'<svg class="ruota-svg" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">'
     svg += f'<circle cx="200" cy="200" r="190" fill="none" stroke="#b89752" stroke-width="2"/>'
@@ -71,35 +71,26 @@ async def genera_libro_completo(profile: dict, report: dict, tema: dict, settori
     prompt_id = f"Scrivi la Parte I (Identità) per {nome}. Dati: {riepilogo}. Dividi in 3 parti [SEP]. Max 150 parole a parte."
     identita_raw = await _chiama_ai(prompt_id, max_tokens=900) or "Testo"
     parti_id = identita_raw.split("[SEP]")
-    
-    # PROTEZIONE: assicuriamoci che ci siano almeno 3 parti
-    while len(parti_id) < 3:
-        parti_id.append("")
-    sole_txt = pulisci_testo(parti_id[0])
-    luna_txt = pulisci_testo(parti_id[1])
-    asc_txt = pulisci_testo(parti_id[2])
+    while len(parti_id) < 3: parti_id.append("")
+    sole_txt, luna_txt, asc_txt = [pulisci_testo(p) for p in parti_id[:3]]
 
     # TRANSITI
     transiti_testo = "\n".join([f"- {t.get('transito')} in {t.get('aspetto')} a {t.get('punto_natale')}" for t in report.get("transiti", [])[:5]])
     prompt_transiti = f"Scrivi la Parte II (Transiti 2027) per {nome}. Transiti: {transiti_testo}. Dividi in 3 blocchi [SEP]. Max 150 parole per blocco."
     transiti_raw = await _chiama_ai(prompt_transiti, max_tokens=900) or "Transiti"
     parti_transiti = transiti_raw.split("[SEP]")
+    while len(parti_transiti) < 3: parti_transiti.append("")
     
-    # PROTEZIONE: assicuriamoci che ci siano almeno 3 parti
-    while len(parti_transiti) < 3:
-        parti_transiti.append("")
-        
     transiti_blocchi = ""
     titoli_transiti = ["Le Sfide del 2027", "Le Opportunità del 2027", "La Crescita del 2027"]
-    for i in range(3):
-        t_txt = parti_transiti[i]
+    for i, t_txt in enumerate(parti_transiti[:3]):
         transiti_blocchi += f"<div class='box-identita'><span class='titolo-box'>{titoli_transiti[i]}</span><p>{pulisci_testo(t_txt)}</p></div>"
 
     # MESI
     mesi_nomi = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"]
     capitoli_mesi = ""
     for mese in mesi_nomi:
-        prompt_mese = f"Scrivi un testo di almeno 150 parole per il mese di {mese} 2027 per {nome} (Sole in {segno_sole}). Non menzionare transiti inesistenti, parla dell'energia del mese e delle stagioni. Tono: ispirazionale."
+        prompt_mese = f"Scrivi un testo di almeno 150 parole per il mese di {mese} 2027 per {nome} (Sole in {segno_sole}). Parla dell'energia del mese. Tono: ispirazionale."
         testo_mese = pulisci_testo(await _chiama_ai(prompt_mese, max_tokens=400))
         capitoli_mesi += f"<div class='capitolo'><h2>{mese} 2027</h2><p>{testo_mese}</p></div>"
 
@@ -119,47 +110,38 @@ async def genera_libro_completo(profile: dict, report: dict, tema: dict, settori
     html_content = html_content.replace("{{NOME_CLIENTE}}", nome)
     
     corpo_libro = f"""
-    <div class="capitolo">
-        <div class="dedica">
-            <div class="simbolo-segno">{simbolo_segno}</div>
-            <p class="testo-dedica">{testo_dedica}</p>
-        </div>
-    </div>
-    
-    <div class="capitolo">
-        <h2>La Tua Ruota e i Tuoi Dati</h2>
-        
-        <div class="ruota-container">
-            {ruota_svg}
-        </div>
-        
-        <h3>I Pianeti</h3>
-        {tab_pianeti}
-        <h3>Le Case</h3>
-        {tab_case}
-        <h3>Gli Aspetti</h3>
-        {tab_aspetti}
-    </div>
-    
-    <div class="capitolo">
-        <h2>Parte I - La Tua Identità</h2>
-        <div class="box-identita"><div class="simbolo-grande">☉</div><span class="titolo-box">Il Sole</span><p>{sole_txt}</p></div>
-        <div class="box-identita"><div class="simbolo-grande">☽</div><span class="titolo-box">La Luna</span><p>{luna_txt}</p></div>
-        <div class="box-identita"><div class="simbolo-grande">↑</div><span class="titolo-box">L'Ascendente</span><p>{asc_txt}</p></div>
-    </div>
-    
-    <div class="capitolo">
-        <h2>Parte II - Il Tuo 2027</h2>
-        {transiti_blocchi}
-    </div>
-    
+    <div class="capitolo"><div class="dedica"><div class="simbolo-segno">{simbolo_segno}</div><p class="testo-dedica">{testo_dedica}</p></div></div>
+    <div class="capitolo"><h2>La Tua Ruota e i Tuoi Dati</h2><div class="ruota-container">{ruota_svg}</div><h3>I Pianeti</h3>{tab_pianeti}<h3>Le Case</h3>{tab_case}<h3>Gli Aspetti</h3>{tab_aspetti}</div>
+    <div class="capitolo"><h2>Parte I - La Tua Identità</h2><div class="box-identita"><div class="simbolo-grande">☉</div><span class="titolo-box">Il Sole</span><p>{sole_txt}</p></div><div class="box-identita"><div class="simbolo-grande">☽</div><span class="titolo-box">La Luna</span><p>{luna_txt}</p></div><div class="box-identita"><div class="simbolo-grande">↑</div><span class="titolo-box">L'Ascendente</span><p>{asc_txt}</p></div></div>
+    <div class="capitolo"><h2>Parte II - Il Tuo 2027</h2>{transiti_blocchi}</div>
     {capitoli_mesi}
     {settori_html}
     """
     
     html_content = html_content.replace('<div id="contenuto"></div>', f'<div id="contenuto">{corpo_libro}</div>')
     
+    # Generiamo il PDF in memoria (o in un file temporaneo)
     nome_file = f"libro_{profile['id']}_{datetime.now().strftime('%Y%m%d%H%M%S')}.pdf"
-    percorso_file = os.path.join("/tmp", nome_file)
-    HTML(string=html_content).write_pdf(percorso_file)
-    return percorso_file
+    percorso_temp = os.path.join("/tmp", nome_file)
+    HTML(string=html_content).write_pdf(percorso_temp)
+    
+    # --- CARICAMENTO SU SUPABASE STORAGE ---
+    supabase_url = os.getenv("SUPABASE_URL")
+    supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+    sb = create_client(supabase_url, supabase_key)
+    
+    # Apriamo il file e carichiamolo nel bucket 'libri'
+    with open(percorso_temp, "rb") as f:
+        sb.storage.from_("libri").upload(
+            path=nome_file, 
+            file=f, 
+            file_options={"content-type": "application/pdf"}
+        )
+    
+    # Otteniamo l'URL pubblico
+    url_pubblico = sb.storage.from_("libri").get_public_url(nome_file)
+    
+    # Puliamo il file temporaneo
+    os.remove(percorso_temp)
+    
+    return url_pubblico
