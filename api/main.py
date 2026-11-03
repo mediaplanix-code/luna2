@@ -22,7 +22,7 @@ from ai import genera_oroscopo_settimanale, rispondi_chat, genera_copione_voce, 
 from compatibilita import router as compatibilita_router
 from sogni import router as sogni_router
 
-app = FastAPI(title="Luna2 Astro API", version="0.48.0")
+app = FastAPI(title="Luna2 Astro API", version="0.50.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -266,7 +266,7 @@ def root():
     return {
         "status": "ok",
         "service": "Luna2 Astro API",
-        "version": "0.48.0",
+        "version": "0.50.0",
         "supabase_configured": bool(SUPABASE_URL and SUPABASE_KEY),
         "telegram_configured": bool(TELEGRAM_TOKEN),
         "ai_provider": os.getenv("AI_PROVIDER", "groq"),
@@ -279,7 +279,7 @@ async def geocode(q: str = ""):
     if len(q) < 3: return {"features": []}
     url = "https://photon.komoot.io/api/"
     params = {"q": q, "limit": 5, "lang": "default"}
-    headers = {"User-Agent": "Luna2/0.48", "Accept": "application/json"}
+    headers = {"User-Agent": "Luna2/0.50", "Accept": "application/json"}
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.get(url, params=params, headers=headers)
@@ -382,7 +382,6 @@ async def recupera_token(req: RecuperoRequest):
 
 @app.post("/conferma-pagamento/{token}")
 async def conferma_pagamento(token: str):
-    """Aggiunge 990 secondi (16.5 min) al saldo del cliente."""
     try:
         sb = create_client(SUPABASE_URL, SUPABASE_KEY)
         res = sb.table("profiles").select("*").eq("access_token", token).execute()
@@ -504,6 +503,7 @@ async def get_sala(token: str):
 
     return {
         "profile": {
+            "id": profile.get("id"), # <-- AGGIUNTO ID PER IL PULSANTE LIBRO
             "nome": profile.get("nome"), "email": profile.get("email"),
             "birth_date": str(profile.get("birth_date")),
             "birth_time": str(profile.get("birth_time"))[:5] if profile.get("birth_time") else None,
@@ -618,7 +618,7 @@ async def chat_endpoint(token: str, req: ChatRequest, focus: str = None):
     usate = profile.get("chat_questions_used", 0)
     limite = 3
     credito = profile.get("credito_secondi") or 0
-    ha_credito = credito >= 30  # Deve avere almeno 30 secondi per fare una domanda
+    ha_credito = credito >= 30
     
     if not ha_credito and usate >= limite:
         raise HTTPException(status_code=402, detail=f"Hai esaurito le {limite} domande gratuite.")
@@ -642,7 +642,6 @@ async def chat_endpoint(token: str, req: ChatRequest, focus: str = None):
 
     if not risposta: raise HTTPException(status_code=503, detail="Il consulto non è disponibile. Riprova più tardi.")
     
-    # Scaliamo 30 secondi se ha credito, altrimenti incrementiamo le domande gratuite
     if ha_credito:
         nuovo_credito = max(0, credito - 30)
         sb.table("profiles").update({"credito_secondi": nuovo_credito}).eq("id", profile["id"]).execute()
@@ -871,32 +870,6 @@ async def cron_oroscopo_settimanale(request: Request):
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Errore: {e}")
 
-@app.post("/acquista-libro/{token}")
-async def acquista_libro(token: str):
-    try:
-        sb = create_client(SUPABASE_URL, SUPABASE_KEY)
-        res = sb.table("profiles").select("*").eq("access_token", token).execute()
-        if not res.data:
-            raise HTTPException(status_code=404, detail="Profilo non trovato")
-        profile = res.data[0]
-
-        # Controlla se c'è già un libro in coda o completato per questo utente
-        existing = sb.table("libri_in_coda").select("*").eq("profile_id", profile["id"]).execute()
-        if existing.data:
-            return {"status": "ok", "message": "Libro già in coda o completato."}
-
-        # Inserisce il libro in coda
-        sb.table("libri_in_coda").insert({
-            "profile_id": profile["id"],
-            "stato": "in_attesa"
-        }).execute()
-
-        return {"status": "ok", "message": "Libro messo in coda con successo."}
-    except HTTPException: raise
-    except Exception as e:
-        print(f"=== ERRORE acquista libro: {e} ===")
-        raise HTTPException(status_code=500, detail=str(e))
-
 @app.post("/cron/alert-mensili")
 async def cron_alert_mensili(request: Request):
     try:
@@ -1055,20 +1028,6 @@ async def cron_recupera_coda(request: Request):
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Errore: {e}")
 
-async def send_telegram(chat_id, text):
-    if not TELEGRAM_API: return
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            await client.post(f"{TELEGRAM_API}/sendMessage", json={"chat_id": chat_id, "text": text, "parse_mode": "HTML", "disable_web_page_preview": True})
-    except Exception as e:
-        print(f"Errore Telegram: {e}")
-
-async def unlink_telegram_account(chat_id):
-    sb = create_client(SUPABASE_URL, SUPABASE_KEY)
-    try:
-        sb.table("profiles").update({"telegram_id": None}).eq("telegram_id", str(chat_id)).execute()
-    except Exception: pass
-
 # =========================================================
 # CRON PER LA GENERAZIONE DEI LIBRI
 # =========================================================
@@ -1126,25 +1085,59 @@ async def cron_genera_libri(request: Request):
             pass
         raise HTTPException(status_code=500, detail=f"Errore: {e}")
 
-# =========================================================
-# SCARICA LIBRO
-# =========================================================
-
 @app.get("/scarica-libro/{profile_id}")
 async def scarica_libro(profile_id: str):
     try:
-        from fastapi.responses import FileResponse
         sb = create_client(SUPABASE_URL, SUPABASE_KEY)
-        res = sb.table("libri_in_coda").select("*").eq("profile_id", profile_id).eq("stato", "completato").execute()
-        if not res.data:
-            raise HTTPException(status_code=404, detail="Libro non trovato o non ancora completato.")
+        res = sb.table("libri_in_coda").select("url_pdf").eq("profile_id", profile_id).eq("stato", "completato").order("created_at", desc=True).limit(1).execute()
         
-        percorso_pdf = res.data[0].get("url_pdf")
-        if not percorso_pdf or not os.path.exists(percorso_pdf):
-            raise HTTPException(status_code=404, detail="File PDF non trovato sul server.")
+        if not res.data or not res.data[0].get("url_pdf"):
+            raise HTTPException(status_code=404, detail="Libro non ancora pronto.")
             
-        return FileResponse(percorso_pdf, media_type="application/pdf", filename="Il_Tuo_Cielo_2027.pdf")
+        url_pdf = res.data[0]["url_pdf"]
+        
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url=url_pdf)
+        
     except HTTPException: raise
     except Exception as e:
         print(f"=== ERRORE scarica libro: {e} ===")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/acquista-libro/{token}")
+async def acquista_libro(token: str):
+    try:
+        sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+        res = sb.table("profiles").select("*").eq("access_token", token).execute()
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Profilo non trovato")
+        profile = res.data[0]
+
+        existing = sb.table("libri_in_coda").select("*").eq("profile_id", profile["id"]).execute()
+        if existing.data:
+            return {"status": "ok", "message": "Libro già in coda o completato."}
+
+        sb.table("libri_in_coda").insert({
+            "profile_id": profile["id"],
+            "stato": "in_attesa"
+        }).execute()
+
+        return {"status": "ok", "message": "Libro messo in coda con successo."}
+    except HTTPException: raise
+    except Exception as e:
+        print(f"=== ERRORE acquista libro: {e} ===")
+        raise HTTPException(status_code=500, detail=str(e))
+
+async def send_telegram(chat_id, text):
+    if not TELEGRAM_API: return
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            await client.post(f"{TELEGRAM_API}/sendMessage", json={"chat_id": chat_id, "text": text, "parse_mode": "HTML", "disable_web_page_preview": True})
+    except Exception as e:
+        print(f"Errore Telegram: {e}")
+
+async def unlink_telegram_account(chat_id):
+    sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+    try:
+        sb.table("profiles").update({"telegram_id": None}).eq("telegram_id", str(chat_id)).execute()
+    except Exception: pass
