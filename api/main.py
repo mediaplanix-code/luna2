@@ -1096,6 +1096,9 @@ async def scarica_libro(profile_id: str):
             
         url_pdf = res.data[0]["url_pdf"]
         
+        # Puliamo l'URL: rimuoviamo eventuali '?' o spazi alla fine
+        url_pdf = url_pdf.strip().rstrip("?").strip()
+        
         from fastapi.responses import RedirectResponse
         return RedirectResponse(url=url_pdf)
         
