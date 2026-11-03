@@ -1104,24 +1104,21 @@ async def cron_genera_libri(request: Request):
         )
         report = genera_report_interno(profile, tema, sb)
         
-        # Recuperiamo i settori per passarli al libro
         settori = await genera_settori_tema(report)
 
-        # Chiamiamo il motore passando tutti i dati
         from libro import genera_libro_completo
-        percorso_pdf = await genera_libro_completo(profile, report, tema, settori)
+        url_pubblico = await genera_libro_completo(profile, report, tema, settori)
 
         sb.table("libri_in_coda").update({
             "stato": "completato",
-            "url_pdf": percorso_pdf
+            "url_pdf": url_pubblico
         }).eq("id", libro_da_generare["id"]).execute()
 
-        return {"status": "ok", "message": "Libro generato con successo.", "path": percorso_pdf}
+        return {"status": "ok", "message": "Libro generato con successo.", "url": url_pubblico}
 
     except HTTPException: raise
     except Exception as e:
         print(traceback.format_exc())
-        # In caso di errore, rimettiamo il libro in coda per riprovare
         try:
             sb = create_client(SUPABASE_URL, SUPABASE_KEY)
             sb.table("libri_in_coda").update({"stato": "errore"}).eq("id", libro_da_generare["id"]).execute()
