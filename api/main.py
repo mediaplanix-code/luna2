@@ -1082,7 +1082,6 @@ async def cron_genera_libri(request: Request):
 
         sb = create_client(SUPABASE_URL, SUPABASE_KEY)
         
-        # 1. Prendiamo un libro in attesa
         res = sb.table("libri_in_coda").select("*").eq("stato", "in_attesa").limit(1).execute()
         if not res.data:
             return {"status": "ok", "message": "Nessun libro in coda."}
@@ -1090,10 +1089,8 @@ async def cron_genera_libri(request: Request):
         libro_da_generare = res.data[0]
         profile_id = libro_da_generare["profile_id"]
 
-        # 2. Segniamo che stiamo iniziando a generarlo
         sb.table("libri_in_coda").update({"stato": "in_generazione"}).eq("id", libro_da_generare["id"]).execute()
 
-        # 3. Prendiamo i dati del profilo
         prof_res = sb.table("profiles").select("*").eq("id", profile_id).execute()
         if not prof_res.data:
             sb.table("libri_in_coda").update({"stato": "errore"}).eq("id", libro_da_generare["id"]).execute()
@@ -1101,24 +1098,22 @@ async def cron_genera_libri(request: Request):
         
         profile = prof_res.data[0]
 
-        # 4. Prepariamo il report (usiamo la funzione esistente nel tuo main.py)
         tema = calcola_tema_completo(
             str(profile["birth_date"]), str(profile["birth_time"])[:5],
             float(profile["birth_lat"]), float(profile["birth_lon"]), 1.0,
         )
         report = genera_report_interno(profile, tema, sb)
-
-        # 5. Chiamiamo il motore per generare il PDF
-        from libro import genera_libro_completo
-        settori = await genera_settori_tema(report)
-percorso_pdf = await genera_libro_completo(profile, report, tema, settori)
-
-        # 6. (FUTURO) Qui caricheremo il PDF su Supabase Storage e invieremo l'email.
-        # Per ora, simuliamo il completamento.
         
+        # Recuperiamo i settori per passarli al libro
+        settori = await genera_settori_tema(report)
+
+        # Chiamiamo il motore passando tutti i dati
+        from libro import genera_libro_completo
+        percorso_pdf = await genera_libro_completo(profile, report, tema, settori)
+
         sb.table("libri_in_coda").update({
             "stato": "completato",
-            "url_pdf": percorso_pdf # Per ora salviamo solo il percorso temporaneo
+            "url_pdf": percorso_pdf
         }).eq("id", libro_da_generare["id"]).execute()
 
         return {"status": "ok", "message": "Libro generato con successo.", "path": percorso_pdf}
@@ -1126,6 +1121,12 @@ percorso_pdf = await genera_libro_completo(profile, report, tema, settori)
     except HTTPException: raise
     except Exception as e:
         print(traceback.format_exc())
+        # In caso di errore, rimettiamo il libro in coda per riprovare
+        try:
+            sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+            sb.table("libri_in_coda").update({"stato": "errore"}).eq("id", libro_da_generare["id"]).execute()
+        except Exception:
+            pass
         raise HTTPException(status_code=500, detail=f"Errore: {e}")
 
 # =========================================================
