@@ -16,6 +16,8 @@ def genera_ruota_svg(tema: dict) -> str:
     svg += f'<circle cx="300" cy="300" r="280" fill="#fcfbf7" stroke="#b89752" stroke-width="2"/>'
     svg += f'<circle cx="300" cy="300" r="230" fill="none" stroke="#b89752" stroke-width="1"/>'
     svg += f'<circle cx="300" cy="300" r="150" fill="none" stroke="#b89752" stroke-width="1"/>'
+    
+    # Spicchi e segni
     for i, segno in enumerate(segni):
         angle_start = (i * 30 - 90) * (math.pi / 180)
         angle_mid = (i * 30 + 15 - 90) * (math.pi / 180)
@@ -27,6 +29,8 @@ def genera_ruota_svg(tema: dict) -> str:
         x_sym = 300 + 255 * math.cos(angle_mid)
         y_sym = 300 + 255 * math.sin(angle_mid)
         svg += f'<text x="{x_sym}" y="{y_sym}" fill="#b89752" font-size="24" text-anchor="middle" dominant-baseline="central">{segno}</text>'
+        
+    # Pianeti (posizionati sulla ruota)
     simboli_pianeti = {"Sole": "☉", "Luna": "☽", "Mercurio": "☿", "Venere": "♀", "Marte": "♂", "Giove": "♃", "Saturno": "♄", "Urano": "♅", "Nettuno": "♆", "Plutone": "♇"}
     for nome_p, dati_p in tema.get("planets", {}).items():
         if nome_p in simboli_pianeti:
@@ -36,6 +40,7 @@ def genera_ruota_svg(tema: dict) -> str:
             y = 300 + 190 * math.sin(angle)
             sym = simboli_pianeti[nome_p]
             svg += f'<text x="{x}" y="{y}" fill="#0d1321" font-size="20" text-anchor="middle" dominant-baseline="central">{sym}</text>'
+
     svg += '</svg>'
     return svg
 
@@ -100,8 +105,7 @@ async def genera_libro_completo(profile: dict, report: dict, tema: dict, settori
         tab_transiti += "<tr><td colspan='4' style='text-align: center;'>Nessun transito rilevante.</td></tr>"
     tab_transiti += "</table>"
 
-    # IDENTITÀ: 4 chiamate separate per non sbagliare
-    riepilogo = report.get("riepilogo_testuale", "")
+    # --- IDENTITÀ (4 chiamate separate) ---
     await asyncio.sleep(1)
     sole_txt = pulisci_testo(await _chiama_ai(f"Scrivi 100 parole sull'identità di {nome} con Sole in {segno_sole}.", max_tokens=300)) or "Il tuo Sole brilla."
     await asyncio.sleep(1)
@@ -111,7 +115,7 @@ async def genera_libro_completo(profile: dict, report: dict, tema: dict, settori
     await asyncio.sleep(1)
     mc_txt = pulisci_testo(await _chiama_ai(f"Scrivi 100 parole sul Medio Cielo di {nome}.", max_tokens=300)) or "Il tuo Medio Cielo indica la strada."
 
-    # SEGNI COMPATIBILI (frasi fisse)
+    # --- SEGNI COMPATIBILI (con descrizione ricca) ---
     COMPATIBILI = {
         "Ariete": ["Leone", "Sagittario", "Gemelli", "Acquario"], "Toro": ["Vergine", "Capricorno", "Cancro", "Pesci"],
         "Gemelli": ["Bilancia", "Acquario", "Ariete", "Leone"], "Cancro": ["Scorpione", "Pesci", "Toro", "Vergine"],
@@ -120,7 +124,13 @@ async def genera_libro_completo(profile: dict, report: dict, tema: dict, settori
         "Sagittario": ["Ariete", "Leone", "Bilancia", "Acquario"], "Capricorno": ["Toro", "Vergine", "Scorpione", "Pesci"],
         "Acquario": ["Gemelli", "Bilancia", "Ariete", "Sagittario"], "Pesci": ["Cancro", "Scorpione", "Toro", "Capricorno"],
     }
-    frasi_compatibilita = {"Fuoco": "Condividete la stessa passione e energia vitale.", "Terra": "Siete pratici e cercate stabilità insieme.", "Aria": "La vostra comunicazione è fluida e stimolante.", "Acqua": "C'è un'intesa emotiva profonda e istintiva."}
+    # Frasi fisse basate sull'elemento
+    frasi_compatibilita = {
+        "Fuoco": "Condividete la stessa passione e energia vitale.",
+        "Terra": "Siete pratici e cercate stabilità insieme.",
+        "Aria": "La vostra comunicazione è fluida e stimolante.",
+        "Acqua": "C'è un'intesa emotiva profonda e istintiva."
+    }
     elementi = {"Ariete": "Fuoco", "Leone": "Fuoco", "Sagittario": "Fuoco", "Toro": "Terra", "Vergine": "Terra", "Capricorno": "Terra", "Gemelli": "Aria", "Bilancia": "Aria", "Acquario": "Aria", "Cancro": "Acqua", "Scorpione": "Acqua", "Pesci": "Acqua"}
     
     compatibili = COMPATIBILI.get(segno_sole, [])
@@ -130,7 +140,7 @@ async def genera_libro_completo(profile: dict, report: dict, tema: dict, settori
         compatibili_html += f"<li style='font-size: 13pt; margin-bottom: 10px;'><span style='font-size: 18pt; color: #b89752;'>{simboli_segni.get(c, '')}</span> <strong>{c}</strong>: {frase}</li>"
     compatibili_html += "</ul>"
 
-    # SEGNALI DALLE STELLE
+    # --- SEGNALI DALLE STELLE ---
     segnali_html = ""
     if transiti_list:
         for t in transiti_list[:5]:
@@ -140,14 +150,14 @@ async def genera_libro_completo(profile: dict, report: dict, tema: dict, settori
     else:
         segnali_html = "<p>I transiti principali saranno rivelati mese per mese.</p>"
 
-    # RESOCONTO ANNUALE
+    # --- RESOCONTO ANNUALE ---
     await asyncio.sleep(1)
     prompt_resoconto = f"Scrivi un resoconto annuale per il 2027 per {nome} (Sole in {segno_sole}). Massimo 300 parole. Tono: ispirazionale."
     resoconto = pulisci_testo(await _chiama_ai(prompt_resoconto, max_tokens=600)) or "Il 2027 è un anno di crescita."
     if resoconto:
         resoconto = f"<span style='font-size: 40pt; float: left; line-height: 1; margin-right: 10px; color: #b89752; font-family: Cinzel;'>{resoconto[0]}</span>{resoconto[1:]}"
 
-    # MESI
+    # --- MESI ---
     mesi_nomi = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"]
     capitoli_mesi = ""
     for mese in mesi_nomi:
@@ -155,10 +165,11 @@ async def genera_libro_completo(profile: dict, report: dict, tema: dict, settori
         prompt_mese = f"Scrivi un testo di almeno 150 parole per il mese di {mese} 2027 per {nome} (Sole in {segno_sole}). Parla dell'energia del mese."
         testo_mese = pulisci_testo(await _chiama_ai(prompt_mese, max_tokens=400)) or f"Il mese di {mese} porta nuove energie."
         if testo_mese:
-            testo_mese = f"<span style='font-size: 40pt; float: left; line-height: 1; margin-right: 10px; color: #b89752; font-family: Cinzel;'>{testo_mese[0]}</span>{testo_mese[1:]}"
+            # Drop Cap: solo un'immagine finta (non togliamo la lettera al testo)
+            testo_mese = f"<span style='font-size: 40pt; float: left; line-height: 1; margin-right: 10px; color: #b89752; font-family: Cinzel;'>✦</span>{testo_mese}"
         capitoli_mesi += f"<div class='capitolo'><h2>{mese} 2027</h2><p>{testo_mese}</p></div>"
 
-    # AMBITI
+    # --- AMBITI (divisi in paragrafi) ---
     settori_html = ""
     ambiti = [("Amore e Relazioni", f"Venere in {tema.get('planets', {}).get('Venere', {}).get('segno', '')}"), ("Lavoro e Carriera", f"Marte in {tema.get('planets', {}).get('Marte', {}).get('segno', '')}"), ("Salute e Benessere", f"Luna in {segno_luna}"), ("Crescita Personale", f"Nodo Nord in {tema.get('planets', {}).get('NodoNord', {}).get('segno', '')}")]
     for titolo, contesto in ambiti:
@@ -167,7 +178,7 @@ async def genera_libro_completo(profile: dict, report: dict, tema: dict, settori
         testo_ambito = pulisci_testo(await _chiama_ai(prompt_ambito, max_tokens=600)) or "Testo non disponibile."
         settori_html += f"<div class='capitolo'><h2>{titolo}</h2><p>{testo_ambito}</p></div>"
 
-    # COMPONIAMO L'HTML
+    # --- COMPONIAMO L'HTML ---
     template_path = os.path.join(os.path.dirname(__file__), "template_libro.html")
     with open(template_path, "r", encoding="utf-8") as f:
         html_content = f.read()
