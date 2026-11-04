@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
-const STRIPE_PAYMENT_LINK = "https://buy.stripe.com/test_fZu14pfFefK76BRgk8e3e00"; // <-- SOSTITUISCI CON IL LINK PER IL LIBRO (39€)
+const STRIPE_PAYMENT_LINK = "https://buy.stripe.com/test_28E3cx0KkcxV2lB4Bqe3e01"; // <-- SOSTITUISCI CON IL LINK PER IL LIBRO (39€)
 
 function LibroContent() {
   const router = useRouter();
