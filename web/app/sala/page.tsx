@@ -175,6 +175,10 @@ function SalaContent() {
   const haCredito = credito >= 30;
   const isPaying = data.profile.is_paying || false;
   const mostraBarra = credito > 0 || isPaying;
+  
+  // NUOVE VARIABILI PER I PULSANTI
+  const haCompratoLibro = data.profile.ha_comprato_libro || false;
+  const telegramCollegato = data.profile.telegram_id ? true : false;
 
   const soleSegno = planets.Sole?.segno || 'Ariete';
   const lunaSegno = planets.Luna?.segno || 'Ariete';
@@ -365,18 +369,37 @@ function SalaContent() {
         </Accordion>
       </div>
 
-      <div className="section-label" style={{ marginTop: '30px', fontSize: '15px' }}>Rimani connesso</div>
-      <div className="accordion">
-        <Accordion title="Collega Telegram" bare>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', padding: '10px 0' }}>
-            {token && (
-              <a href={`https://t.me/Luna2OroscopoBot?start=${token}`} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#2AABEE', width: '64px', height: '64px', borderRadius: '50%', textDecoration: 'none', boxShadow: '0 4px 12px rgba(42, 171, 238, 0.3)' }}>
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="white"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
-              </a>
-            )}
-          </div>
-        </Accordion>
-      </div>
+      {/* PULSANTE ACQUISTA LIBRO (appare solo se non l'ha comprato) */}
+      {!haCompratoLibro && (
+        <div style={{ marginTop: '30px' }}>
+          <Link 
+            href="/libro" 
+            className="cta" 
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%', fontSize: '15px', padding: '14px', background: 'transparent', border: '1px solid #F5A623', color: '#F5A623', textDecoration: 'none' }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+            Acquista il tuo libro 2027 (39€)
+          </Link>
+        </div>
+      )}
+
+      {/* PULSANTE TELEGRAM (appare solo se non è collegato) */}
+      {!telegramCollegato && (
+        <div className="section-label" style={{ marginTop: '30px', fontSize: '15px' }}>Rimani connesso</div>
+      )}
+      {!telegramCollegato && (
+        <div className="accordion">
+          <Accordion title="Collega Telegram" bare>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', padding: '10px 0' }}>
+              {token && (
+                <a href={`https://t.me/Luna2OroscopoBot?start=${token}`} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#2AABEE', width: '64px', height: '64px', borderRadius: '50%', textDecoration: 'none', boxShadow: '0 4px 12px rgba(42, 171, 238, 0.3)' }}>
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="white"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+                </a>
+              )}
+            </div>
+          </Accordion>
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: '12px', marginTop: '30px' }}>
         <button onClick={() => router.push('/consulenza')} className="cta" style={{ flex: 1, fontSize: '15px', padding: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
@@ -386,20 +409,6 @@ function SalaContent() {
         <button onClick={() => router.push('/chat')} className="cta" style={{ flex: 1, fontSize: '15px', padding: '14px', background: 'transparent', border: '1px solid var(--text-dim)', color: 'var(--text-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
           Apri chat
-        </button>
-      </div>
-
-      {/* PULSANTE SCARICA LIBRO */}
-      <div style={{ marginTop: '20px' }}>
-        <button 
-          onClick={() => {
-            window.location.href = `https://luna2-api.onrender.com/scarica-libro/${data.profile.id}`;
-          }}
-          className="cta" 
-          style={{ width: '100%', fontSize: '15px', padding: '14px', background: 'transparent', border: '1px solid #F5A623', color: '#F5A623', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          Scarica il tuo libro 2027
         </button>
       </div>
 
