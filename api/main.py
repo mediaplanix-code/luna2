@@ -1073,7 +1073,15 @@ async def cron_genera_libri(request: Request):
             "url_pdf": url_pubblico
         }).eq("id", libro_da_generare["id"]).execute()
 
-        return {"status": "ok", "message": "Libro generato con successo.", "url": url_pubblico}
+        # INVIO EMAIL AL CLIENTE
+        email_cliente = profile.get("email")
+        nome_cliente = profile.get("nome", "Cliente")
+        if email_cliente:
+            await invia_email_libro(email_cliente, nome_cliente, url_pubblico)
+        else:
+            print(f"=== NESSUN EMAIL PER IL PROFILO {profile_id} ===")
+
+        return {"status": "ok", "message": "Libro generato e email inviata.", "url": url_pubblico}
 
     except HTTPException: raise
     except Exception as e:
