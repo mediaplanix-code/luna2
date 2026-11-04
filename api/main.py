@@ -1089,23 +1089,22 @@ async def cron_genera_libri(request: Request):
 async def scarica_libro(profile_id: str):
     try:
         sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+        # Prende l'ultimo libro completato per questo profilo
         res = sb.table("libri_in_coda").select("url_pdf").eq("profile_id", profile_id).eq("stato", "completato").order("created_at", desc=True).limit(1).execute()
         
         if not res.data or not res.data[0].get("url_pdf"):
-            raise HTTPException(status_code=404, detail="Libro non ancora pronto.")
+            raise HTTPException(status_code=404, detail="Libro non ancora pronto. Torna tra poco.")
             
-        url_pdf = res.data[0]["url_pdf"]
+        url_pdf = res.data[0]["url_pdf"].strip().rstrip("?").strip()
         
-        # Puliamo l'URL: rimuoviamo eventuali '?' o spazi alla fine
-        url_pdf = url_pdf.strip().rstrip("?").strip()
-        
+        # Reindirizza al file su Supabase
         from fastapi.responses import RedirectResponse
         return RedirectResponse(url=url_pdf)
         
     except HTTPException: raise
     except Exception as e:
         print(f"=== ERRORE scarica libro: {e} ===")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Errore: {str(e)}")
 
 @app.post("/acquista-libro/{token}")
 async def acquista_libro(token: str):
