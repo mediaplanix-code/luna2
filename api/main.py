@@ -1130,6 +1130,65 @@ async def acquista_libro(token: str):
         print(f"=== ERRORE acquista libro: {e} ===")
         raise HTTPException(status_code=500, detail=str(e))
 
+async def invia_email_libro(email_cliente: str, nome_cliente: str, url_libro: str):
+    """Invia l'email con il link al libro appena generato."""
+    api_key = os.getenv("RESEND_API_KEY")
+    if not api_key:
+        print("=== ERRORE EMAIL: RESEND_API_KEY non configurata ===")
+        return False
+    
+    html_content = f"""
+    <div style="font-family: Georgia, serif; max-width: 600px; margin: 0 auto; background-color: #fcfbf7; padding: 40px; color: #1a1a1a;">
+        <h1 style="color: #0d1321; text-align: center;">Il Tuo Cielo 2027</h1>
+        <h2 style="color: #b89752; text-align: center;">La tua mappa astrologica personale</h2>
+        
+        <p style="font-size: 16px; line-height: 1.8;">Ciao <strong>{nome_cliente}</strong>,</p>
+        
+        <p style="font-size: 16px; line-height: 1.8;">
+            Il tuo libro astrologico personale è pronto. Abbiamo analizzato il tuo tema natale e i transiti del 2027 per creare un volume unico, dedicato solo a te.
+        </p>
+        
+        <div style="text-align: center; margin: 40px 0;">
+            <a href="{url_libro}" style="background-color: #0d1321; color: #ffd700; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-family: 'Cinzel', serif; font-size: 18px; border: 2px solid #b89752;">
+                📖 Scarica il tuo libro
+            </a>
+        </div>
+        
+        <p style="font-size: 14px; color: #555; text-align: center; margin-top: 40px;">
+            Se il pulsante non funziona, copia e incolla questo link nel browser:<br>
+            <a href="{url_libro}" style="color: #b89752;">{url_libro}</a>
+        </p>
+        
+        <p style="font-size: 12px; color: #999; text-align: center; margin-top: 40px; border-top: 1px solid #ddd; padding-top: 20px;">
+            Luna Astrologica — La tua guida tra le stelle
+        </p>
+    </div>
+    """
+    
+    payload = {
+        "from": "Luna Astrologica <ciao@mediaplanio.com>",
+        "to": [email_cliente],
+        "subject": f"Il tuo libro 'Il Tuo Cielo 2027' è pronto, {nome_cliente}!",
+        "html": html_content
+    }
+    
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.post(
+                "https://api.resend.com/emails",
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json=payload
+            )
+            if r.status_code == 200:
+                print(f"=== EMAIL INVIATA a {email_cliente} ===")
+                return True
+            else:
+                print(f"=== ERRORE RESEND: {r.status_code} - {r.text} ===")
+                return False
+    except Exception as e:
+        print(f"=== ERRORE INVIO EMAIL: {e} ===")
+        return False
+
 async def send_telegram(chat_id, text):
     if not TELEGRAM_API: return
     try:
