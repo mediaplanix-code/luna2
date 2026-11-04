@@ -514,6 +514,7 @@ async def get_sala(token: str):
             "is_paying": profile.get("is_paying", False),
             "credito_secondi": profile.get("credito_secondi", 0),
             "telegram_id": profile.get("telegram_id"),
+            "ha_comprato_libro": bool(sb.table("libri_in_coda").select("id").eq("profile_id", profile["id"]).execute().data),
             "compatibilita_usate": profile.get("compatibilita_usate", 0),
             "ultima_compatibilita": profile.get("ultima_compatibilita"),
         },
