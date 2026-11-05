@@ -1116,7 +1116,7 @@ async def scarica_libro(profile_id: str):
         raise HTTPException(status_code=500, detail=f"Errore: {str(e)}")
 
 @app.post("/acquista-libro/{token}")
-async def acquista_libro(token: str):
+async def acquista_libro(token: str, background_tasks: BackgroundTasks):
     try:
         sb = create_client(SUPABASE_URL, SUPABASE_KEY)
         res = sb.table("profiles").select("*").eq("access_token", token).execute()
@@ -1128,12 +1128,26 @@ async def acquista_libro(token: str):
         if existing.data:
             return {"status": "ok", "message": "Libro già in coda o completato."}
 
+        # 1. Mettiamo in coda il libro
         sb.table("libri_in_coda").insert({
             "profile_id": profile["id"],
             "stato": "in_attesa"
         }).execute()
 
-        return {"status": "ok", "message": "Libro messo in coda con successo."}
+        # 2. Facciamo partire SUBITO la generazione (in background)
+        async def genera_in_background():
+            try:
+                async with httpx.AsyncClient(timeout=600) as client:
+                    await client.post(
+                        "https://luna2-api.onrender.com/cron/genera-libri",
+                        headers={"x-cron-secret": CRON_SECRET}
+                    )
+            except Exception as e:
+                print(f"=== ERRORE GENERAZIONE BACKGROUND: {e} ===")
+        
+        background_tasks.add_task(genera_in_background)
+        
+        return {"status": "ok", "message": "Libro messo in coda e generazione avviata."}
     except HTTPException: raise
     except Exception as e:
         print(f"=== ERRORE acquista libro: {e} ===")
