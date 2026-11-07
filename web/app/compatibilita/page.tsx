@@ -57,7 +57,7 @@ function CompatibilitaContent() {
 
     setInCaricamento(true);
     try {
-      const r = await fetch(`${API_URL}/compatibilita`, {
+      const r = await fetch(`${API_URL}/compatibilita/${token}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({
