@@ -10,7 +10,7 @@ function FormContent() {
   const router = useRouter();
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
-  const [sesso, setSesso] = useState('Femmina'); // Default
+  const [sesso, setSesso] = useState('Donna'); // Default
   const [dataNascita, setDataNascita] = useState('');
   const [oraNascita, setOraNascita] = useState('');
   const [citta, setCitta] = useState('');
