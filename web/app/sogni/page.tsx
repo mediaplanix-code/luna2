@@ -28,7 +28,6 @@ function SogniContent() {
     const n = localStorage.getItem('luna2_nome');
     if (n) setNome(n);
     
-    // Prendiamo sia il credito che lo stato is_paying
     fetch(`${API_URL}/stato-credito/${t}`).then(r => r.json()).then(d => {
       setCredito(d.credito_secondi || 0);
       setIsPaying(d.is_paying || false);
@@ -73,7 +72,7 @@ function SogniContent() {
     <div className="canvas">
       <div className="topbar">
         <Link href="/sala" className="back">← Indietro</Link>
-        <div className="brand">✦ Luna Astrologica</div>
+        <div className="brand">✦ tuFelia</div>
       </div>
 
       <h1 style={{ fontFamily: 'Georgia, serif', fontSize: '22px', fontWeight: 400, textAlign: 'center', marginBottom: '6px' }}>
@@ -139,7 +138,7 @@ function SogniContent() {
       <div className="footer" style={{ marginTop: '40px' }}>
         <Link href="/privacy">Privacy</Link>·
         <Link href="/disclaimer">Disclaimer</Link>·
-        <Link href="/faq">?</Link>
+        <Link href="/faq">FAQ</Link>
       </div>
     </div>
   );
@@ -147,7 +146,7 @@ function SogniContent() {
 
 export default function SogniPage() {
   return (
-    <Suspense fallback={<div className="canvas"><div className="topbar"><div className="brand">✦ Luna Astrologica</div></div><p style={{ textAlign: 'center', marginTop: '40px', color: 'var(--text-dim)' }}>Caricamento...</p></div>}>
+    <Suspense fallback={<div className="canvas"><div className="topbar"><div className="brand">✦ tuFelia</div></div><p style={{ textAlign: 'center', marginTop: '40px', color: 'var(--text-dim)' }}>Caricamento...</p></div>}>
       <SogniContent />
     </Suspense>
   );
