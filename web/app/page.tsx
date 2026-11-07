@@ -5,7 +5,7 @@ export default function Landing() {
   return (
     <div className="canvas">
       <div className="topbar">
-        <div className="brand">✦ Luna Astrologica</div>
+        <div className="brand">✦ tuFelia</div>
         <Link href="/accedi" className="login">Accedi</Link>
       </div>
 
@@ -15,7 +15,7 @@ export default function Landing() {
       </div>
 
       <div className="accordion">
-        <Accordion title="Cos'è Luna Astrologica" bare>
+        <Accordion title="Cos'è tuFelia" bare>
           Un servizio di astrologia personalizzata basato esclusivamente sul tuo tema natale.
           Invio settimanale del tuo oroscopo, con possibilità di consulto di approfondimento con
           la voce. Possibili ulteriori invii di alert, uno o due al cambio importante del tuo cielo.
@@ -49,7 +49,7 @@ export default function Landing() {
       <div className="footer">
         <Link href="/privacy">Privacy</Link>·
         <Link href="/disclaimer">Disclaimer</Link>·
-        <Link href="/faq">?</Link>
+        <Link href="/faq">FAQ</Link>
       </div>
     </div>
   );
