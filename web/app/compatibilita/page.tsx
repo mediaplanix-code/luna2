@@ -59,16 +59,14 @@ function CompatibilitaContent() {
     try {
       const r = await fetch(`${API_URL}/compatibilita/${token}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          token: token,
-          other_name: nome,
-          other_birth_date: dataNascita,
-          other_birth_time: oraNascita || '12:00',
-          other_birth_city: citta,
-          other_birth_lat: lat,
-          other_birth_lon: lon,
-          other_gender: sesso, // <-- Inviato al backend
+          nome: nome,
+          birth_date: dataNascita,
+          birth_time: oraNascita || '12:00',
+          birth_lat: lat,
+          birth_lon: lon,
+          sesso: sesso,
         }),
       });
 
