@@ -1,404 +1,164 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import Accordion from '../components/Accordion';
 
-type Aspetto = {
-  pianeta_a: string;
-  pianeta_b: string;
-  tipo: string;
-  orb: number;
-};
+const API_URL = "https://luna2-api.onrender.com";
 
-const SIMBOLI: Record<string, string> = {
-  Ariete: '♈', Toro: '♉', Gemelli: '♊', Cancro: '♋', Leone: '♌', Vergine: '♍',
-  Bilancia: '♎', Scorpione: '♏', Sagittario: '♐', Capricorno: '♑', Acquario: '♒', Pesci: '♓',
-};
-
-export default function CompatibilitaPage() {
+function CompatibilitaContent() {
   const router = useRouter();
+  const [nome, setNome] = useState('');
+  const [sesso, setSesso] = useState('Donna');
+  const [dataNascita, setDataNascita] = useState('');
+  const [oraNascita, setOraNascita] = useState('');
+  const [citta, setCitta] = useState('');
+  const [lat, setLat] = useState<number | null>(null);
+  const [lon, setLon] = useState<number | null>(null);
+  const [suggerimenti, setSuggerimenti] = useState<any[]>([]);
+  const [showSuggerimenti, setShowSuggerimenti] = useState(false);
+  const [errore, setErrore] = useState('');
+  const [inCaricamento, setInCaricamento] = useState(false);
   const [token, setToken] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [risultato, setRisultato] = useState<any>(null);
-  const [resetVoluto, setResetVoluto] = useState(false);
-
-  const [form, setForm] = useState({
-    nome: '',
-    birth_date: '',
-    birth_time: '',
-    birth_city: '',
-    birth_lat: 0,
-    birth_lon: 0,
-  });
-
-  const [cityQuery, setCityQuery] = useState('');
-  const [suggestions, setSuggestions] = useState<any[]>([]);
-  const [loadingCity, setLoadingCity] = useState(false);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const debounceRef = useRef<any>(null);
 
   useEffect(() => {
     const t = localStorage.getItem('luna2_token');
-    if (!t) {
-      router.push('/accedi');
-      return;
-    }
+    if (!t) { router.push('/form'); return; }
     setToken(t);
-
-    // Se resetVoluto è true, non caricare nulla dal database
-    if (!resetVoluto) {
-      const salvatoLocale = localStorage.getItem('luna2_ultima_compatibilita');
-      if (salvatoLocale) {
-        try {
-          setRisultato(JSON.parse(salvatoLocale));
-        } catch (e) {}
-      }
-
-      fetch(`https://luna2-api.onrender.com/sala/${t}`)
-        .then(r => r.json())
-        .then(d => {
-          if (d.profile && d.profile.ultima_compatibilita) {
-            setRisultato(d.profile.ultima_compatibilita);
-            localStorage.setItem('luna2_ultima_compatibilita', JSON.stringify(d.profile.ultima_compatibilita));
-          }
-        })
-        .catch(() => {});
-    }
-  }, [router, resetVoluto]);
+  }, [router]);
 
   useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (cityQuery.length < 2) { setSuggestions([]); setShowSuggestions(false); return; }
-
-    setLoadingCity(true);
-    setShowSuggestions(true);
-
-    debounceRef.current = setTimeout(async () => {
-      try {
-        const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(cityQuery)}&limit=5&lang=default`;
-        const res = await fetch(url);
-        const data = await res.json();
-        const items = (data.features || []).map((f: any) => ({
-          label: [f.properties.name, f.properties.state, f.properties.country].filter(Boolean).join(', '),
-          lat: f.geometry.coordinates[1],
-          lon: f.geometry.coordinates[0],
-        }));
-        setSuggestions(items);
-      } catch {
-        setSuggestions([]);
-      } finally {
-        setLoadingCity(false);
-      }
+    if (citta.length < 3) { setSuggerimenti([]); return; }
+    const timeout = setTimeout(() => {
+      fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(citta)}&limit=5`)
+        .then(r => r.json())
+        .then(d => { setSuggerimenti(d.features || []); setShowSuggerimenti(true); })
+        .catch(() => {});
     }, 500);
-    return () => clearTimeout(debounceRef.current);
-  }, [cityQuery]);
+    return () => clearTimeout(timeout);
+  }, [citta]);
 
-  function selezionaCitta(s: any) {
-    setForm(prev => ({ ...prev, birth_city: s.label, birth_lat: s.lat, birth_lon: s.lon }));
-    setCityQuery(s.label);
-    setSuggestions([]);
-    setShowSuggestions(false);
-  }
+  const selezionaCitta = (feature: any) => {
+    const props = feature.properties;
+    const coords = feature.geometry.coordinates;
+    const nomeCitta = props.city || props.name || props.county || '';
+    const paese = props.country || '';
+    setCitta(`${nomeCitta}, ${paese}`);
+    setLon(coords[0]);
+    setLat(coords[1]);
+    setShowSuggerimenti(false);
+  };
 
-  async function handleSubmit(e: React.FormEvent) {
+  const invia = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrore('');
+    if (!lat || !lon) { setErrore('Seleziona una città dall\'elenco.'); return; }
     if (!token) return;
-    if (!form.birth_lat || !form.birth_lon) {
-      setError('Scegli una città dalla lista.');
-      return;
-    }
 
-    setLoading(true);
-    setError('');
-    setRisultato(null);
-    localStorage.removeItem('luna2_ultima_compatibilita');
-
+    setInCaricamento(true);
     try {
-      const res = await fetch(`https://luna2-api.onrender.com/compatibilita/${token}`, {
+      const r = await fetch(`${API_URL}/compatibilita`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({
-          nome: form.nome,
-          birth_date: form.birth_date,
-          birth_time: form.birth_time,
-          birth_lat: form.birth_lat,
-          birth_lon: form.birth_lon,
+          token: token,
+          other_name: nome,
+          other_birth_date: dataNascita,
+          other_birth_time: oraNascita || '12:00',
+          other_birth_city: citta,
+          other_birth_lat: lat,
+          other_birth_lon: lon,
+          other_gender: sesso, // <-- Inviato al backend
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || `Errore ${res.status}`);
-      setRisultato(data);
-      localStorage.setItem('luna2_ultima_compatibilita', JSON.stringify(data));
-    } catch (err: any) {
-      setError(err.message || 'Errore sconosciuto');
-    } finally {
-      setLoading(false);
-    }
-  }
 
-  function nuovoConfronto() {
-    setRisultato(null);
-    setResetVoluto(true);
-    setForm({ nome: '', birth_date: '', birth_time: '', birth_city: '', birth_lat: 0, birth_lon: 0 });
-    setCityQuery('');
-    setSuggestions([]);
-    localStorage.removeItem('luna2_ultima_compatibilita');
-  }
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || 'Errore durante il calcolo');
+
+      router.push(`/compatibilita/risultato?token=${token}`);
+    } catch (err: any) {
+      setErrore(err.message || 'Errore di connessione');
+    } finally {
+      setInCaricamento(false);
+    }
+  };
 
   return (
     <div className="canvas">
       <div className="topbar">
-        <Link href="/sala" className="back">← Sala</Link>
-        <div className="brand">✦ Luna Astrologica</div>
+        <Link href="/sala" className="back">← Indietro</Link>
+        <div className="brand">✦ tuFelia</div>
       </div>
 
-      <h1 style={{ fontSize: '22px', fontWeight: 400, textAlign: 'center', marginBottom: '6px' }}>
+      <h1 style={{ fontFamily: 'Georgia, serif', fontSize: '22px', fontWeight: 400, textAlign: 'center', marginBottom: '6px' }}>
         Compatibilità
       </h1>
       <p style={{ textAlign: 'center', fontSize: '12px', color: 'var(--text-dim)', marginBottom: '22px' }}>
-        {risultato ? "Ecco il vostro confronto." : "Inserisci i dati di nascita dell'altra persona."}
+        Scopri l'intesa con un'altra persona.
       </p>
 
-      {!risultato && (
-        <form onSubmit={handleSubmit}>
-          <div className="field">
-            <label>Nome</label>
-            <input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} required />
-          </div>
-          <div className="field">
-            <label>Data di nascita</label>
-            <input type="date" value={form.birth_date} onChange={(e) => setForm({ ...form, birth_date: e.target.value })} required />
-          </div>
-          <div className="field">
-            <label>Ora di nascita (esatta)</label>
-            <input type="time" value={form.birth_time} onChange={(e) => setForm({ ...form, birth_time: e.target.value })} required />
-          </div>
-          
-          <div className="field">
-            <label>Città di nascita</label>
-            <input 
-              value={cityQuery} 
-              onChange={(e) => setCityQuery(e.target.value)} 
-              placeholder="es. Roma" 
-              autoComplete="off" 
-              required 
-            />
-            {loadingCity && <div style={{ fontSize: '12px', color: '#F5A623', marginTop: '6px' }}>Cerco la città...</div>}
-          </div>
-
-          {showSuggestions && suggestions.length > 0 && (
-            <div style={{ 
-              background: 'rgba(255,255,255,0.05)', 
-              border: '1px solid rgba(245,166,35,0.3)', 
-              borderRadius: '8px', 
-              marginTop: '8px', 
-              padding: '4px'
-            }}>
-              {suggestions.map((s, i) => (
-                <div 
-                  key={i} 
-                  onClick={() => selezionaCitta(s)}
-                  style={{ 
-                    padding: '10px', 
-                    cursor: 'pointer', 
-                    borderBottom: i < suggestions.length - 1 ? '1px solid rgba(255,255,255,0.1)' : 'none',
-                    fontSize: '14px'
-                  }}
-                >
-                  {s.label}
-                </div>
-              ))}
-            </div>
-          )}
-
-          <button type="submit" className="cta" disabled={loading} style={{ marginTop: '22px' }}>
-            {loading ? 'Calcolo la sinastria...' : 'Calcola compatibilità'}
-          </button>
-          {error && <div className="error" style={{ marginTop: '14px' }}>{error}</div>}
-        </form>
-      )}
-
-      {risultato && (
-        <div>
-          <div style={{ textAlign: 'center', margin: '10px 0 20px 0' }}>
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '20px', marginBottom: '10px' }}>
-              <div>
-                <div style={{ fontSize: '32px' }}>{SIMBOLI[risultato.segno_a]}</div>
-                <div style={{ fontSize: '12px', color: 'var(--text-dim)' }}>{risultato.segno_a}</div>
-              </div>
-              <div style={{ fontSize: '20px', color: 'var(--text-dim)' }}>&amp;</div>
-              <div>
-                <div style={{ fontSize: '32px' }}>{SIMBOLI[risultato.segno_b]}</div>
-                <div style={{ fontSize: '12px', color: 'var(--text-dim)' }}>{risultato.segno_b}</div>
-              </div>
-            </div>
-            <h2 style={{ fontSize: '18px', color: '#F5A623', margin: '8px 0 4px 0' }}>
-              {risultato.persona_a} e {risultato.persona_b}
-            </h2>
-            <div style={{ 
-              fontSize: '36px', 
-              fontWeight: 'bold', 
-              color: risultato.percentuale > 60 ? '#06D6A0' : risultato.percentuale > 40 ? '#F5A623' : '#EF476F',
-              marginTop: '8px' 
-            }}>
-              {risultato.percentuale}%
-            </div>
-            <p style={{ fontSize: '12px', color: 'var(--text-dim)', marginTop: '4px' }}>di compatibilità complessiva</p>
-          </div>
-
-          <div className="section-label">I settori della vostra vita</div>
-          
-          <div className="accordion">
-            <Accordion title="❤️ Amore e Relazioni" bare>
-              <p style={{ fontSize: '13px', lineHeight: '1.6', marginBottom: '16px' }}>
-                {risultato.testi?.amore || ''}
-              </p>
-              <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-                 <button className="icon-btn" title="Chat" onClick={() => router.push(`${risultato.link?.amore?.chat || '/chat'}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                  </button>
-                  <button className="icon-btn accent" title="Voce" onClick={() => router.push(`${risultato.link?.amore?.voce || '/consulenza'}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
-                  </button>
-              </div>
-            </Accordion>
-
-            <Accordion title="💼 Carriera e Finanze" bare>
-              <p style={{ fontSize: '13px', lineHeight: '1.6', marginBottom: '16px' }}>
-                {risultato.testi?.lavoro || ''}
-              </p>
-              <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-                 <button className="icon-btn" title="Chat" onClick={() => router.push(`${risultato.link?.lavoro?.chat || '/chat'}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                  </button>
-                  <button className="icon-btn accent" title="Voce" onClick={() => router.push(`${risultato.link?.lavoro?.voce || '/consulenza'}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
-                  </button>
-              </div>
-            </Accordion>
-
-            <Accordion title="🌿 Salute e Benessere" bare>
-              <p style={{ fontSize: '13px', lineHeight: '1.6', marginBottom: '16px' }}>
-                {risultato.testi?.salute || ''}
-              </p>
-              <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-                 <button className="icon-btn" title="Chat" onClick={() => router.push(`${risultato.link?.salute?.chat || '/chat'}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                  </button>
-                  <button className="icon-btn accent" title="Voce" onClick={() => router.push(`${risultato.link?.salute?.voce || '/consulenza'}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
-                  </button>
-              </div>
-            </Accordion>
-
-            <Accordion title="🌱 Crescita Personale" bare>
-              <p style={{ fontSize: '13px', lineHeight: '1.6', marginBottom: '16px' }}>
-                {risultato.testi?.crescita || ''}
-              </p>
-              <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-                 <button className="icon-btn" title="Chat" onClick={() => router.push(`${risultato.link?.crescita?.chat || '/chat'}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                  </button>
-                  <button className="icon-btn accent" title="Voce" onClick={() => router.push(`${risultato.link?.crescita?.voce || '/consulenza'}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
-                  </button>
-              </div>
-            </Accordion>
-
-            <Accordion title="🔮 Previsioni Annuali" bare>
-              <p style={{ fontSize: '13px', lineHeight: '1.6', marginBottom: '16px' }}>
-                {risultato.testi?.previsioni || ''}
-              </p>
-              <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-                 <button className="icon-btn" title="Chat" onClick={() => router.push(`${risultato.link?.previsioni?.chat || '/chat'}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                  </button>
-                  <button className="icon-btn accent" title="Voce" onClick={() => router.push(`${risultato.link?.previsioni?.voce || '/consulenza'}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
-                  </button>
-              </div>
-            </Accordion>
-          </div>
-
-          <div className="section-label" style={{ marginTop: '30px' }}>Dettagli tecnici</div>
-          <div className="accordion">
-            <Accordion title={`Il tema di ${risultato.persona_b}`} bare>
-              <div className="identikit">
-                {risultato.pianeti_b?.Sole && (
-                  <div className="row">
-                    <span className="label">Sole</span>
-                    <span className="value"><span className="sym">{SIMBOLI[risultato.pianeti_b.Sole.segno]}</span> {risultato.pianeti_b.Sole.segno}</span>
-                  </div>
-                )}
-                {risultato.pianeti_b?.Luna && (
-                  <div className="row">
-                    <span className="label">Luna</span>
-                    <span className="value"><span className="sym">{SIMBOLI[risultato.pianeti_b.Luna.segno]}</span> {risultato.pianeti_b.Luna.segno}</span>
-                  </div>
-                )}
-                {risultato.pianeti_b?.Mercurio && (
-                  <div className="row">
-                    <span className="label">Mercurio</span>
-                    <span className="value"><span className="sym">{SIMBOLI[risultato.pianeti_b.Mercurio.segno]}</span> {risultato.pianeti_b.Mercurio.segno}</span>
-                  </div>
-                )}
-              </div>
-            </Accordion>
-            
-            <Accordion title="Gli aspetti principali" bare>
-              <table className="data" style={{ marginBottom: '16px' }}>
-                <thead>
-                  <tr><th>Pianeta A</th><th>Aspetto</th><th>Pianeta B</th><th>Orbe</th></tr>
-                </thead>
-                <tbody>
-                  {(risultato.aspetti || []).map((a: Aspetto, i: number) => (
-                    <tr key={i}>
-                      <td>{a.pianeta_a}</td>
-                      <td>{a.tipo}</td>
-                      <td>{a.pianeta_b}</td>
-                      <td>{a.orb}°</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-                 <button className="icon-btn" title="Chat" onClick={() => router.push(`${risultato.link?.generico?.chat || '/chat'}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                  </button>
-                  <button className="icon-btn accent" title="Voce" onClick={() => router.push(`${risultato.link?.generico?.voce || '/consulenza'}&nome_b=${encodeURIComponent(risultato.persona_b)}`)}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
-                  </button>
-              </div>
-            </Accordion>
-          </div>
-
-          <div style={{ display: 'flex', gap: '10px', marginTop: '24px' }}>
-            <button 
-              onClick={() => router.push('/sala')}
-              className="cta" 
-              style={{ flex: 1, background: 'transparent', border: '1px solid var(--text-dim)', color: 'var(--text-dim)', fontSize: '12px' }}
-            >
-              ← Torna indietro
-            </button>
-            <button 
-              onClick={nuovoConfronto}
-              className="cta" 
-              style={{ flex: 1, fontSize: '12px' }}
-            >
-              Un altro confronto
-            </button>
-          </div>
+      <form onSubmit={invia}>
+        <div className="field">
+          <label>Nome dell'altra persona</label>
+          <input type="text" value={nome} onChange={e => setNome(e.target.value)} required placeholder="Il suo nome" style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid rgba(245,166,35,0.25)', background: 'rgba(255,255,255,0.03)', color: 'var(--text)', fontSize: '14px' }} />
         </div>
-      )}
+
+        <div className="field">
+          <label>Sesso</label>
+          <select value={sesso} onChange={e => setSesso(e.target.value)} required style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid rgba(245,166,35,0.25)', background: 'rgba(255,255,255,0.03)', color: 'var(--text)', fontSize: '14px' }}>
+            <option value="Donna">Donna</option>
+            <option value="Uomo">Uomo</option>
+            <option value="Altro">Altro</option>
+          </select>
+        </div>
+
+        <div className="field">
+          <label>Data di nascita</label>
+          <input type="date" value={dataNascita} onChange={e => setDataNascita(e.target.value)} required style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid rgba(245,166,35,0.25)', background: 'rgba(255,255,255,0.03)', color: 'var(--text)', fontSize: '14px' }} />
+        </div>
+
+        <div className="field">
+          <label>Ora di nascita</label>
+          <input type="time" value={oraNascita} onChange={e => setOraNascita(e.target.value)} style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid rgba(245,166,35,0.25)', background: 'rgba(255,255,255,0.03)', color: 'var(--text)', fontSize: '14px' }} />
+          <p style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '6px' }}>
+            Se non conosci l'ora, lascia vuoto (useremo le 12:00).
+          </p>
+        </div>
+
+        <div className="field" style={{ position: 'relative' }}>
+          <label>Città di nascita</label>
+          <input type="text" value={citta} onChange={e => setCitta(e.target.value)} required placeholder="Inizia a scrivere..." style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid rgba(245,166,35,0.25)', background: 'rgba(255,255,255,0.03)', color: 'var(--text)', fontSize: '14px' }} />
+          {showSuggerimenti && suggerimenti.length > 0 && (
+            <ul style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#1a1a1a', border: '1px solid rgba(245,166,35,0.3)', borderRadius: '8px', listStyle: 'none', padding: '8px 0', margin: '4px 0 0', zIndex: 10, maxHeight: '200px', overflowY: 'auto' }}>
+              {suggerimenti.map((f, i) => (
+                <li key={i} onClick={() => selezionaCitta(f)} style={{ padding: '10px 16px', fontSize: '13px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                  {f.properties.name}, {f.properties.country}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {errore && <div className="error" style={{ marginTop: '16px' }}>{errore}</div>}
+
+        <button type="submit" disabled={inCaricamento} className="cta" style={{ marginTop: '24px', width: '100%' }}>
+          {inCaricamento ? 'Calcolo in corso...' : 'Calcola la compatibilità'}
+        </button>
+      </form>
 
       <div className="footer">
         <Link href="/privacy">Privacy</Link>·
         <Link href="/disclaimer">Disclaimer</Link>·
-        <Link href="/faq">?</Link>
+        <Link href="/faq">FAQ</Link>
       </div>
     </div>
+  );
+}
+
+export default function CompatibilitaPage() {
+  return (
+    <Suspense fallback={<div className="canvas"><p style={{ textAlign: 'center', marginTop: '40px' }}>Caricamento...</p></div>}>
+      <CompatibilitaContent />
+    </Suspense>
   );
 }
