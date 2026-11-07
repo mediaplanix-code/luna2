@@ -4,108 +4,59 @@ export default function DisclaimerPage() {
   return (
     <div className="canvas">
       <div className="topbar">
-        <Link href="/" className="back">← Home</Link>
-        <div className="brand">✦ Luna Astrologica</div>
+        <Link href="/" className="back">← Indietro</Link>
+        <div className="brand">✦ tuFelia</div>
       </div>
 
-      <h1 style={{
-        fontFamily: 'Georgia, serif',
-        fontSize: '24px',
-        fontWeight: 400,
-        textAlign: 'center',
-        marginBottom: '22px'
-      }}>
+      <h1 style={{ fontFamily: 'Georgia, serif', fontSize: '22px', fontWeight: 400, textAlign: 'center', marginBottom: '6px' }}>
         Disclaimer
       </h1>
+      <p style={{ textAlign: 'center', fontSize: '12px', color: 'var(--text-dim)', marginBottom: '22px' }}>
+        Avvertenze importanti
+      </p>
 
-      <div style={{
-        fontSize: '14px',
-        lineHeight: '1.7',
-        color: 'var(--text)',
-      }}>
-
-        <h2 style={titoloSezione}>Natura del servizio</h2>
-        <p>
-          Luna Astrologica offre contenuti di astrologia a scopo di
-          <strong> intrattenimento, crescita personale e riflessione</strong>.
-          I testi, gli oroscopi, le chat e le consulenze vocali non costituiscono
-          in alcun modo:
-        </p>
-        <ul style={lista}>
-          <li>consulenza medica, psicologica o psichiatrica</li>
-          <li>consulenza legale, fiscale o finanziaria</li>
-          <li>previsione di eventi futuri con valore scientifico</li>
-        </ul>
-
-        <h2 style={titoloSezione}>Responsabilità dell&apos;utente</h2>
-        <p>
-          Le decisioni che prendi nella tua vita restano di tua esclusiva
-          responsabilità. Luna Astrologica non può essere ritenuta responsabile
-          di scelte personali, professionali, affettive o economiche compiute
-          sulla base dei contenuti del servizio.
-        </p>
-        <p>
-          Se stai attraversando un momento di difficoltà psicologica, rivolgiti
-          a un professionista qualificato. In caso di emergenza chiama il
-          <strong> 112</strong>.
+      <div style={{ fontSize: '14px', lineHeight: '1.7', color: 'var(--text)', marginBottom: '20px' }}>
+        <p style={{ marginBottom: '14px' }}>
+          <strong>Natura del servizio</strong><br />
+          tuFelia è un servizio di intrattenimento e introspezione personale basato sull'astrologia. Non fornisce consulenza medica, psicologica, legale, finanziaria o professionale di alcun tipo.
         </p>
 
-        <h2 style={titoloSezione}>Precisione dei calcoli</h2>
-        <p>
-          Il tema natale viene calcolato con l&apos;effemeride svizzera
-          (<em>Swiss Ephemeris</em>), lo stesso sistema usato in ambito
-          astronomico. L&apos;interpretazione astrologica che ne deriva è invece
-          di natura simbolica e soggettiva, e non ha valore predittivo.
+        <p style={{ marginBottom: '14px' }}>
+          <strong>Nessuna sostituzione professionale</strong><br />
+          Le interpretazioni astrologiche, gli oroscopi, le risposte in chat, le interpretazioni dei sogni e i consulti vocali non sostituiscono in alcun modo il parere di un medico, psicologo, avvocato, commercialista o altro professionista qualificato.
         </p>
 
-        <h2 style={titoloSezione}>Contenuti generati</h2>
-        <p>
-          Alcuni testi (oroscopi, risposte in chat, copioni vocali) sono
-          prodotti con il supporto di sistemi automatici a partire dal tuo
-          tema natale. Vengono rivisti nel loro impianto generale, ma possono
-          contenere imprecisioni. Se qualcosa non ti risuona, non è un
-          problema tuo: è la natura dello strumento.
+        <p style={{ marginBottom: '14px' }}>
+          <strong>Responsabilità dell'utente</strong><br />
+          Le decisioni che prendi nella tua vita sono di tua esclusiva responsabilità. tuFelia non è responsabile per azioni, omissioni o conseguenze derivanti dall'uso delle informazioni fornite.
         </p>
 
-        <h2 style={titoloSezione}>Pagamenti e rimborsi</h2>
-        <p>
-          Le consulenze vocali sono soggette a pagamento anticipato. Una volta
-          erogata la consulenza, non è previsto rimborso. Se la consulenza non
-          viene erogata per causa nostra, il rimborso è integrale e automatico.
+        <p style={{ marginBottom: '14px' }}>
+          <strong>Precisione dei calcoli</strong><br />
+          I calcoli astrologici sono effettuati con Swiss Ephemeris, uno standard professionale. Tuttavia, la precisione del tema natale dipende dall'esattezza dei dati di nascita forniti (data, ora, luogo). Ora di nascita approssimativa produce un tema natale approssimativo.
         </p>
 
-        <h2 style={titoloSezione}>Limitazione di responsabilità</h2>
-        <p>
-          Luna Astrologica non garantisce la continuità ininterrotta del
-          servizio. Potrebbero verificarsi interruzioni tecniche per
-          manutenzione, aggiornamenti o cause di forza maggiore. In tali casi
-          il servizio verrà ripristinato nel più breve tempo possibile.
+        <p style={{ marginBottom: '14px' }}>
+          <strong>Contenuti generati con AI</strong><br />
+          Le interpretazioni sono generate con l'ausilio di intelligenza artificiale sulla base di dati astrologici reali. Possono contenere imprecisioni o interpretazioni non condivisibili. Sono da intendersi come spunti di riflessione, non come verità assolute.
         </p>
 
-        <p style={{ marginTop: '30px', fontSize: '12px', color: 'var(--text-dim)', fontStyle: 'italic' }}>
-          Ultimo aggiornamento: ottobre 2026.
+        <p style={{ marginBottom: '14px' }}>
+          <strong>Pagamenti</strong><br />
+          I consulti vocali e gli eventuali prodotti a pagamento sono soggetti a pagamento anticipato tramite Stripe. Non sono previsti rimborsi una volta erogato il servizio, salvo diverso accordo.
+        </p>
+
+        <p style={{ marginBottom: '14px' }}>
+          <strong>Limitazione di responsabilità</strong><br />
+          tuFelia non è responsabile per interruzioni del servizio, perdita di dati, malfunzionamenti tecnici o danni indiretti derivanti dall'uso della piattaforma.
         </p>
       </div>
 
       <div className="footer">
         <Link href="/privacy">Privacy</Link>·
         <Link href="/disclaimer">Disclaimer</Link>·
-        <Link href="/faq">?</Link>
+        <Link href="/faq">FAQ</Link>
       </div>
     </div>
   );
 }
-
-const titoloSezione: React.CSSProperties = {
-  fontFamily: 'Georgia, serif',
-  fontSize: '16px',
-  fontWeight: 400,
-  marginTop: '24px',
-  marginBottom: '8px',
-  color: '#F5A623',
-};
-
-const lista: React.CSSProperties = {
-  paddingLeft: '20px',
-  marginBottom: '12px',
-};
