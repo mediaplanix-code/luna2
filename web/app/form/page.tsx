@@ -127,8 +127,8 @@ function FormContent() {
         <div className="field">
           <label>Sesso</label>
           <select value={sesso} onChange={e => setSesso(e.target.value)} required style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid rgba(245,166,35,0.25)', background: 'rgba(255,255,255,0.03)', color: 'var(--text)', fontSize: '14px' }}>
-            <option value="Femmina">Femmina</option>
-            <option value="Maschio">Maschio</option>
+            <option value="Donna">Donna</option>
+            <option value="Uomo">Uomo</option>
             <option value="Altro">Altro</option>
           </select>
         </div>
