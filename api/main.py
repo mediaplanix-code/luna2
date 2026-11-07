@@ -81,6 +81,7 @@ class TransitRequest(BaseModel):
 class OnboardingRequest(BaseModel):
     nome: str
     email: str
+    sesso: str = "Altro" # <-- NUOVO CAMPO
     birth_date: str
     birth_time: str
     birth_city: str
@@ -89,6 +90,7 @@ class OnboardingRequest(BaseModel):
     birth_lon: float = 0
     wants_telegram: bool = False
     telefono: str = ""
+    marketing_consent: bool = False # <-- NUOVO CAMPO
 
 class ChatRequest(BaseModel):
     domanda: str
