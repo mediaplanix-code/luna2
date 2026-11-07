@@ -145,7 +145,7 @@ function SalaContent() {
     return (
       <div className="canvas">
         <div className="topbar">
-          <div className="brand">✦ Luna Astrologica</div>
+          <div className="brand">✦ tuFelia</div>
         </div>
         <p style={{ textAlign: 'center', marginTop: '40px', color: 'var(--text-dim)', fontSize: '16px' }}>
           Calcolo in corso...
@@ -159,7 +159,7 @@ function SalaContent() {
       <div className="canvas">
         <div className="topbar">
           <Link href="/" className="back">← Home</Link>
-          <div className="brand">✦ Luna Astrologica</div>
+          <div className="brand">✦ tuFelia</div>
         </div>
         <div className="error">Errore: {message}</div>
       </div>
@@ -176,7 +176,6 @@ function SalaContent() {
   const isPaying = data.profile.is_paying || false;
   const mostraBarra = credito > 0 || isPaying;
   
-  // NUOVE VARIABILI PER I PULSANTI
   const haCompratoLibro = data.profile.ha_comprato_libro || false;
   const telegramCollegato = data.profile.telegram_id ? true : false;
 
@@ -193,8 +192,8 @@ function SalaContent() {
     <div className="canvas">
 
       <div className="topbar">
-        <div className="brand" style={{ fontSize: '16px' }}>✦ Luna Astrologica</div>
-        <div className="user" style={{ fontSize: '14px' }}>{nome} ▾</div>
+        <div className="brand" style={{ fontSize: '16px' }}>✦ tuFelia</div>
+        {/* Nome utente rimosso come richiesto */}
       </div>
 
       <div style={{ textAlign: 'center', margin: '20px 0' }}>
@@ -369,7 +368,6 @@ function SalaContent() {
         </Accordion>
       </div>
 
-      {/* PULSANTE ACQUISTA LIBRO (appare solo se non l'ha comprato) */}
       {!haCompratoLibro && (
         <div style={{ marginTop: '30px' }}>
           <Link 
@@ -383,22 +381,21 @@ function SalaContent() {
         </div>
       )}
 
-      {/* PULSANTE TELEGRAM (appare solo se non è collegato) */}
       {!telegramCollegato && (
-        <div className="section-label" style={{ marginTop: '30px', fontSize: '15px' }}>Rimani connesso</div>
-      )}
-      {!telegramCollegato && (
-        <div className="accordion">
-          <Accordion title="Collega Telegram" bare>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', padding: '10px 0' }}>
-              {token && (
-                <a href={`https://t.me/Luna2OroscopoBot?start=${token}`} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#2AABEE', width: '64px', height: '64px', borderRadius: '50%', textDecoration: 'none', boxShadow: '0 4px 12px rgba(42, 171, 238, 0.3)' }}>
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="white"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
-                </a>
-              )}
-            </div>
-          </Accordion>
-        </div>
+        <>
+          <div className="section-label" style={{ marginTop: '30px', fontSize: '15px' }}>Rimani connesso</div>
+          <div className="accordion">
+            <Accordion title="Collega Telegram" bare>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', padding: '10px 0' }}>
+                {token && (
+                  <a href={`https://t.me/Luna2OroscopoBot?start=${token}`} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#2AABEE', width: '64px', height: '64px', borderRadius: '50%', textDecoration: 'none', boxShadow: '0 4px 12px rgba(42, 171, 238, 0.3)' }}>
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="white"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+                  </a>
+                )}
+              </div>
+            </Accordion>
+          </div>
+        </>
       )}
 
       <div style={{ display: 'flex', gap: '12px', marginTop: '30px' }}>
@@ -429,7 +426,7 @@ function SalaContent() {
       <div className="footer" style={{ fontSize: '12px' }}>
         <Link href="/privacy">Privacy</Link>·
         <Link href="/disclaimer">Disclaimer</Link>·
-        <Link href="/faq">?</Link>
+        <Link href="/faq">FAQ</Link>
       </div>
 
     </div>
@@ -441,7 +438,7 @@ export default function SalaPage() {
     <Suspense fallback={
       <div className="canvas">
         <div className="topbar">
-          <div className="brand">✦ Luna Astrologica</div>
+          <div className="brand">✦ tuFelia</div>
         </div>
         <p style={{ textAlign: 'center', marginTop: '40px', color: 'var(--text-dim)' }}>Caricamento...</p>
       </div>
