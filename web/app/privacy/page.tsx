@@ -4,139 +4,64 @@ export default function PrivacyPage() {
   return (
     <div className="canvas">
       <div className="topbar">
-        <Link href="/" className="back">← Home</Link>
-        <div className="brand">✦ Luna Astrologica</div>
+        <Link href="/" className="back">← Indietro</Link>
+        <div className="brand">✦ tuFelia</div>
       </div>
 
-      <h1 style={{
-        fontFamily: 'Georgia, serif',
-        fontSize: '24px',
-        fontWeight: 400,
-        textAlign: 'center',
-        marginBottom: '22px'
-      }}>
-        Informativa sulla privacy
+      <h1 style={{ fontFamily: 'Georgia, serif', fontSize: '22px', fontWeight: 400, textAlign: 'center', marginBottom: '6px' }}>
+        Privacy
       </h1>
+      <p style={{ textAlign: 'center', fontSize: '12px', color: 'var(--text-dim)', marginBottom: '22px' }}>
+        Informativa sul trattamento dei dati personali
+      </p>
 
-      <div style={{
-        fontSize: '14px',
-        lineHeight: '1.7',
-        color: 'var(--text)',
-      }}>
-
-        <h2 style={titoloSezione}>1. Titolare del trattamento</h2>
-        <p>
-          Luna Astrologica è un servizio di astrologia personalizzata.
-          Per qualsiasi richiesta relativa ai tuoi dati personali puoi
-          scrivere a <strong>privacy@lunaastrologica.it</strong>.
+      <div style={{ fontSize: '14px', lineHeight: '1.7', color: 'var(--text)', marginBottom: '20px' }}>
+        <p style={{ marginBottom: '14px' }}>
+          <strong>Titolare del trattamento</strong><br />
+          tuFelia tratta i tuoi dati personali nel rispetto del Regolamento UE 2016/679 (GDPR).
         </p>
 
-        <h2 style={titoloSezione}>2. Quali dati raccogliamo</h2>
-        <p>Per calcolare il tuo tema natale e inviarti gli oroscopi raccogliamo:</p>
-        <ul style={lista}>
-          <li>Nome</li>
-          <li>Indirizzo email</li>
-          <li>Data, ora e città di nascita</li>
-          <li>Coordinate geografiche del luogo di nascita (latitudine, longitudine)</li>
-          <li>Identificativo Telegram (solo se scegli di collegare il bot)</li>
-        </ul>
-
-        <h2 style={titoloSezione}>3. Perché li raccogliamo</h2>
-        <p>I tuoi dati sono utilizzati esclusivamente per:</p>
-        <ul style={lista}>
-          <li>Calcolare il tuo tema natale</li>
-          <li>Generarti oroscopi e avvisi personalizzati</li>
-          <li>Inviarti i messaggi tramite Telegram (se collegato)</li>
-          <li>Permetterti di accedere alla tua area personale</li>
-          <li>Rispondere alle tue domande nella chat</li>
-        </ul>
-        <p>
-          <strong>Non utilizziamo i tuoi dati per pubblicità</strong>, non li vendiamo
-          a terzi e non li condividiamo con nessuno al di fuori dei fornitori tecnici
-          strettamente necessari (vedi punto 5).
+        <p style={{ marginBottom: '14px' }}>
+          <strong>Quali dati raccogliamo</strong><br />
+          Nome, email, data, ora e luogo di nascita, sesso, coordinate geografiche della città di nascita, numero di telefono (se fornito), identificativo Telegram (se collegato). Questi dati sono necessari per calcolare il tuo tema natale e inviarti gli oroscopi personalizzati.
         </p>
 
-        <h2 style={titoloSezione}>4. Base giuridica</h2>
-        <p>
-          Il trattamento si basa sul tuo <strong>consenso esplicito</strong>,
-          che presti al momento dell&apos;iscrizione. Puoi ritirarlo in qualsiasi
-          momento scrivendo all&apos;indirizzo del punto 1.
+        <p style={{ marginBottom: '14px' }}>
+          <strong>Perché li raccogliamo</strong><br />
+          Per calcolare il tema natale, generare gli oroscopi settimanali, gli alert e le interpretazioni dei sogni. Per consentirti l'accesso alla chat e ai consulti vocali. Per adempiere a obblighi legali e fiscali in caso di acquisto.
         </p>
 
-        <h2 style={titoloSezione}>5. Dove sono conservati i dati</h2>
-        <p>I tuoi dati sono conservati su:</p>
-        <ul style={lista}>
-          <li>
-            <strong>Supabase</strong> (database PostgreSQL, server nell&apos;Unione Europea)
-          </li>
-          <li>
-            <strong>Render</strong> (servizio di calcolo, server negli Stati Uniti)
-          </li>
-          <li>
-            <strong>Telegram</strong> (solo se colleghi il bot, per l&apos;invio dei messaggi)
-          </li>
-          <li>
-            <strong>Groq / DeepSeek</strong> (per la generazione dei testi — i dati
-            vengono inviati in forma anonima, senza nome ed email)
-          </li>
-        </ul>
-
-        <h2 style={titoloSezione}>6. Per quanto tempo</h2>
-        <p>
-          Conserviamo i tuoi dati finché il tuo profilo è attivo. Se richiedi la
-          cancellazione, i dati vengono eliminati entro 30 giorni.
+        <p style={{ marginBottom: '14px' }}>
+          <strong>Dove sono conservati</strong><br />
+          I dati sono conservati su Supabase (database PostgreSQL) con server nell'Unione Europea. Le comunicazioni avvengono tramite Telegram. I pagamenti, se effettuati, sono gestiti da Stripe.
         </p>
 
-        <h2 style={titoloSezione}>7. I tuoi diritti</h2>
-        <p>Hai diritto a:</p>
-        <ul style={lista}>
-          <li>Accedere ai tuoi dati personali</li>
-          <li>Chiederne la correzione</li>
-          <li>Chiederne la cancellazione</li>
-          <li>Opporti al trattamento</li>
-          <li>Richiedere la portabilità</li>
-        </ul>
-        <p>
-          Per esercitare questi diritti scrivi a <strong>privacy@lunaastrologica.it</strong>.
+        <p style={{ marginBottom: '14px' }}>
+          <strong>Per quanto tempo</strong><br />
+          I dati sono conservati fino alla richiesta di cancellazione. Puoi chiedere in qualsiasi momento la cancellazione dei tuoi dati scrivendo al titolare.
         </p>
 
-        <h2 style={titoloSezione}>8. Cookie</h2>
-        <p>
-          Luna Astrologica utilizza solo cookie tecnici e memoria locale
-          (localStorage) strettamente necessari al funzionamento del sito.
-          Non utilizziamo cookie di tracciamento o profilazione.
+        <p style={{ marginBottom: '14px' }}>
+          <strong>I tuoi diritti</strong><br />
+          Hai diritto di accesso, rettifica, cancellazione, limitazione, portabilità e opposizione al trattamento. Puoi esercitare questi diritti scrivendo al titolare del trattamento.
         </p>
 
-        <h2 style={titoloSezione}>9. Modifiche</h2>
-        <p>
-          Questa informativa può essere aggiornata. La versione vigente è
-          sempre pubblicata su questa pagina.
+        <p style={{ marginBottom: '14px' }}>
+          <strong>Cookie</strong><br />
+          Il sito utilizza esclusivamente localStorage del browser per mantenere la sessione (token di accesso e nome). Non utilizziamo cookie di profilazione né tracker di terze parti.
         </p>
 
-        <p style={{ marginTop: '30px', fontSize: '12px', color: 'var(--text-dim)', fontStyle: 'italic' }}>
-          Ultimo aggiornamento: ottobre 2026.
+        <p style={{ marginBottom: '14px' }}>
+          <strong>Contatti</strong><br />
+          Per qualsiasi richiesta relativa ai tuoi dati personali, scrivi al titolare del trattamento.
         </p>
       </div>
 
       <div className="footer">
         <Link href="/privacy">Privacy</Link>·
         <Link href="/disclaimer">Disclaimer</Link>·
-        <Link href="/faq">?</Link>
+        <Link href="/faq">FAQ</Link>
       </div>
     </div>
   );
 }
-
-const titoloSezione: React.CSSProperties = {
-  fontFamily: 'Georgia, serif',
-  fontSize: '16px',
-  fontWeight: 400,
-  marginTop: '24px',
-  marginBottom: '8px',
-  color: '#F5A623',
-};
-
-const lista: React.CSSProperties = {
-  paddingLeft: '20px',
-  marginBottom: '12px',
-};
