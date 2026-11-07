@@ -318,10 +318,12 @@ async def onboarding(req: OnboardingRequest):
         else:
             prof_res = sb.table("profiles").insert({
                 "email": email_lower, "nome": req.nome, "telegram_id": None,
+                "sesso": req.sesso, # <-- AGGIUNTO
                 "birth_date": req.birth_date, "birth_time": req.birth_time,
                 "birth_lat": lat, "birth_lon": lon, "birth_city": req.birth_city,
                 "telefono": req.telefono,
                 "timezone": "Europe/Rome", "consent_gdpr": True,
+                "marketing_consent": req.marketing_consent, # <-- AGGIUNTO
             }).execute()
             if not prof_res.data:
                 raise HTTPException(status_code=500, detail="Profilo non creato")
