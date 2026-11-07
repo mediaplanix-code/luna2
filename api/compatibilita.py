@@ -28,6 +28,7 @@ class PersonaB(BaseModel):
     birth_time: str
     birth_lat: float
     birth_lon: float
+    sesso: str = "Altro" # <-- AGGIUNTO
 
 def julian_day(date_str: str, time_str: str) -> float:
     try:
