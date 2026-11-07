@@ -14,16 +14,23 @@ function ConsulenzaContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const focus = searchParams.get('focus') || 'generico';
-  
+  const pagato = searchParams.get('pagato');
+
   const [nome, setNome] = useState('');
   const [token, setToken] = useState<string | null>(null);
   const [credito, setCredito] = useState(0);
   const [inCaricamento, setInCaricamento] = useState(true);
   const [errore, setErrore] = useState('');
+  const [confermato, setConfermato] = useState(false);
   const [chiamataAttiva, setChiamataAttiva] = useState(false);
   const [inAvvio, setInAvvio] = useState(false);
 
   const vapiRef = useRef<Vapi | null>(null);
+
+  const etichetteFocus: Record<string, string> = {
+    generico: 'Consulto Generale', tema_amore: 'Approfondimento Amore', tema_lavoro: 'Approfondimento Lavoro', tema_salute: 'Approfondimento Salute', tema_crescita: 'Approfondimento Crescita Personale', tema_previsioni: 'Approfondimento Previsioni', tema_pianeti: 'Approfondimento Pianeti', tema_case: 'Approfondimento Case', tema_aspetti: 'Approfondimento Aspetti', tema_transiti: 'Approfondimento Transiti', compatibilita_amore: 'Compatibilità Amorosa', compatibilita_lavoro: 'Compatibilità Lavorativa', compatibilita_salute: 'Compatibilità Salute', compatibilita_crescita: 'Compatibilità Crescita', compatibilita_previsioni: 'Compatibilità Previsioni', compatibilita: 'Compatibilità Generale',
+  };
+  const etichetta = etichetteFocus[focus] || 'Consulto';
 
   useEffect(() => {
     const n = localStorage.getItem('luna2_nome');
@@ -69,6 +76,17 @@ function ConsulenzaContent() {
       vapi.stop();
     };
   }, [router]);
+
+  useEffect(() => {
+    if (!token) return;
+    if (pagato === '1' && !confermato) {
+      setConfermato(true);
+      fetch(`${API_URL}/conferma-pagamento/${token}`, { method: 'POST' })
+        .then(r => r.json())
+        .then(d => { if (d.status === 'ok') setCredito(d.credito_secondi); else setErrore('Pagamento ricevuto ma errore di attivazione.'); })
+        .catch(() => setErrore('Pagamento ricevuto ma errore di connessione.'));
+    }
+  }, [token, pagato, confermato]);
 
   useEffect(() => {
     if (!token) return;
@@ -122,14 +140,7 @@ function ConsulenzaContent() {
   };
 
   if (inCaricamento) {
-    return (
-      <div className="canvas">
-        <div className="topbar">
-          <div className="brand">✦ Luna Astrologica</div>
-        </div>
-        <p style={{ textAlign: 'center', marginTop: '40px', color: 'var(--text-dim)' }}>Caricamento...</p>
-      </div>
-    );
+    return <div className="canvas"><div className="topbar"><div className="brand">✦ tuFelia</div></div><p style={{ textAlign: 'center', marginTop: '40px', color: 'var(--text-dim)' }}>Caricamento...</p></div>;
   }
 
   const haCredito = credito >= 30;
@@ -138,20 +149,18 @@ function ConsulenzaContent() {
     <div className="canvas">
       <div className="topbar">
         <Link href={focus.startsWith('compatibilita') ? '/compatibilita' : '/sala'} className="back">← Indietro</Link>
-        <div className="brand">✦ Luna Astrologica</div>
+        <div className="brand">✦ tuFelia</div>
       </div>
 
-      <h1 style={{ fontFamily: 'Georgia, serif', fontSize: '22px', fontWeight: 400, textAlign: 'center', marginBottom: '6px' }}>
-        {focus === 'generico' ? 'Consulto Generale' : 'Approfondimento'}
-      </h1>
-      
-      <p style={{ textAlign: 'center', fontSize: '12px', color: 'var(--text-dim)', marginBottom: '22px' }}>
-        {chiamataAttiva ? 'Luna è in linea. Parla pure.' : inAvvio ? 'Sto connettendo le stelle...' : haCredito ? 'Hai un credito attivo. Puoi parlare con Luna.' : 'Sblocca l\'accesso per parlare.'}
-      </p>
+      <h1 style={{ fontFamily: 'Georgia, serif', fontSize: '22px', fontWeight: 400, textAlign: 'center', marginBottom: '6px' }}>{etichetta}</h1>
+      <p style={{ textAlign: 'center', fontSize: '12px', color: 'var(--text-dim)', marginBottom: '22px' }}>15 minuti di accesso a tutto: chat, voce e approfondimenti.</p>
 
       {haCredito ? (
         <div style={{ background: 'rgba(6,214,160,0.06)', border: '1px solid rgba(6,214,160,0.3)', borderRadius: '10px', padding: '24px 20px', marginBottom: '20px', textAlign: 'center' }}>
-          
+          <p style={{ fontSize: '14px', color: 'var(--text)', marginBottom: '16px' }}>
+            {chiamataAttiva ? 'Luna è in linea. Parla pure.' : inAvvio ? 'Sto connettendo le stelle...' : 'Hai un credito attivo. Puoi parlare con Luna.'}
+          </p>
+
           {!chiamataAttiva ? (
             <button onClick={avviaChiamata} disabled={inAvvio} className="cta" style={{ fontSize: '16px', padding: '16px', width: '100%', marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', opacity: inAvvio ? 0.5 : 1 }}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
@@ -165,17 +174,25 @@ function ConsulenzaContent() {
 
           {errore && <p style={{ fontSize: '13px', color: '#EF476F', marginBottom: '16px' }}>{errore}</p>}
 
-          <button onClick={vaiAlPagamento} className="cta" style={{ width: '100%', fontSize: '14px', padding: '12px', background: 'transparent', border: '1px solid #F5A623', color: '#F5A623' }}>
-            + Aggiungi altri 15 minuti (19€)
-          </button>
+          <button onClick={vaiAlPagamento} className="cta" style={{ width: '100%', fontSize: '14px', padding: '12px', background: 'transparent', border: '1px solid #F5A623', color: '#F5A623' }}>+ Aggiungi altri 15 minuti (19€)</button>
         </div>
       ) : (
         <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(245,166,35,0.2)', borderRadius: '10px', padding: '30px 20px', marginBottom: '20px', textAlign: 'center' }}>
           {errore && <p style={{ fontSize: '13px', color: '#EF476F', marginBottom: '16px' }}>{errore}</p>}
           <p style={{ fontSize: '14px', color: 'var(--text-dim)', marginBottom: '20px' }}>{nome ? `Ciao ${nome}, ` : ''}sblocca 15 minuti di accesso completo per 19€.</p>
           <button onClick={vaiAlPagamento} className="cta" style={{ fontSize: '16px', padding: '16px 32px', margin: '0 auto', display: 'inline-block' }}>Paga 19€ e inizia</button>
+          <p style={{ fontSize: '12px', color: 'var(--text-dim)', marginTop: '16px' }}>Pagamento sicuro con Stripe. Nessun abbonamento.</p>
         </div>
       )}
+
+      <div style={{ fontSize: '14px', lineHeight: '1.7', color: 'var(--text)', marginBottom: '20px', marginTop: '24px' }}>
+        <p style={{ marginBottom: '12px' }}><strong>Cosa include:</strong></p>
+        <ul style={{ paddingLeft: '20px', marginBottom: '16px' }}>
+          <li>15 minuti di accesso a chat, voce e approfondimenti</li>
+          <li>Analisi del tuo tema natale e dei transiti attuali</li>
+          <li>Risposte alle tue domande specifiche</li>
+        </ul>
+      </div>
 
       {haCredito && (
         <div style={{ marginTop: '30px' }}>
@@ -194,7 +211,7 @@ function ConsulenzaContent() {
       <div className="footer" style={{ marginTop: '40px' }}>
         <Link href="/privacy">Privacy</Link>·
         <Link href="/disclaimer">Disclaimer</Link>·
-        <Link href="/faq">?</Link>
+        <Link href="/faq">FAQ</Link>
       </div>
     </div>
   );
@@ -202,7 +219,7 @@ function ConsulenzaContent() {
 
 export default function ConsulenzaPage() {
   return (
-    <Suspense fallback={<div className="canvas"><p style={{ textAlign: 'center', marginTop: '40px' }}>Caricamento...</p></div>}>
+    <Suspense fallback={<div className="canvas"><div className="topbar"><div className="brand">✦ tuFelia</div></div><p style={{ textAlign: 'center', marginTop: '40px', color: 'var(--text-dim)' }}>Caricamento...</p></div>}>
       <ConsulenzaContent />
     </Suspense>
   );
