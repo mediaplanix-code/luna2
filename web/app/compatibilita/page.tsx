@@ -20,6 +20,9 @@ function CompatibilitaContent() {
   const [errore, setErrore] = useState('');
   const [inCaricamento, setInCaricamento] = useState(false);
   const [token, setToken] = useState<string | null>(null);
+  
+  // Stato per i risultati
+  const [risultato, setRisultato] = useState<any>(null);
 
   useEffect(() => {
     const t = localStorage.getItem('luna2_token');
@@ -56,6 +59,8 @@ function CompatibilitaContent() {
     if (!token) return;
 
     setInCaricamento(true);
+    setRisultato(null); // Resetta il risultato precedente
+
     try {
       const r = await fetch(`${API_URL}/compatibilita/${token}`, {
         method: 'POST',
@@ -73,7 +78,9 @@ function CompatibilitaContent() {
       const d = await r.json();
       if (!r.ok) throw new Error(d.detail || 'Errore durante il calcolo');
 
-      router.push(`/compatibilita/risultato?token=${token}`);
+      // Salviamo i risultati nello stato per mostrarli
+      setRisultato(d);
+      
     } catch (err: any) {
       setErrore(err.message || 'Errore di connessione');
     } finally {
@@ -81,6 +88,81 @@ function CompatibilitaContent() {
     }
   };
 
+  // Se abbiamo un risultato, mostriamo la pagina dei risultati
+  if (risultato) {
+    let colorePercentuale = '#06D6A0'; // verde
+    if (risultato.percentuale < 50) colorePercentuale = '#EF476F'; // rosso
+    else if (risultato.percentuale < 70) colorePercentuale = '#F5A623'; // giallo
+
+    return (
+      <div className="canvas">
+        <div className="topbar">
+          <button onClick={() => setRisultato(null)} className="back" style={{ background: 'none', border: 'none', color: 'var(--text)', fontSize: '16px', cursor: 'pointer' }}>← Indietro</button>
+          <div className="brand">✦ tuFelia</div>
+        </div>
+
+        <h1 style={{ fontFamily: 'Georgia, serif', fontSize: '22px', fontWeight: 400, textAlign: 'center', marginBottom: '6px' }}>
+          La vostra intesa
+        </h1>
+        <p style={{ textAlign: 'center', fontSize: '12px', color: 'var(--text-dim)', marginBottom: '22px' }}>
+          {risultato.persona_a} e {risultato.persona_b}
+        </p>
+
+        <div style={{ textAlign: 'center', margin: '30px 0' }}>
+          <div style={{ fontSize: '64px', fontWeight: 'bold', color: colorePercentuale, lineHeight: '1' }}>
+            {risultato.percentuale}%
+          </div>
+          <div style={{ fontSize: '14px', color: 'var(--text-dim)', marginTop: '10px' }}>
+            Compatibilità tra {risultato.segno_a} e {risultato.segno_b}
+          </div>
+        </div>
+
+        <div className="accordion">
+          <div className="section-label" style={{ fontSize: '15px', marginTop: '30px' }}>Amore e Relazioni</div>
+          <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(245,166,35,0.2)', borderRadius: '10px', padding: '20px', marginBottom: '16px' }}>
+            <p style={{ fontSize: '15px', lineHeight: '1.7', margin: 0 }}>{risultato.testi.amore}</p>
+            <div style={{ marginTop: '16px', display: 'flex', gap: '16px', justifyContent: 'center' }}>
+              <Link href={`/chat?focus=compatibilita_amore`} className="icon-btn" style={{ width: '48px', height: '48px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Chiedi alla Chat">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              </Link>
+              <Link href={`/consulenza?focus=compatibilita_amore`} className="icon-btn accent" style={{ width: '48px', height: '48px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Approfondisci con la Voce">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+              </Link>
+            </div>
+          </div>
+
+          <div className="section-label" style={{ fontSize: '15px' }}>Lavoro e Carriera</div>
+          <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(245,166,35,0.2)', borderRadius: '10px', padding: '20px', marginBottom: '16px' }}>
+            <p style={{ fontSize: '15px', lineHeight: '1.7', margin: 0 }}>{risultato.testi.lavoro}</p>
+          </div>
+
+          <div className="section-label" style={{ fontSize: '15px' }}>Salute e Benessere</div>
+          <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(245,166,35,0.2)', borderRadius: '10px', padding: '20px', marginBottom: '16px' }}>
+            <p style={{ fontSize: '15px', lineHeight: '1.7', margin: 0 }}>{risultato.testi.salute}</p>
+          </div>
+
+          <div className="section-label" style={{ fontSize: '15px' }}>Crescita Personale</div>
+          <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(245,166,35,0.2)', borderRadius: '10px', padding: '20px', marginBottom: '16px' }}>
+            <p style={{ fontSize: '15px', lineHeight: '1.7', margin: 0 }}>{risultato.testi.crescita}</p>
+          </div>
+        </div>
+
+        <div style={{ marginTop: '30px', textAlign: 'center' }}>
+          <Link href="/sala" className="cta" style={{ display: 'inline-block', fontSize: '14px', padding: '12px 24px' }}>
+            Torna alla Sala
+          </Link>
+        </div>
+
+        <div className="footer" style={{ marginTop: '40px' }}>
+          <Link href="/privacy">Privacy</Link>·
+          <Link href="/disclaimer">Disclaimer</Link>·
+          <Link href="/faq">FAQ</Link>
+        </div>
+      </div>
+    );
+  }
+
+  // Altrimenti mostriamo il form
   return (
     <div className="canvas">
       <div className="topbar">
