@@ -884,27 +884,52 @@ async def cron_alert_mensili(request: Request):
 
         sb = create_client(SUPABASE_URL, SUPABASE_KEY)
         
+        # 1. Prendiamo tutti gli alert non inviati
         res = sb.table("alerts").select("*, profiles(*)").eq("inviato", False).execute()
         elementi = res.data or []
 
         if not elementi: return {"status": "ok", "inviati": 0}
 
-        inviati = 0
+        # 2. Raggruppiamo per profilo (utente)
+        alert_per_utente = {}
         for el in elementi:
-            prof = el.get("profiles")
+            prof_id = el["profile_id"]
+            if prof_id not in alert_per_utente:
+                alert_per_utente[prof_id] = []
+            alert_per_utente[prof_id].append(el)
+
+        inviati = 0
+        for prof_id, lista_alert in alert_per_utente.items():
+            prof = lista_alert[0].get("profiles")
             if not prof or not prof.get("telegram_id"):
                 continue
+
+            # 3. Scegliamo UN SOLO alert per utente: quello con la data_evento più vicina
+            # (Se la data è nel passato, lo consideriamo comunque, ma ordiniamo per data)
+            lista_alert.sort(key=lambda x: x.get("data_evento", "9999-12-31"))
+            alert_da_inviare = lista_alert[0]
 
             try:
                 chat_id = int(prof["telegram_id"])
                 nome = prof.get("nome", "")
-                testo = f"Ciao <b>{nome}</b>, un segnale dalle stelle 🌙\n\n{el['descrizione']}\n\n🌐 <a href='{SITE_URL}/sala'>Approfondisci nella tua sala</a>"
+                
+                # Formattiamo il messaggio in modo elegante
+                descrizione = alert_da_inviare.get("descrizione", "")
+                parti = descrizione.split("_")
+                if len(parti) >= 3:
+                    testo_evento = f"{parti[0]} in {parti[1]} al tuo {parti[2]}"
+                else:
+                    testo_evento = descrizione
+
+                testo = f"Ciao <b>{nome}</b>, un segnale dalle stelle 🌙\n\n{testo_evento}\n\n🌐 <a href='{SITE_URL}/sala'>Approfondisci nella tua sala</a>"
                 await send_telegram(chat_id, testo)
                 
-                sb.table("alerts").update({"inviato": True}).eq("id", el["id"]).execute()
+                # Segniamo come inviato SOLO l'alert scelto
+                sb.table("alerts").update({"inviato": True}).eq("id", alert_da_inviare["id"]).execute()
                 inviati += 1
+                
             except Exception as e:
-                print(f"=== Errore invio alert {el['id']}: {e} ===")
+                print(f"=== Errore invio alert {alert_da_inviare['id']}: {e} ===")
 
         return {"status": "ok", "inviati": inviati}
     except HTTPException: raise
