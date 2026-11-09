@@ -1,147 +1,62 @@
-'use client';
+@app.get("/admin/clienti")
+async def admin_clienti(password: str = ""):
+    try:
+        admin_password = os.getenv("ADMIN_PASSWORD", "")
+        if not admin_password or password != admin_password:
+            raise HTTPException(status_code=403, detail="Non autorizzato.")
 
-import { useState } from 'react';
-import Link from 'next/link';
+        sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+        res = sb.table("profiles").select("*").order("created_at", desc=True).execute()
+        clienti = res.data or []
 
-const API_URL = "https://luna2-api.onrender.com";
+        # Mappa dei libri
+        libri_res = sb.table("libri_in_coda").select("profile_id, stato").execute()
+        libri_map = {}
+        for l in (libri_res.data or []):
+            libri_map[l["profile_id"]] = l["stato"]
 
-export default function AdminPage() {
-  const [password, setPassword] = useState('');
-  const [clienti, setClienti] = useState<any[]>([]);
-  const [autenticato, setAutenticato] = useState(false);
-  const [errore, setErrore] = useState('');
-  const [inCaricamento, setInCaricamento] = useState(false);
-  const [clienteSelezionato, setClienteSelezionato] = useState<any>(null);
+        risultato = []
+        for c in clienti:
+            # Età
+            eta = None
+            segno = ""
+            data_nascita = str(c.get("birth_date", ""))[:10] if c.get("birth_date") else ""
+            if data_nascita:
+                try:
+                    from datetime import date
+                    anno, mese, giorno = map(int, data_nascita.split("-"))
+                    oggi = date.today()
+                    eta = oggi.year - anno - ((oggi.month, oggi.day) < (mese, giorno))
+                    # Segno zodiacale (approssimativo per il Sole)
+                    segni = ["Capricorno", "Acquario", "Pesci", "Ariete", "Toro", "Gemelli", "Cancro", "Leone", "Vergine", "Bilancia", "Scorpione", "Sagittario"]
+                    idx = (mese - 1) * 2 + (1 if giorno >= 21 else 0)
+                    if idx >= 24: idx -= 24
+                    segno = segni[idx // 2]
+                except:
+                    eta = None
 
-  const accedi = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrore('');
-    setInCaricamento(true);
-    try {
-      const r = await fetch(`${API_URL}/admin/clienti?password=${encodeURIComponent(password)}`);
-      if (r.status === 403) { setErrore('Password errata.'); return; }
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.detail || 'Errore');
-      setClienti(d.clienti || []);
-      setAutenticato(true);
-      localStorage.setItem('luna2_admin_password', password);
-    } catch (err: any) { setErrore(err.message); }
-    finally { setInCaricamento(false); }
-  };
+            risultato.append({
+                "id": c["id"],
+                "nome": c.get("nome"),
+                "email": c.get("email"),
+                "telefono": c.get("telefono") or "",
+                "sesso": c.get("sesso", "Non specificato"),
+                "eta": eta,
+                "data_nascita": data_nascita,
+                "segno": segno,
+                "citta": c.get("birth_city", ""),
+                "credito_secondi": c.get("credito_secondi", 0),
+                "is_paying": c.get("is_paying", False),
+                "telegram_id": c.get("telegram_id"),
+                "created_at": c.get("created_at"),
+                "libro": libri_map.get(c["id"], "nessuno"),
+                "marketing_consent": c.get("marketing_consent", False),
+                "importo_totale": float(c.get("importo_totale") or 0),
+                "data_ultimo_pagamento": c.get("data_ultimo_pagamento"),
+            })
 
-  const regalaMinuti = async (profile_id: string, minuti: number) => {
-    try {
-      const r = await fetch(`${API_URL}/admin/regala-minuti/${profile_id}?minuti=${minuti}&password=${encodeURIComponent(password)}`, { method: 'POST' });
-      const d = await r.json();
-      if (r.ok) {
-        alert(d.message);
-        const rl = await fetch(`${API_URL}/admin/clienti?password=${encodeURIComponent(password)}`);
-        const dl = await rl.json();
-        setClienti(dl.clienti || []);
-        const aggiornato = dl.clienti.find((c: any) => c.id === profile_id);
-        if (aggiornato) setClienteSelezionato(aggiornato);
-      } else { alert('Errore: ' + d.detail); }
-    } catch { alert('Errore di connessione'); }
-  };
-
-  if (!autenticato) {
-    return (
-      <div style={{ background: '#0a0a0a', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <form onSubmit={accedi} style={{ background: '#1a1a1a', padding: '40px', borderRadius: '10px', width: '350px', border: '1px solid #333' }}>
-          <h1 style={{ color: '#fff', fontSize: '20px', marginBottom: '20px', textAlign: 'center' }}>tuFelia CRM</h1>
-          <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Password" required style={{ width: '100%', padding: '10px', marginBottom: '15px', borderRadius: '5px', border: '1px solid #444', background: '#222', color: '#fff' }} />
-          {errore && <p style={{ color: 'red', fontSize: '12px', marginBottom: '10px' }}>{errore}</p>}
-          <button type="submit" disabled={inCaricamento} style={{ width: '100%', padding: '12px', background: '#F5A623', border: 'none', borderRadius: '5px', fontWeight: 'bold', cursor: 'pointer' }}>
-            {inCaricamento ? 'Verifica...' : 'Accedi'}
-          </button>
-        </form>
-      </div>
-    );
-  }
-
-  const totale = clienti.length;
-  const donne = clienti.filter(c => c.sesso === 'Donna').length;
-  const uomini = clienti.filter(c => c.sesso === 'Uomo').length;
-  const conLibro = clienti.filter(c => c.libro !== 'nessuno').length;
-  const marketingOk = clienti.filter(c => c.marketing_consent).length;
-  const incassoTotale = clienti.reduce((acc, c) => acc + (c.importo_totale || 0), 0);
-
-  return (
-    <div style={{ display: 'flex', height: '100vh', background: '#0a0a0a', color: '#fff', fontFamily: 'sans-serif', overflow: 'hidden' }}>
-      {/* SIDEBAR */}
-      <div style={{ width: '220px', background: '#111', borderRight: '1px solid #222', padding: '20px', display: 'flex', flexDirection: 'column' }}>
-        <h1 style={{ color: '#F5A623', fontSize: '18px', marginBottom: '30px' }}>tuFelia CRM</h1>
-        <div style={{ marginBottom: '20px' }}><div style={{ fontSize: '11px', color: '#666' }}>CLIENTI</div><div style={{ fontSize: '24px', fontWeight: 'bold' }}>{totale}</div></div>
-        <div style={{ marginBottom: '20px' }}><div style={{ fontSize: '11px', color: '#666' }}>SESSO</div><div style={{ fontSize: '14px' }}>♀ {donne} · ♂ {uomini} · ✦ {totale - donne - uomini}</div></div>
-        <div style={{ marginBottom: '20px' }}><div style={{ fontSize: '11px', color: '#666' }}>LIBRI</div><div style={{ fontSize: '18px' }}>{conLibro}</div></div>
-        <div style={{ marginBottom: '20px' }}><div style={{ fontSize: '11px', color: '#666' }}>INCASSO TOTALE</div><div style={{ fontSize: '18px', color: '#06D6A0' }}>€ {incassoTotale.toFixed(2)}</div></div>
-        <div style={{ marginBottom: '20px' }}><div style={{ fontSize: '11px', color: '#666' }}>MARKETING OK</div><div style={{ fontSize: '18px' }}>{marketingOk}</div></div>
-        <div style={{ marginTop: 'auto' }}><Link href="/" style={{ color: '#666', fontSize: '12px' }}>← Torna al sito</Link></div>
-      </div>
-
-      {/* MAIN */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <div style={{ padding: '20px', borderBottom: '1px solid #222', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2 style={{ fontSize: '16px' }}>Elenco Clienti</h2>
-          <button onClick={() => { setAutenticato(false); setClienti([]); }} style={{ background: 'transparent', border: '1px solid #444', color: '#888', padding: '5px 15px', borderRadius: '5px', cursor: 'pointer', fontSize: '12px' }}>Esci</button>
-        </div>
-        <div style={{ flex: 1, overflowY: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-            <thead style={{ background: '#111', position: 'sticky', top: 0 }}>
-              <tr>
-                <th style={{ padding: '10px', textAlign: 'left', color: '#666' }}>NOME</th>
-                <th style={{ padding: '10px', textAlign: 'left', color: '#666' }}>EMAIL</th>
-                <th style={{ padding: '10px', textAlign: 'left', color: '#666' }}>SESSO</th>
-                <th style={{ padding: '10px', textAlign: 'left', color: '#666' }}>ETÀ</th>
-                <th style={{ padding: '10px', textAlign: 'left', color: '#666' }}>SEGNO</th>
-                <th style={{ padding: '10px', textAlign: 'left', color: '#666' }}>CREDITO</th>
-                <th style={{ padding: '10px', textAlign: 'left', color: '#666' }}>LIBRO</th>
-                <th style={{ padding: '10px', textAlign: 'left', color: '#666' }}>SPESO</th>
-              </tr>
-            </thead>
-            <tbody>
-              {clienti.map(c => (
-                <tr key={c.id} onClick={() => setClienteSelezionato(c)} style={{ borderBottom: '1px solid #1a1a1a', cursor: 'pointer', background: clienteSelezionato?.id === c.id ? '#1a1a1a' : 'transparent' }}>
-                  <td style={{ padding: '10px' }}>{c.nome}</td>
-                  <td style={{ padding: '10px', color: '#888' }}>{c.email}</td>
-                  <td style={{ padding: '10px' }}>{c.sesso === 'Donna' ? '♀' : c.sesso === 'Uomo' ? '♂' : '✦'}</td>
-                  <td style={{ padding: '10px' }}>{c.eta ?? '-'}</td>
-                  <td style={{ padding: '10px' }}>{c.segno || '-'}</td>
-                  <td style={{ padding: '10px' }}>{Math.floor(c.credito_secondi / 60)}m</td>
-                  <td style={{ padding: '10px' }}>{c.libro === 'nessuno' ? '❌' : '✅'}</td>
-                  <td style={{ padding: '10px', color: c.importo_totale > 0 ? '#06D6A0' : '#666' }}>€ {(c.importo_totale || 0).toFixed(2)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* DETTAGLIO */}
-      {clienteSelezionato && (
-        <div style={{ width: '320px', background: '#111', borderLeft: '1px solid #222', padding: '20px', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <h3 style={{ fontSize: '15px', color: '#F5A623' }}>Dettaglio Cliente</h3>
-            <button onClick={() => setClienteSelezionato(null)} style={{ background: 'transparent', border: 'none', color: '#666', fontSize: '22px', cursor: 'pointer' }}>×</button>
-          </div>
-          <div style={{ marginBottom: '12px' }}><div style={{ fontSize: '10px', color: '#666' }}>NOME</div><div style={{ fontSize: '14px' }}>{clienteSelezionato.nome}</div></div>
-          <div style={{ marginBottom: '12px' }}><div style={{ fontSize: '10px', color: '#666' }}>EMAIL</div><div style={{ fontSize: '12px', wordBreak: 'break-all' }}>{clienteSelezionato.email}</div></div>
-          <div style={{ marginBottom: '12px' }}><div style={{ fontSize: '10px', color: '#666' }}>TELEFONO</div><div style={{ fontSize: '12px' }}>{clienteSelezionato.telefono || 'Non fornito'}</div></div>
-          <div style={{ marginBottom: '12px' }}><div style={{ fontSize: '10px', color: '#666' }}>DATA DI NASCITA</div><div style={{ fontSize: '12px' }}>{clienteSelezionato.data_nascita || 'Non fornita'}</div></div>
-          <div style={{ marginBottom: '12px' }}><div style={{ fontSize: '10px', color: '#666' }}>SEGNO</div><div style={{ fontSize: '12px' }}>{clienteSelezionato.segno || 'Non calcolato'}</div></div>
-          <div style={{ marginBottom: '12px' }}><div style={{ fontSize: '10px', color: '#666' }}>CITTÀ</div><div style={{ fontSize: '12px' }}>{clienteSelezionato.citta || 'Non fornita'}</div></div>
-          <div style={{ marginBottom: '12px' }}><div style={{ fontSize: '10px', color: '#666' }}>CREDITO</div><div style={{ fontSize: '18px', color: '#06D6A0' }}>{Math.floor(clienteSelezionato.credito_secondi / 60)} minuti</div></div>
-          <div style={{ marginBottom: '12px' }}><div style={{ fontSize: '10px', color: '#666' }}>SPESO TOTALE</div><div style={{ fontSize: '16px', color: '#F5A623' }}>€ {(clienteSelezionato.importo_totale || 0).toFixed(2)}</div></div>
-          <div style={{ marginBottom: '12px' }}><div style={{ fontSize: '10px', color: '#666' }}>TELEGRAM</div><div>{clienteSelezionato.telegram_id ? '✅ Collegato' : '❌ Non collegato'}</div></div>
-          <div style={{ marginBottom: '12px' }}><div style={{ fontSize: '10px', color: '#666' }}>LIBRO</div><div>{clienteSelezionato.libro === 'nessuno' ? 'Non acquistato' : '✅ Acquistato'}</div></div>
-          <div style={{ marginBottom: '12px' }}><div style={{ fontSize: '10px', color: '#666' }}>MARKETING</div><div>{clienteSelezionato.marketing_consent ? '✅ Consenso' : '❌ No consenso'}</div></div>
-
-          <hr style={{ borderColor: '#222', margin: '15px 0' }} />
-          <div style={{ fontSize: '11px', color: '#666', marginBottom: '8px' }}>AZIONI</div>
-          <button onClick={() => regalaMinuti(clienteSelezionato.id, 15)} style={{ background: '#F5A623', border: 'none', padding: '8px', borderRadius: '5px', fontWeight: 'bold', cursor: 'pointer', marginBottom: '8px', fontSize: '12px' }}>+ 15 Minuti</button>
-          <button onClick={() => regalaMinuti(clienteSelezionato.id, 30)} style={{ background: 'transparent', border: '1px solid #F5A623', color: '#F5A623', padding: '8px', borderRadius: '5px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>+ 30 Minuti</button>
-        </div>
-      )}
-    </div>
-  );
-}
+        return {"status": "ok", "clienti": risultato, "totale": len(risultato)}
+    except HTTPException: raise
+    except Exception as e:
+        print(f"=== ERRORE ADMIN CLIENTI: {e} ===")
+        raise HTTPException(status_code=500, detail=str(e))
