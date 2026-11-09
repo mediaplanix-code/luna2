@@ -91,9 +91,8 @@ function FormContent() {
 
       // CONTROLLO: se serve la verifica email, non entriamo
       if (d.email_verification_required) {
-        setMessaggioSuccesso('Registrazione completata! Controlla la tua email per confermare l\'account e accedere alla tua Sala.');
-        // Svuotiamo il form per evitare doppie iscrizioni
-        setNome(''); setEmail(''); setDataNascita(''); setOraNascita(''); setCitta(''); setLat(null); setLon(null);
+        // Invece del messaggio in alto, andiamo alla pagina di conferma
+        router.push('/conferma-email');
         return;
       }
 
