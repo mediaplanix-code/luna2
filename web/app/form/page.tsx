@@ -10,6 +10,7 @@ function FormContent() {
   const router = useRouter();
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
+  const [telefono, setTelefono] = useState(''); // <-- NUOVO
   const [sesso, setSesso] = useState('Donna');
   const [dataNascita, setDataNascita] = useState('');
   const [oraNascita, setOraNascita] = useState('');
@@ -21,7 +22,6 @@ function FormContent() {
   const [privacy, setPrivacy] = useState(false);
   const [marketing, setMarketing] = useState(false);
   const [errore, setErrore] = useState('');
-  const [messaggioSuccesso, setMessaggioSuccesso] = useState(''); // <-- NUOVO
   const [inCaricamento, setInCaricamento] = useState(false);
 
   useEffect(() => {
@@ -55,7 +55,6 @@ function FormContent() {
   const invia = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrore('');
-    setMessaggioSuccesso('');
 
     if (!privacy) {
       setErrore('Devi accettare l\'informativa sulla privacy per proseguire.');
@@ -75,6 +74,7 @@ function FormContent() {
         body: JSON.stringify({
           nome: nome,
           email: email,
+          telefono: telefono, // <-- NUOVO
           sesso: sesso,
           birth_date: dataNascita,
           birth_time: oraNascita || '12:00',
@@ -89,16 +89,14 @@ function FormContent() {
       const d = await r.json();
       if (!r.ok) throw new Error(d.detail || 'Errore durante la registrazione');
 
-      // CONTROLLO: se serve la verifica email, non entriamo
       if (d.email_verification_required) {
-        // Invece del messaggio in alto, andiamo alla pagina di conferma
         router.push('/conferma-email');
         return;
       }
 
-      // Se è un utente già confermato, entriamo
       localStorage.setItem('luna2_token', d.access_token);
       localStorage.setItem('luna2_nome', nome);
+      
       router.push('/sala');
     } catch (err: any) {
       setErrore(err.message || 'Errore di connessione');
@@ -121,12 +119,6 @@ function FormContent() {
         Inserisci i tuoi dati per iniziare.
       </p>
 
-      {messaggioSuccesso && (
-        <div style={{ background: 'rgba(6,214,160,0.08)', border: '1px solid rgba(6,214,160,0.3)', borderRadius: '10px', padding: '20px', marginBottom: '22px', textAlign: 'center' }}>
-          <p style={{ fontSize: '15px', color: '#06D6A0', lineHeight: '1.6' }}>{messaggioSuccesso}</p>
-        </div>
-      )}
-
       <form onSubmit={invia}>
         <div className="field">
           <label>Nome</label>
@@ -136,6 +128,12 @@ function FormContent() {
         <div className="field">
           <label>Email</label>
           <input type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="La tua email" />
+        </div>
+
+        {/* CAMPO TELEFONO AGGIUNTO */}
+        <div className="field">
+          <label>Telefono (facoltativo)</label>
+          <input type="tel" value={telefono} onChange={e => setTelefono(e.target.value)} placeholder="Il tuo numero di telefono" />
         </div>
 
         <div className="field">
