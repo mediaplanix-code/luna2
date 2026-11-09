@@ -1300,7 +1300,7 @@ async def admin_clienti(password: str = ""):
         res = sb.table("profiles").select("*").order("created_at", desc=True).execute()
         clienti = res.data or []
 
-        # Recuperiamo anche i libri comprati per ogni cliente
+        # Recuperiamo i libri comprati per ogni cliente
         libri_res = sb.table("libri_in_coda").select("profile_id, stato").execute()
         libri_map = {}
         for l in (libri_res.data or []):
@@ -1308,12 +1308,25 @@ async def admin_clienti(password: str = ""):
 
         risultato = []
         for c in clienti:
+            # Calcolo età
+            eta = None
+            if c.get("birth_date"):
+                try:
+                    from datetime import date
+                    bd = str(c["birth_date"]).split("T")[0]
+                    anno, mese, giorno = map(int, bd.split("-"))
+                    oggi = date.today()
+                    eta = oggi.year - anno - ((oggi.month, oggi.day) < (mese, giorno))
+                except:
+                    eta = None
+
             risultato.append({
                 "id": c["id"],
                 "nome": c.get("nome"),
                 "email": c.get("email"),
                 "telefono": c.get("telefono"),
-                "sesso": c.get("sesso"),
+                "sesso": c.get("sesso", "Non specificato"),
+                "eta": eta,
                 "credito_secondi": c.get("credito_secondi", 0),
                 "is_paying": c.get("is_paying", False),
                 "telegram_id": c.get("telegram_id"),
