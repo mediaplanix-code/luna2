@@ -1300,7 +1300,6 @@ async def admin_clienti(password: str = ""):
         res = sb.table("profiles").select("*").order("created_at", desc=True).execute()
         clienti = res.data or []
 
-        # Mappa dei libri
         libri_res = sb.table("libri_in_coda").select("profile_id, stato").execute()
         libri_map = {}
         for l in (libri_res.data or []):
@@ -1308,7 +1307,6 @@ async def admin_clienti(password: str = ""):
 
         risultato = []
         for c in clienti:
-            # Età
             eta = None
             segno = ""
             data_nascita = str(c.get("birth_date", ""))[:10] if c.get("birth_date") else ""
@@ -1318,7 +1316,6 @@ async def admin_clienti(password: str = ""):
                     anno, mese, giorno = map(int, data_nascita.split("-"))
                     oggi = date.today()
                     eta = oggi.year - anno - ((oggi.month, oggi.day) < (mese, giorno))
-                    # Segno zodiacale (approssimativo per il Sole)
                     segni = ["Capricorno", "Acquario", "Pesci", "Ariete", "Toro", "Gemelli", "Cancro", "Leone", "Vergine", "Bilancia", "Scorpione", "Sagittario"]
                     idx = (mese - 1) * 2 + (1 if giorno >= 21 else 0)
                     if idx >= 24: idx -= 24
