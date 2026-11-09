@@ -10,7 +10,7 @@ function FormContent() {
   const router = useRouter();
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
-  const [sesso, setSesso] = useState('Donna'); // Default
+  const [sesso, setSesso] = useState('Donna');
   const [dataNascita, setDataNascita] = useState('');
   const [oraNascita, setOraNascita] = useState('');
   const [citta, setCitta] = useState('');
@@ -21,9 +21,9 @@ function FormContent() {
   const [privacy, setPrivacy] = useState(false);
   const [marketing, setMarketing] = useState(false);
   const [errore, setErrore] = useState('');
+  const [messaggioSuccesso, setMessaggioSuccesso] = useState(''); // <-- NUOVO
   const [inCaricamento, setInCaricamento] = useState(false);
 
-  // Autocomplete città (Photon)
   useEffect(() => {
     if (citta.length < 3) {
       setSuggerimenti([]);
@@ -55,6 +55,7 @@ function FormContent() {
   const invia = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrore('');
+    setMessaggioSuccesso('');
 
     if (!privacy) {
       setErrore('Devi accettare l\'informativa sulla privacy per proseguire.');
@@ -88,9 +89,17 @@ function FormContent() {
       const d = await r.json();
       if (!r.ok) throw new Error(d.detail || 'Errore durante la registrazione');
 
+      // CONTROLLO: se serve la verifica email, non entriamo
+      if (d.email_verification_required) {
+        setMessaggioSuccesso('Registrazione completata! Controlla la tua email per confermare l\'account e accedere alla tua Sala.');
+        // Svuotiamo il form per evitare doppie iscrizioni
+        setNome(''); setEmail(''); setDataNascita(''); setOraNascita(''); setCitta(''); setLat(null); setLon(null);
+        return;
+      }
+
+      // Se è un utente già confermato, entriamo
       localStorage.setItem('luna2_token', d.access_token);
       localStorage.setItem('luna2_nome', nome);
-      
       router.push('/sala');
     } catch (err: any) {
       setErrore(err.message || 'Errore di connessione');
@@ -112,6 +121,12 @@ function FormContent() {
       <p style={{ textAlign: 'center', fontSize: '12px', color: 'var(--text-dim)', marginBottom: '22px' }}>
         Inserisci i tuoi dati per iniziare.
       </p>
+
+      {messaggioSuccesso && (
+        <div style={{ background: 'rgba(6,214,160,0.08)', border: '1px solid rgba(6,214,160,0.3)', borderRadius: '10px', padding: '20px', marginBottom: '22px', textAlign: 'center' }}>
+          <p style={{ fontSize: '15px', color: '#06D6A0', lineHeight: '1.6' }}>{messaggioSuccesso}</p>
+        </div>
+      )}
 
       <form onSubmit={invia}>
         <div className="field">
