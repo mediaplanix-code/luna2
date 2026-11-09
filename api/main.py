@@ -1284,3 +1284,70 @@ async def unlink_telegram_account(chat_id):
     try:
         sb.table("profiles").update({"telegram_id": None}).eq("telegram_id", str(chat_id)).execute()
     except Exception: pass
+
+    # =========================================================
+# ADMIN PANEL
+# =========================================================
+
+@app.get("/admin/clienti")
+async def admin_clienti(password: str = ""):
+    try:
+        admin_password = os.getenv("ADMIN_PASSWORD", "")
+        if not admin_password or password != admin_password:
+            raise HTTPException(status_code=403, detail="Non autorizzato.")
+
+        sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+        res = sb.table("profiles").select("*").order("created_at", desc=True).execute()
+        clienti = res.data or []
+
+        # Recuperiamo anche i libri comprati per ogni cliente
+        libri_res = sb.table("libri_in_coda").select("profile_id, stato").execute()
+        libri_map = {}
+        for l in (libri_res.data or []):
+            libri_map[l["profile_id"]] = l["stato"]
+
+        risultato = []
+        for c in clienti:
+            risultato.append({
+                "id": c["id"],
+                "nome": c.get("nome"),
+                "email": c.get("email"),
+                "telefono": c.get("telefono"),
+                "sesso": c.get("sesso"),
+                "credito_secondi": c.get("credito_secondi", 0),
+                "is_paying": c.get("is_paying", False),
+                "telegram_id": c.get("telegram_id"),
+                "created_at": c.get("created_at"),
+                "libro": libri_map.get(c["id"], "nessuno"),
+                "marketing_consent": c.get("marketing_consent", False),
+            })
+
+        return {"status": "ok", "clienti": risultato, "totale": len(risultato)}
+    except HTTPException: raise
+    except Exception as e:
+        print(f"=== ERRORE ADMIN CLIENTI: {e} ===")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/admin/regala-minuti/{profile_id}")
+async def admin_regala_minuti(profile_id: str, minuti: int = 15, password: str = ""):
+    try:
+        admin_password = os.getenv("ADMIN_PASSWORD", "")
+        if not admin_password or password != admin_password:
+            raise HTTPException(status_code=403, detail="Non autorizzato.")
+
+        sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+        res = sb.table("profiles").select("*").eq("id", profile_id).execute()
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Cliente non trovato")
+        
+        profile = res.data[0]
+        credito_attuale = profile.get("credito_secondi") or 0
+        nuovo_credito = credito_attuale + (minuti * 60)
+        
+        sb.table("profiles").update({"credito_secondi": nuovo_credito}).eq("id", profile_id).execute()
+        
+        return {"status": "ok", "message": f"Regalati {minuti} minuti a {profile.get('nome')}. Nuovo credito: {nuovo_credito} secondi."}
+    except HTTPException: raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
