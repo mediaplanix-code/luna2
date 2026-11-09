@@ -384,6 +384,7 @@ async def onboarding(req: OnboardingRequest):
             "message": f"Tema natale calcolato per {req.nome}.",
             "profile_id": profile_id,
             "access_token": access_token,
+            "email_verification_required": not existing.data, # <-- AGGIUNTO
             "chart_preview": {
                 "sole": tema["planets"].get("Sole"),
                 "luna": tema["planets"].get("Luna"),
