@@ -141,6 +141,23 @@ function SalaContent() {
       });
   }, [token]);
 
+  const cancellaAccount = async () => {
+    if (!token) return;
+    if (!confirm('Sei sicuro? Tutti i tuoi dati verranno eliminati.')) return;
+    try {
+      const r = await fetch(`https://luna2-api.onrender.com/cancella-account/${token}`, { method: 'POST' });
+      if (r.ok) {
+        localStorage.clear();
+        alert('Account cancellato.');
+        router.push('/');
+      } else {
+        alert('Errore durante la cancellazione.');
+      }
+    } catch {
+      alert('Errore di connessione.');
+    }
+  };
+
   if (status === 'loading') {
     return (
       <div className="canvas">
@@ -193,7 +210,7 @@ function SalaContent() {
 
       <div className="topbar">
         <div className="brand" style={{ fontSize: '16px' }}>✦ tuFelia</div>
-        {/* Nome utente rimosso come richiesto */}
+        <div className="user" style={{ fontSize: '14px' }}>{nome} ▾</div>
       </div>
 
       <div style={{ textAlign: 'center', margin: '20px 0' }}>
@@ -423,10 +440,17 @@ function SalaContent() {
         </div>
       )}
 
-      <div className="footer" style={{ fontSize: '12px' }}>
+      <div className="footer" style={{ fontSize: '12px', textAlign: 'center', paddingBottom: '20px' }}>
         <Link href="/privacy">Privacy</Link>·
         <Link href="/disclaimer">Disclaimer</Link>·
         <Link href="/faq">FAQ</Link>
+        <br /><br />
+        <button 
+          onClick={cancellaAccount} 
+          style={{ background: 'none', border: 'none', color: '#EF476F', fontSize: '12px', cursor: 'pointer', textDecoration: 'underline' }}
+        >
+          Cancella il mio account
+        </button>
       </div>
 
     </div>
