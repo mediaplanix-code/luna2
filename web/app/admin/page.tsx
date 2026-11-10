@@ -13,13 +13,11 @@ export default function AdminPage() {
   const [inCaricamento, setInCaricamento] = useState(false);
   const [clienteSelezionato, setClienteSelezionato] = useState<any>(null);
   
-  // Filtri
   const [filtroSesso, setFiltroSesso] = useState('');
   const [filtroSegno, setFiltroSegno] = useState('');
   const [filtroMarketing, setFiltroMarketing] = useState('');
   const [ricercaTesto, setRicercaTesto] = useState('');
   
-  // Input manuali
   const [minutiCustom, setMinutiCustom] = useState('');
   const [notaCustom, setNotaCustom] = useState('');
 
@@ -66,24 +64,6 @@ export default function AdminPage() {
     } catch { alert('Errore di connessione'); }
   };
 
-  const bloccaCliente = async () => {
-    if (!clienteSelezionato) return;
-    if (!confirm('Vuoi bloccare questo cliente?')) return;
-    try {
-      const r = await fetch(`${API_URL}/admin/blocca/${clienteSelezionato.id}?password=${encodeURIComponent(password)}`, { method: 'POST' });
-      if (r.ok) { alert('Cliente bloccato'); aggiornaLista(); } else { alert('Errore'); }
-    } catch { alert('Errore di connessione'); }
-  };
-
-  const cancellaCliente = async () => {
-    if (!clienteSelezionato) return;
-    if (!confirm('Vuoi segnare questo cliente come cancellato (GDPR)?')) return;
-    try {
-      const r = await fetch(`${API_URL}/admin/cancella/${clienteSelezionato.id}?password=${encodeURIComponent(password)}`, { method: 'POST' });
-      if (r.ok) { alert('Cliente cancellato'); aggiornaLista(); } else { alert('Errore'); }
-    } catch { alert('Errore di connessione'); }
-  };
-
   const generaLibroManuale = async () => {
     if (!clienteSelezionato) return;
     if (!confirm('Vuoi generare e inviare il libro manualmente per questo cliente?')) return;
@@ -122,7 +102,6 @@ export default function AdminPage() {
   }
 
   const totale = clientiFiltrati.length;
-  const incassoTotale = clientiFiltrati.reduce((acc, c) => acc + (c.importo_totale || 0), 0);
   const tuttiISegni = Array.from(new Set(clienti.map(c => c.segno).filter(Boolean))).sort();
 
   return (
@@ -130,7 +109,6 @@ export default function AdminPage() {
       <div style={{ width: '220px', background: '#111', borderRight: '1px solid #222', padding: '20px', display: 'flex', flexDirection: 'column' }}>
         <h1 style={{ color: '#F5A623', fontSize: '18px', marginBottom: '30px' }}>tuFelia CRM</h1>
         <div style={{ marginBottom: '20px' }}><div style={{ fontSize: '11px', color: '#666' }}>CLIENTI</div><div style={{ fontSize: '24px', fontWeight: 'bold' }}>{totale}</div></div>
-        <div style={{ marginBottom: '20px' }}><div style={{ fontSize: '11px', color: '#666' }}>INCASSO TOTALE</div><div style={{ fontSize: '20px', color: '#06D6A0' }}>€ {incassoTotale.toFixed(2)}</div></div>
         <div style={{ marginTop: 'auto' }}><Link href="/" style={{ color: '#666', fontSize: '12px' }}>← Torna al sito</Link></div>
       </div>
 
@@ -153,8 +131,7 @@ export default function AdminPage() {
                 <th style={{ padding: '10px', textAlign: 'left', color: '#666' }}>ETÀ</th>
                 <th style={{ padding: '10px', textAlign: 'left', color: '#666' }}>SEGNO</th>
                 <th style={{ padding: '10px', textAlign: 'left', color: '#666' }}>CREDITO</th>
-                <th style={{ padding: '10px', textAlign: 'left', color: '#666' }}>SPESO</th>
-                <th style={{ padding: '10px', textAlign: 'left', color: '#666' }}>STATO</th>
+                <th style={{ padding: '10px', textAlign: 'left', color: '#666' }}>MARKETING</th>
               </tr>
             </thead>
             <tbody>
@@ -166,8 +143,7 @@ export default function AdminPage() {
                   <td style={{ padding: '10px' }}>{c.eta ?? '-'}</td>
                   <td style={{ padding: '10px' }}>{c.segno || '-'}</td>
                   <td style={{ padding: '10px' }}>{Math.floor(c.credito_secondi / 60)}m</td>
-                  <td style={{ padding: '10px', color: c.importo_totale > 0 ? '#06D6A0' : '#666' }}>€ {(c.importo_totale || 0).toFixed(2)}</td>
-                  <td style={{ padding: '10px', color: c.stato === 'bloccato' ? '#EF476F' : c.stato === 'cancellato' ? '#666' : '#06D6A0' }}>{c.stato || 'Attivo'}</td>
+                  <td style={{ padding: '10px' }}>{c.marketing_consent ? 'Sì' : 'No'}</td>
                 </tr>
               ))}
             </tbody>
@@ -190,14 +166,18 @@ export default function AdminPage() {
           <div style={{ marginBottom: '10px' }}><div style={{ fontSize: '10px', color: '#666' }}>CITTÀ</div><div style={{ fontSize: '12px' }}>{clienteSelezionato.citta || 'N/D'}</div></div>
           <div style={{ marginBottom: '10px' }}><div style={{ fontSize: '10px', color: '#666' }}>ISCRITTO IL</div><div style={{ fontSize: '12px' }}>{new Date(clienteSelezionato.created_at).toLocaleDateString('it-IT')}</div></div>
           <div style={{ marginBottom: '10px' }}><div style={{ fontSize: '10px', color: '#666' }}>CREDITO</div><div style={{ fontSize: '16px', color: '#06D6A0' }}>{Math.floor(clienteSelezionato.credito_secondi / 60)} min</div></div>
-          <div style={{ marginBottom: '10px' }}><div style={{ fontSize: '10px', color: '#666' }}>SPESO</div><div style={{ fontSize: '16px', color: '#F5A623' }}>€ {(clienteSelezionato.importo_totale || 0).toFixed(2)}</div></div>
-          <div style={{ marginBottom: '10px' }}><div style={{ fontSize: '10px', color: '#666' }}>STATO</div><div>{clienteSelezionato.stato || 'Attivo'}</div></div>
+          <div style={{ marginBottom: '10px' }}><div style={{ fontSize: '10px', color: '#666' }}>MARKETING</div><div>{clienteSelezionato.marketing_consent ? 'Consenso dato' : 'Nessun consenso'}</div></div>
 
           <hr style={{ borderColor: '#222', margin: '15px 0' }} />
 
           <div style={{ fontSize: '11px', color: '#666', marginBottom: '5px' }}>NOTE</div>
-          <textarea value={notaCustom} onChange={e => setNotaCustom(e.target.value)} rows={3} style={{ width: '100%', padding: '8px', borderRadius: '5px', border: '1px solid #444', background: '#222', color: '#fff', fontSize: '12px', marginBottom: '5px' }} />
-          <button onClick={salvaNota} style={{ background: '#444', color: '#fff', border: 'none', padding: '6px', borderRadius: '5px', cursor: 'pointer', fontSize: '11px', marginBottom: '15px' }}>Salva Nota</button>
+          <textarea 
+            value={notaCustom} 
+            onChange={e => setNotaCustom(e.target.value)} 
+            rows={10} 
+            style={{ width: '100%', padding: '10px', borderRadius: '5px', border: '1px solid #444', background: '#222', color: '#fff', fontSize: '12px', marginBottom: '8px', resize: 'vertical' }} 
+          />
+          <button onClick={salvaNota} style={{ background: '#444', color: '#fff', border: 'none', padding: '8px', borderRadius: '5px', cursor: 'pointer', fontSize: '11px', marginBottom: '15px' }}>Salva Nota</button>
 
           <hr style={{ borderColor: '#222', margin: '10px 0' }} />
 
@@ -211,8 +191,6 @@ export default function AdminPage() {
 
           <div style={{ fontSize: '11px', color: '#666', marginBottom: '5px' }}>AZIONI</div>
           <button onClick={generaLibroManuale} style={{ background: '#F5A623', color: '#000', border: 'none', padding: '8px', borderRadius: '5px', cursor: 'pointer', fontSize: '11px', marginBottom: '5px', fontWeight: 'bold' }}>Genera/Invia Libro</button>
-          <button onClick={bloccaCliente} style={{ background: '#EF476F', color: '#fff', border: 'none', padding: '8px', borderRadius: '5px', cursor: 'pointer', fontSize: '11px', marginBottom: '5px' }}>Blocca Cliente</button>
-          <button onClick={cancellaCliente} style={{ background: 'transparent', border: '1px solid #444', color: '#888', padding: '8px', borderRadius: '5px', cursor: 'pointer', fontSize: '11px' }}>Segna come Cancellato (GDPR)</button>
         </div>
       )}
     </div>
