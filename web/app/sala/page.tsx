@@ -440,14 +440,14 @@ function SalaContent() {
         </div>
       )}
 
-      <div className="footer" style={{ fontSize: '12px', textAlign: 'center', paddingBottom: '20px' }}>
+            <div className="footer" style={{ fontSize: '12px', textAlign: 'center', paddingBottom: '20px' }}>
         <Link href="/privacy">Privacy</Link>·
         <Link href="/disclaimer">Disclaimer</Link>·
         <Link href="/faq">FAQ</Link>
         <br /><br />
         <button 
           onClick={cancellaAccount} 
-          style={{ background: 'none', border: 'none', color: '#EF476F', fontSize: '12px', cursor: 'pointer', textDecoration: 'underline' }}
+          style={{ background: 'none', border: 'none', color: 'var(--text-dim)', fontSize: '12px', cursor: 'pointer' }}
         >
           Cancella il mio account
         </button>
