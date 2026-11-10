@@ -16,8 +16,6 @@ def genera_ruota_svg(tema: dict) -> str:
     svg += f'<circle cx="300" cy="300" r="280" fill="#fcfbf7" stroke="#b89752" stroke-width="2"/>'
     svg += f'<circle cx="300" cy="300" r="230" fill="none" stroke="#b89752" stroke-width="1"/>'
     svg += f'<circle cx="300" cy="300" r="150" fill="none" stroke="#b89752" stroke-width="1"/>'
-    
-    # Spicchi e segni
     for i, segno in enumerate(segni):
         angle_start = (i * 30 - 90) * (math.pi / 180)
         angle_mid = (i * 30 + 15 - 90) * (math.pi / 180)
@@ -29,8 +27,6 @@ def genera_ruota_svg(tema: dict) -> str:
         x_sym = 300 + 255 * math.cos(angle_mid)
         y_sym = 300 + 255 * math.sin(angle_mid)
         svg += f'<text x="{x_sym}" y="{y_sym}" fill="#b89752" font-size="24" text-anchor="middle" dominant-baseline="central">{segno}</text>'
-        
-    # Pianeti (posizionati sulla ruota)
     simboli_pianeti = {"Sole": "☉", "Luna": "☽", "Mercurio": "☿", "Venere": "♀", "Marte": "♂", "Giove": "♃", "Saturno": "♄", "Urano": "♅", "Nettuno": "♆", "Plutone": "♇"}
     for nome_p, dati_p in tema.get("planets", {}).items():
         if nome_p in simboli_pianeti:
@@ -40,7 +36,6 @@ def genera_ruota_svg(tema: dict) -> str:
             y = 300 + 190 * math.sin(angle)
             sym = simboli_pianeti[nome_p]
             svg += f'<text x="{x}" y="{y}" fill="#0d1321" font-size="20" text-anchor="middle" dominant-baseline="central">{sym}</text>'
-
     svg += '</svg>'
     return svg
 
@@ -53,11 +48,7 @@ async def genera_libro_completo(profile: dict, report: dict, tema: dict, settori
     segno_luna = tema.get("planets", {}).get("Luna", {}).get("segno", "")
     simboli_segni = {"Ariete": "♈", "Toro": "♉", "Gemelli": "♊", "Cancro": "♋", "Leone": "♌", "Vergine": "♍", "Bilancia": "♎", "Scorpione": "♏", "Sagittario": "♐", "Capricorno": "♑", "Acquario": "♒", "Pesci": "♓"}
     simbolo_segno = simboli_segni.get(segno_sole, "✦")
-    
-    testo_dedica = f"""
-    <p class="testo-dedica">Questo libro è dedicato a <strong>{nome}</strong>, nato il {data_nascita} a {luogo_nascita}.</p>
-    <p class="testo-dedica" style="margin-top: 20px;">Le sue pagine nascono dal cielo di quel giorno, unico e irripetibile, e attraversano i simboli astrologici che accompagnano il tuo percorso. Ogni pianeta, ogni casa, ogni transito racconta una parte di te.</p>
-    """
+
     ruota_svg = genera_ruota_svg(tema)
 
     # TABELLE
@@ -105,7 +96,7 @@ async def genera_libro_completo(profile: dict, report: dict, tema: dict, settori
         tab_transiti += "<tr><td colspan='4' style='text-align: center;'>Nessun transito rilevante.</td></tr>"
     tab_transiti += "</table>"
 
-    # --- IDENTITÀ (4 chiamate separate) ---
+    # IDENTITÀ
     await asyncio.sleep(1)
     sole_txt = pulisci_testo(await _chiama_ai(f"Scrivi 100 parole sull'identità di {nome} con Sole in {segno_sole}.", max_tokens=300)) or "Il tuo Sole brilla."
     await asyncio.sleep(1)
@@ -115,7 +106,7 @@ async def genera_libro_completo(profile: dict, report: dict, tema: dict, settori
     await asyncio.sleep(1)
     mc_txt = pulisci_testo(await _chiama_ai(f"Scrivi 100 parole sul Medio Cielo di {nome}.", max_tokens=300)) or "Il tuo Medio Cielo indica la strada."
 
-    # --- SEGNI COMPATIBILI (con descrizione ricca) ---
+    # SEGNI COMPATIBILI
     COMPATIBILI = {
         "Ariete": ["Leone", "Sagittario", "Gemelli", "Acquario"], "Toro": ["Vergine", "Capricorno", "Cancro", "Pesci"],
         "Gemelli": ["Bilancia", "Acquario", "Ariete", "Leone"], "Cancro": ["Scorpione", "Pesci", "Toro", "Vergine"],
@@ -124,13 +115,7 @@ async def genera_libro_completo(profile: dict, report: dict, tema: dict, settori
         "Sagittario": ["Ariete", "Leone", "Bilancia", "Acquario"], "Capricorno": ["Toro", "Vergine", "Scorpione", "Pesci"],
         "Acquario": ["Gemelli", "Bilancia", "Ariete", "Sagittario"], "Pesci": ["Cancro", "Scorpione", "Toro", "Capricorno"],
     }
-    # Frasi fisse basate sull'elemento
-    frasi_compatibilita = {
-        "Fuoco": "Condividete la stessa passione e energia vitale.",
-        "Terra": "Siete pratici e cercate stabilità insieme.",
-        "Aria": "La vostra comunicazione è fluida e stimolante.",
-        "Acqua": "C'è un'intesa emotiva profonda e istintiva."
-    }
+    frasi_compatibilita = {"Fuoco": "Condividete la stessa passione e energia vitale.", "Terra": "Siete pratici e cercate stabilità insieme.", "Aria": "La vostra comunicazione è fluida e stimolante.", "Acqua": "C'è un'intesa emotiva profonda e istintiva."}
     elementi = {"Ariete": "Fuoco", "Leone": "Fuoco", "Sagittario": "Fuoco", "Toro": "Terra", "Vergine": "Terra", "Capricorno": "Terra", "Gemelli": "Aria", "Bilancia": "Aria", "Acquario": "Aria", "Cancro": "Acqua", "Scorpione": "Acqua", "Pesci": "Acqua"}
     
     compatibili = COMPATIBILI.get(segno_sole, [])
@@ -140,7 +125,7 @@ async def genera_libro_completo(profile: dict, report: dict, tema: dict, settori
         compatibili_html += f"<li style='font-size: 13pt; margin-bottom: 10px;'><span style='font-size: 18pt; color: #b89752;'>{simboli_segni.get(c, '')}</span> <strong>{c}</strong>: {frase}</li>"
     compatibili_html += "</ul>"
 
-    # --- SEGNALI DALLE STELLE ---
+    # SEGNALI DALLE STELLE
     segnali_html = ""
     if transiti_list:
         for t in transiti_list[:5]:
@@ -150,14 +135,14 @@ async def genera_libro_completo(profile: dict, report: dict, tema: dict, settori
     else:
         segnali_html = "<p>I transiti principali saranno rivelati mese per mese.</p>"
 
-    # --- RESOCONTO ANNUALE ---
+    # RESOCONTO ANNUALE
     await asyncio.sleep(1)
     prompt_resoconto = f"Scrivi un resoconto annuale per il 2027 per {nome} (Sole in {segno_sole}). Massimo 300 parole. Tono: ispirazionale."
     resoconto = pulisci_testo(await _chiama_ai(prompt_resoconto, max_tokens=600)) or "Il 2027 è un anno di crescita."
     if resoconto:
         resoconto = f"<span style='font-size: 40pt; float: left; line-height: 1; margin-right: 10px; color: #b89752; font-family: Cinzel;'>{resoconto[0]}</span>{resoconto[1:]}"
 
-    # --- MESI ---
+    # MESI
     mesi_nomi = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"]
     capitoli_mesi = ""
     for mese in mesi_nomi:
@@ -165,11 +150,10 @@ async def genera_libro_completo(profile: dict, report: dict, tema: dict, settori
         prompt_mese = f"Scrivi un testo di almeno 150 parole per il mese di {mese} 2027 per {nome} (Sole in {segno_sole}). Parla dell'energia del mese."
         testo_mese = pulisci_testo(await _chiama_ai(prompt_mese, max_tokens=400)) or f"Il mese di {mese} porta nuove energie."
         if testo_mese:
-            # Drop Cap: solo un'immagine finta (non togliamo la lettera al testo)
-            testo_mese = f"<span style='font-size: 40pt; float: left; line-height: 1; margin-right: 10px; color: #b89752; font-family: Cinzel;'>✦</span>{testo_mese}"
+            testo_mese = f"<span style='font-size: 40pt; float: left; line-height: 1; margin-right: 10px; color: #b89752; font-family: Cinzel;'>{testo_mese[0]}</span>{testo_mese[1:]}"
         capitoli_mesi += f"<div class='capitolo'><h2>{mese} 2027</h2><p>{testo_mese}</p></div>"
 
-    # --- AMBITI (divisi in paragrafi) ---
+    # AMBITI
     settori_html = ""
     ambiti = [("Amore e Relazioni", f"Venere in {tema.get('planets', {}).get('Venere', {}).get('segno', '')}"), ("Lavoro e Carriera", f"Marte in {tema.get('planets', {}).get('Marte', {}).get('segno', '')}"), ("Salute e Benessere", f"Luna in {segno_luna}"), ("Crescita Personale", f"Nodo Nord in {tema.get('planets', {}).get('NodoNord', {}).get('segno', '')}")]
     for titolo, contesto in ambiti:
@@ -184,16 +168,75 @@ async def genera_libro_completo(profile: dict, report: dict, tema: dict, settori
         html_content = f.read()
     html_content = html_content.replace("{{NOME_CLIENTE}}", nome)
     
+    # TESTO DELLA DEDICA FISSA
+    dedica_html = f"""
+    <div class="capitolo">
+        <div class="dedica">
+            <div class="simbolo-segno">{simbolo_segno}</div>
+            <p class="testo-dedica">Questo libro porta un nome che è anche un augurio.</p>
+            <p class="testo-dedica" style="margin-top: 20px;">Tufelia nasce da un "tu" e da una "Felia": il "tu" è la scusa per guardare il cielo da vicino, senza il filtro delle previsioni uguali per tutti; "Felia" viene dal latino felix, che significa felice, fortunato, fecondo — e conserva dentro di sé l'antica radice di chi porta aiuto.</p>
+            <p class="testo-dedica" style="margin-top: 20px;">Tu, Felia: tu che questo cielo lo abiti, tu a cui le stelle parlano al singolare.</p>
+            <p class="testo-dedica" style="margin-top: 20px;">Le pagine che seguono non vogliono dirti cosa accadrà, ma aiutarti a leggere ciò che già sei. Il tuo cielo personalizzato comincia qui, con il tuo nome sulla prima riga e il tuo tempo scritto nelle pagine.</p>
+            <p class="testo-dedica" style="margin-top: 20px;">Che questo sia un anno felice. Che le stelle ti siano, come si dice, favorevoli — e che tu sappia riconoscerle anche quando si nascondono.</p>
+            <p class="testo-dedica" style="margin-top: 30px; font-size: 14pt;">Con affetto,<br>tuFelia</p>
+        </div>
+    </div>
+    """
+
+    # TESTO DELLA PAGINA FINALE
+    pagina_finale_html = f"""
+    <div class="capitolo">
+        <div class="dedica" style="margin-top: 100px;">
+            <div class="simbolo-segno">✦</div>
+            <p class="testo-dedica" style="font-size: 16pt; font-style: italic;">Tufelia — perché il tuo cielo non è quello di tutti.</p>
+            <p class="testo-dedica" style="font-size: 14pt; margin-top: 30px;">A {nome}, con l'augurio di ogni felicità.</p>
+            <div style="margin-top: 60px; font-size: 12pt; color: #b89752;">✦</div>
+        </div>
+    </div>
+    """
+    
     corpo_libro = f"""
-    <div class="capitolo"><div class="dedica"><div class="simbolo-segno">{simbolo_segno}</div>{testo_dedica}</div></div>
-    <div class="capitolo"><h2>La Tua Ruota e i Tuoi Dati</h2><div class="ruota-container">{ruota_svg}</div><h3>I Pianeti</h3>{tab_pianeti}<h3>Le Case</h3>{tab_case}<h3>Gli Aspetti</h3>{tab_aspetti}<h3>I Transiti</h3>{tab_transiti}</div>
-    <div class="capitolo"><h2>Parte I - La Tua Identità</h2><div class="box-identita"><div class="simbolo-grande">☉</div><span class="titolo-box">Il Segno Solare</span><p>{sole_txt}</p></div><div class="box-identita"><div class="simbolo-grande">↑</div><span class="titolo-box">L'Ascendente</span><p>{asc_txt}</p></div><div class="box-identita"><div class="simbolo-grande">☽</div><span class="titolo-box">La Luna</span><p>{luna_txt}</p></div><div class="box-identita"><div class="simbolo-grande">⚡</div><span class="titolo-box">Il Medio Cielo</span><p>{mc_txt}</p></div></div>
-    <div class="capitolo"><h2>I Tuoi Segni Compatibili</h2><p>Le tue energie si armonizzano meglio con:</p>{compatibili_html}</div>
-    <div class="capitolo"><h2>Segnali dalle Stelle</h2><p>Questi sono i transiti più importanti che segneranno il tuo 2027:</p>{segnali_html}</div>
-    <div class="capitolo"><h2>Resoconto Annuale 2027</h2><p>{resoconto}</p></div>
+    {dedica_html}
+    
+    <div class="capitolo">
+        <h2>La Tua Ruota e i Tuoi Dati</h2>
+        <div class="ruota-container">{ruota_svg}</div>
+        <h3>I Pianeti</h3>{tab_pianeti}
+        <h3>Le Case</h3>{tab_case}
+        <h3>Gli Aspetti</h3>{tab_aspetti}
+        <h3>I Transiti</h3>{tab_transiti}
+    </div>
+    
+    <div class="capitolo">
+        <h2>Parte I - La Tua Identità</h2>
+        <div class="box-identita"><div class="simbolo-grande">☉</div><span class="titolo-box">Il Segno Solare</span><p>{sole_txt}</p></div>
+        <div class="box-identita"><div class="simbolo-grande">↑</div><span class="titolo-box">L'Ascendente</span><p>{asc_txt}</p></div>
+        <div class="box-identita"><div class="simbolo-grande">☽</div><span class="titolo-box">La Luna</span><p>{luna_txt}</p></div>
+        <div class="box-identita"><div class="simbolo-grande">⚡</div><span class="titolo-box">Il Medio Cielo</span><p>{mc_txt}</p></div>
+    </div>
+    
+    <div class="capitolo">
+        <h2>I Tuoi Segni Compatibili</h2>
+        <p>Le tue energie si armonizzano meglio con:</p>
+        {compatibili_html}
+    </div>
+    
+    <div class="capitolo">
+        <h2>Segnali dalle Stelle</h2>
+        <p>Questi sono i transiti più importanti che segneranno il tuo 2027:</p>
+        {segnali_html}
+    </div>
+    
+    <div class="capitolo">
+        <h2>Resoconto Annuale 2027</h2>
+        <p>{resoconto}</p>
+    </div>
+    
     {capitoli_mesi}
     {settori_html}
+    {pagina_finale_html}
     """
+    
     html_content = html_content.replace('<div id="contenuto"></div>', f'<div id="contenuto">{corpo_libro}</div>')
     
     nome_file = f"libro_{profile['id']}_{datetime.now().strftime('%Y%m%d%H%M%S')}.pdf"
