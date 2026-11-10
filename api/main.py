@@ -875,7 +875,7 @@ async def telegram_webhook(request: Request):
         nome = prof["nome"]
         sb.table("profiles").update({"telegram_id": str(chat_id)}).eq("access_token", token).execute()
         
-        await send_telegram(chat_id, f"Benvenuto <b>{nome}</b>! 🌙\n\nQuesto è il tuo contatto con le stelle. Profilo collegato correttamente.\n🌐 {SITE_URL}/sala?token={token}")
+        await send_telegram(chat_id, f"Ciao <b>{nome}</b>, sono tuFelia. 🌙\n\nIl tuo cielo è ora collegato a me. Da oggi, ogni settimana, riceverai qui il tuo oroscopo personale, scritto solo per te, basato sul tuo tema natale.\n\nNon previsioni uguali per tutti, ma le stelle che parlano al singolare.\n\nA presto,\ntuFelia\n\n🌐 <a href='{SITE_URL}/sala?token={token}'>La tua Sala</a>")
         await asyncio.sleep(2)
         
         try:
