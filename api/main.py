@@ -1345,6 +1345,37 @@ async def send_telegram(chat_id, text):
     except Exception as e:
         print(f"Errore Telegram: {e}")
 
+@app.post("/cancella-account/{token}")
+async def cancella_account(token: str):
+    try:
+        sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+        res = sb.table("profiles").select("*").eq("access_token", token).execute()
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Profilo non trovato")
+        profile = res.data[0]
+        
+        email = profile.get("email")
+        
+        # 1. Cancella da Brevo
+        if email:
+            await cancella_da_brevo(email)
+        
+        # 2. Anonimizza su Supabase
+        sb.table("profiles").update({
+            "nome": "Utente Cancellato",
+            "email": None,
+            "telefono": None,
+            "note": "Richiesta cancellazione",
+            "marketing_consent": False,
+            "cessione_terzi": False
+        }).eq("id", profile["id"]).execute()
+        
+        return {"status": "ok", "message": "Account cancellato."}
+    except HTTPException: raise
+    except Exception as e:
+        print(f"=== ERRORE CANCELLAZIONE ACCOUNT: {e} ===")
+        raise HTTPException(status_code=500, detail=str(e))
+
 async def unlink_telegram_account(chat_id):
     sb = create_client(SUPABASE_URL, SUPABASE_KEY)
     try:
