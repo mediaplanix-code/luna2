@@ -90,7 +90,8 @@ class OnboardingRequest(BaseModel):
     birth_lon: float = 0
     wants_telegram: bool = False
     telefono: str = ""
-    marketing_consent: bool = False # <-- NUOVO CAMPO
+    marketing_consent: bool = False
+    cessione_terzi: bool = False # <-- NUOVO CAMPO
 
 class ChatRequest(BaseModel):
     domanda: str
