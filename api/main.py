@@ -252,6 +252,67 @@ def genera_alert_futuri(profile_id: str, tema: dict, sb):
         print(f"=== ERRORE generazione alert: {e} ===")
         return []
 
+async def aggiungi_a_brevo(email: str, nome: str, marketing: bool, cessione: bool):
+    api_key = os.getenv("BREVO_API_KEY")
+    if not api_key or not email:
+        return
+    
+    # Se non ha dato il consenso al marketing, non lo aggiungiamo
+    if not marketing:
+        return
+
+    headers = {
+        "accept": "application/json",
+        "content-type": "application/json",
+        "api-key": api_key
+    }
+    
+    # Aggiungiamo il contatto alla lista "Marketing" (ID 2 di default su Brevo)
+    # Se non hai una lista, Brevo creerà il contatto ma non lo metterà in nessuna lista
+    body = {
+        "email": email,
+        "attributes": {
+            "NOME": nome,
+            "CESSIONE_TERZI": cessione
+        },
+        "listIds": [2], # <-- SOSTITUISCI 2 CON L'ID DELLA TUA LISTA "MARKETING" SU BREVO
+        "updateEnabled": True
+    }
+    
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.post("https://api.brevo.com/v3/contacts", headers=headers, json=body)
+            if r.status_code not in [201, 204, 400]: # 400 significa che esiste già, va bene
+                print(f"=== ERRORE BREVO ADD: {r.status_code} - {r.text} ===")
+            else:
+                print(f"=== BREVO: contatto {email} aggiunto/aggiornato ===")
+    except Exception as e:
+        print(f"=== ERRORE INVIO BREVO: {e} ===")
+
+
+async def cancella_da_brevo(email: str):
+    api_key = os.getenv("BREVO_API_KEY")
+    if not api_key or not email:
+        return
+    
+    headers = {
+        "accept": "application/json",
+        "api-key": api_key
+    }
+    
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            # L'API di Brevo richiede l'email come URL-encoded
+            import urllib.parse
+            email_encoded = urllib.parse.quote(email)
+            r = await client.delete(f"https://api.brevo.com/v3/contacts/{email_encoded}", headers=headers)
+            if r.status_code == 204:
+                print(f"=== BREVO: contatto {email} cancellato ===")
+            else:
+                print(f"=== ERRORE BREVO DELETE: {r.status_code} - {r.text} ===")
+    except Exception as e:
+        print(f"=== ERRORE CANCELLAZIONE BREVO: {e} ===")
+
 @app.on_event("startup")
 async def on_startup():
     if not TELEGRAM_TOKEN or not TELEGRAM_API: return
