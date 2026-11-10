@@ -1382,7 +1382,7 @@ async def admin_nota(profile_id: str, nota: str = "", password: str = ""):
     sb.table("profiles").update({"note": nota}).eq("id", profile_id).execute()
     return {"status": "ok"}
 
-    @app.post("/admin/blocca/{profile_id}")
+@app.post("/admin/blocca/{profile_id}")
 async def admin_blocca(profile_id: str, password: str = ""):
     if password != os.getenv("ADMIN_PASSWORD", ""): raise HTTPException(status_code=403)
     sb = create_client(SUPABASE_URL, SUPABASE_KEY)
