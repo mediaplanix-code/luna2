@@ -441,7 +441,10 @@ async def onboarding(req: OnboardingRequest):
             except Exception as email_err:
                 print(f"=== ERRORE INVIO EMAIL BENVENUTO: {email_err} ===")
         # --- FINE INVIO EMAIL ---
-
+        # Aggiungi a Brevo (solo se nuovo utente)
+        if not existing.data:
+            await aggiungi_a_brevo(email_lower, req.nome, req.marketing_consent, req.cessione_terzi)
+            
         return {
             "status": "ok",
             "message": f"Tema natale calcolato per {req.nome}.",
