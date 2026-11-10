@@ -1341,6 +1341,8 @@ async def admin_clienti(password: str = ""):
                 "marketing_consent": c.get("marketing_consent", False),
                 "importo_totale": float(c.get("importo_totale") or 0),
                 "data_ultimo_pagamento": c.get("data_ultimo_pagamento"),
+                "note": c.get("note", ""),        # <-- AGGIUNTO
+                "stato": c.get("stato", "attivo"), # <-- AGGIUNTO
             })
 
         return {"status": "ok", "clienti": risultato, "totale": len(risultato)}
