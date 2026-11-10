@@ -1377,34 +1377,45 @@ async def admin_regala_minuti(profile_id: str, minuti: int = 15, password: str =
 
 @app.post("/admin/nota/{profile_id}")
 async def admin_nota(profile_id: str, nota: str = "", password: str = ""):
-    if password != os.getenv("ADMIN_PASSWORD", ""): raise HTTPException(status_code=403)
+    if password != os.getenv("ADMIN_PASSWORD", ""): 
+        raise HTTPException(status_code=403, detail="Non autorizzato.")
     sb = create_client(SUPABASE_URL, SUPABASE_KEY)
     sb.table("profiles").update({"note": nota}).eq("id", profile_id).execute()
     return {"status": "ok"}
 
+
 @app.post("/admin/blocca/{profile_id}")
 async def admin_blocca(profile_id: str, password: str = ""):
-    if password != os.getenv("ADMIN_PASSWORD", ""): raise HTTPException(status_code=403)
+    if password != os.getenv("ADMIN_PASSWORD", ""): 
+        raise HTTPException(status_code=403, detail="Non autorizzato.")
     sb = create_client(SUPABASE_URL, SUPABASE_KEY)
     sb.table("profiles").update({"stato": "bloccato"}).eq("id", profile_id).execute()
     return {"status": "ok"}
 
-    @app.post("/admin/cancella/{profile_id}")
+
+@app.post("/admin/cancella/{profile_id}")
 async def admin_cancella(profile_id: str, password: str = ""):
-    if password != os.getenv("ADMIN_PASSWORD", ""): raise HTTPException(status_code=403)
+    if password != os.getenv("ADMIN_PASSWORD", ""): 
+        raise HTTPException(status_code=403, detail="Non autorizzato.")
     sb = create_client(SUPABASE_URL, SUPABASE_KEY)
     sb.table("profiles").update({"stato": "cancellato", "email": None, "nome": "Utente Cancellato"}).eq("id", profile_id).execute()
     return {"status": "ok"}
 
-    @app.post("/admin/genera-libro/{profile_id}")
+
+@app.post("/admin/genera-libro/{profile_id}")
 async def admin_genera_libro(profile_id: str, password: str = ""):
-    if password != os.getenv("ADMIN_PASSWORD", ""): raise HTTPException(status_code=403)
+    if password != os.getenv("ADMIN_PASSWORD", ""): 
+        raise HTTPException(status_code=403, detail="Non autorizzato.")
     sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+    
     # Rimuoviamo eventuali libri vecchi per questo utente
     sb.table("libri_in_coda").delete().eq("profile_id", profile_id).execute()
+    
     # Mettiamo in coda un nuovo libro
     sb.table("libri_in_coda").insert({"profile_id": profile_id, "stato": "in_attesa"}).execute()
+    
     # Facciamo partire la generazione (chiamata al cron)
     async with httpx.AsyncClient(timeout=600) as client:
         await client.post("https://luna2-api.onrender.com/cron/genera-libri", headers={"x-cron-secret": CRON_SECRET})
+    
     return {"status": "ok", "message": "Libro in generazione. Arriverà via email."}
