@@ -151,46 +151,60 @@ export default function AdminPage() {
         </div>
       </div>
 
+      {/* MODALE DETTAGLIO CLIENTE */}
       {clienteSelezionato && (
-        <div style={{ width: '350px', background: '#111', borderLeft: '1px solid #222', padding: '20px', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <h3 style={{ fontSize: '15px', color: '#F5A623' }}>Scheda Cliente</h3>
-            <button onClick={() => setClienteSelezionato(null)} style={{ background: 'transparent', border: 'none', color: '#666', fontSize: '22px', cursor: 'pointer' }}>×</button>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+          <div style={{ background: '#111', width: '90%', maxWidth: '900px', height: '80vh', borderRadius: '10px', border: '1px solid #333', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            
+            {/* Header Modale */}
+            <div style={{ padding: '20px', borderBottom: '1px solid #222', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h2 style={{ fontSize: '18px', color: '#F5A623' }}>Scheda Cliente: {clienteSelezionato.nome}</h2>
+              <button onClick={() => setClienteSelezionato(null)} style={{ background: 'transparent', border: 'none', color: '#888', fontSize: '24px', cursor: 'pointer' }}>×</button>
+            </div>
+
+            {/* Corpo Modale */}
+            <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+              
+              {/* Colonna Sinistra: Dati */}
+              <div style={{ width: '40%', padding: '20px', borderRight: '1px solid #222', overflowY: 'auto' }}>
+                <div style={{ marginBottom: '15px' }}><div style={{ fontSize: '11px', color: '#666' }}>EMAIL</div><div style={{ fontSize: '14px', wordBreak: 'break-all' }}>{clienteSelezionato.email}</div></div>
+                <div style={{ marginBottom: '15px' }}><div style={{ fontSize: '11px', color: '#666' }}>TELEFONO</div><div style={{ fontSize: '14px' }}>{clienteSelezionato.telefono || 'N/D'}</div></div>
+                <div style={{ marginBottom: '15px' }}><div style={{ fontSize: '11px', color: '#666' }}>DATA DI NASCITA</div><div style={{ fontSize: '14px' }}>{clienteSelezionato.data_nascita || 'N/D'}</div></div>
+                <div style={{ marginBottom: '15px' }}><div style={{ fontSize: '11px', color: '#666' }}>SEGNO</div><div style={{ fontSize: '14px' }}>{clienteSelezionato.segno || 'N/D'}</div></div>
+                <div style={{ marginBottom: '15px' }}><div style={{ fontSize: '11px', color: '#666' }}>CITTÀ</div><div style={{ fontSize: '14px' }}>{clienteSelezionato.citta || 'N/D'}</div></div>
+                <div style={{ marginBottom: '15px' }}><div style={{ fontSize: '11px', color: '#666' }}>ISCRITTO IL</div><div style={{ fontSize: '14px' }}>{new Date(clienteSelezionato.created_at).toLocaleDateString('it-IT')}</div></div>
+                <div style={{ marginBottom: '15px' }}><div style={{ fontSize: '11px', color: '#666' }}>CREDITO</div><div style={{ fontSize: '18px', color: '#06D6A0' }}>{Math.floor(clienteSelezionato.credito_secondi / 60)} minuti</div></div>
+                <div style={{ marginBottom: '15px' }}><div style={{ fontSize: '11px', color: '#666' }}>MARKETING</div><div>{clienteSelezionato.marketing_consent ? 'Consenso dato' : 'Nessun consenso'}</div></div>
+              </div>
+
+              {/* Colonna Destra: Note e Azioni */}
+              <div style={{ flex: 1, padding: '20px', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+                
+                <div style={{ marginBottom: '10px', fontSize: '13px', color: '#F5A623', fontWeight: 'bold' }}>NOTE SUL CLIENTE</div>
+                <textarea 
+                  value={notaCustom} 
+                  onChange={e => setNotaCustom(e.target.value)} 
+                  style={{ width: '100%', flex: 1, minHeight: '150px', padding: '15px', borderRadius: '5px', border: '1px solid #444', background: '#222', color: '#fff', fontSize: '14px', lineHeight: '1.5', resize: 'none', marginBottom: '10px' }} 
+                  placeholder="Scrivi qui appunti, richieste del cliente, ecc..."
+                />
+                <button onClick={salvaNota} style={{ background: '#444', color: '#fff', border: 'none', padding: '10px', borderRadius: '5px', cursor: 'pointer', fontSize: '13px', marginBottom: '20px', alignSelf: 'flex-start' }}>Salva Note</button>
+
+                <hr style={{ borderColor: '#222', margin: '10px 0' }} />
+
+                <div style={{ marginBottom: '10px', fontSize: '13px', color: '#F5A623', fontWeight: 'bold' }}>REGALA MINUTI</div>
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+                  <input type="number" placeholder="Minuti" value={minutiCustom} onChange={e => setMinutiCustom(e.target.value)} style={{ flex: 1, padding: '10px', borderRadius: '5px', border: '1px solid #444', background: '#222', color: '#fff', fontSize: '14px' }} />
+                  <button onClick={() => { regalaMinuti(clienteSelezionato.id, parseInt(minutiCustom)); setMinutiCustom(''); }} style={{ background: '#F5A623', border: 'none', padding: '10px 20px', borderRadius: '5px', fontWeight: 'bold', cursor: 'pointer', color: '#000', fontSize: '14px' }}>Regala</button>
+                </div>
+
+                <hr style={{ borderColor: '#222', margin: '10px 0' }} />
+
+                <div style={{ marginBottom: '10px', fontSize: '13px', color: '#F5A623', fontWeight: 'bold' }}>AZIONI</div>
+                <button onClick={generaLibroManuale} style={{ background: 'transparent', border: '1px solid #F5A623', color: '#F5A623', padding: '10px', borderRadius: '5px', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold' }}>Genera/Invia Libro</button>
+
+              </div>
+            </div>
           </div>
-          
-          <div style={{ marginBottom: '10px' }}><div style={{ fontSize: '10px', color: '#666' }}>NOME</div><div style={{ fontSize: '14px' }}>{clienteSelezionato.nome}</div></div>
-          <div style={{ marginBottom: '10px' }}><div style={{ fontSize: '10px', color: '#666' }}>EMAIL</div><div style={{ fontSize: '12px', wordBreak: 'break-all' }}>{clienteSelezionato.email}</div></div>
-          <div style={{ marginBottom: '10px' }}><div style={{ fontSize: '10px', color: '#666' }}>TELEFONO</div><div style={{ fontSize: '12px' }}>{clienteSelezionato.telefono || 'N/D'}</div></div>
-          <div style={{ marginBottom: '10px' }}><div style={{ fontSize: '10px', color: '#666' }}>DATA NASCITA</div><div style={{ fontSize: '12px' }}>{clienteSelezionato.data_nascita || 'N/D'}</div></div>
-          <div style={{ marginBottom: '10px' }}><div style={{ fontSize: '10px', color: '#666' }}>SEGNO</div><div style={{ fontSize: '12px' }}>{clienteSelezionato.segno || 'N/D'}</div></div>
-          <div style={{ marginBottom: '10px' }}><div style={{ fontSize: '10px', color: '#666' }}>CITTÀ</div><div style={{ fontSize: '12px' }}>{clienteSelezionato.citta || 'N/D'}</div></div>
-          <div style={{ marginBottom: '10px' }}><div style={{ fontSize: '10px', color: '#666' }}>ISCRITTO IL</div><div style={{ fontSize: '12px' }}>{new Date(clienteSelezionato.created_at).toLocaleDateString('it-IT')}</div></div>
-          <div style={{ marginBottom: '10px' }}><div style={{ fontSize: '10px', color: '#666' }}>CREDITO</div><div style={{ fontSize: '16px', color: '#06D6A0' }}>{Math.floor(clienteSelezionato.credito_secondi / 60)} min</div></div>
-          <div style={{ marginBottom: '10px' }}><div style={{ fontSize: '10px', color: '#666' }}>MARKETING</div><div>{clienteSelezionato.marketing_consent ? 'Consenso dato' : 'Nessun consenso'}</div></div>
-
-          <hr style={{ borderColor: '#222', margin: '15px 0' }} />
-
-          <div style={{ fontSize: '11px', color: '#666', marginBottom: '5px' }}>NOTE</div>
-          <textarea 
-            value={notaCustom} 
-            onChange={e => setNotaCustom(e.target.value)} 
-            rows={10} 
-            style={{ width: '100%', padding: '10px', borderRadius: '5px', border: '1px solid #444', background: '#222', color: '#fff', fontSize: '12px', marginBottom: '8px', resize: 'vertical' }} 
-          />
-          <button onClick={salvaNota} style={{ background: '#444', color: '#fff', border: 'none', padding: '8px', borderRadius: '5px', cursor: 'pointer', fontSize: '11px', marginBottom: '15px' }}>Salva Nota</button>
-
-          <hr style={{ borderColor: '#222', margin: '10px 0' }} />
-
-          <div style={{ fontSize: '11px', color: '#666', marginBottom: '5px' }}>REGALA MINUTI</div>
-          <div style={{ display: 'flex', gap: '5px', marginBottom: '15px' }}>
-            <input type="number" placeholder="Min" value={minutiCustom} onChange={e => setMinutiCustom(e.target.value)} style={{ flex: 1, padding: '6px', borderRadius: '5px', border: '1px solid #444', background: '#222', color: '#fff' }} />
-            <button onClick={() => { regalaMinuti(clienteSelezionato.id, parseInt(minutiCustom)); setMinutiCustom(''); }} style={{ background: '#F5A623', border: 'none', padding: '6px 12px', borderRadius: '5px', fontWeight: 'bold', cursor: 'pointer', color: '#000' }}>Regala</button>
-          </div>
-
-          <hr style={{ borderColor: '#222', margin: '10px 0' }} />
-
-          <div style={{ fontSize: '11px', color: '#666', marginBottom: '5px' }}>AZIONI</div>
-          <button onClick={generaLibroManuale} style={{ background: '#F5A623', color: '#000', border: 'none', padding: '8px', borderRadius: '5px', cursor: 'pointer', fontSize: '11px', marginBottom: '5px', fontWeight: 'bold' }}>Genera/Invia Libro</button>
         </div>
       )}
     </div>
