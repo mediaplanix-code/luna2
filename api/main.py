@@ -316,6 +316,7 @@ async def onboarding(req: OnboardingRequest):
                 "sesso": req.sesso,
                 "telefono": req.telefono if req.telefono else existing.data[0].get("telefono"),
                 "marketing_consent": req.marketing_consent,
+                "cessione_terzi": req.cessione_terzi,
             }).eq("id", profile_id).execute()
             sb.table("natal_charts").delete().eq("profile_id", profile_id).execute()
         else:
