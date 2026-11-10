@@ -1353,18 +1353,16 @@ async def cancella_account(token: str):
         if not res.data:
             raise HTTPException(status_code=404, detail="Profilo non trovato")
         profile = res.data[0]
-        
         email = profile.get("email")
         
-        # 1. Cancella da Brevo
         if email:
             await cancella_da_brevo(email)
         
-        # 2. Anonimizza su Supabase
         sb.table("profiles").update({
             "nome": "Utente Cancellato",
             "email": None,
             "telefono": None,
+            "telegram_id": None, # <-- AGGIUNTO: libera l'ID Telegram
             "note": "Richiesta cancellazione",
             "marketing_consent": False,
             "cessione_terzi": False
