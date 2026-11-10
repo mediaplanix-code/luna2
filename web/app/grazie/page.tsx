@@ -64,7 +64,7 @@ function GrazieContent() {
     return (
       <div className="canvas">
         <div className="topbar">
-          <div className="brand">✦ Luna Astrologica</div>
+          <div className="brand">✦ tuFELIA</div>
         </div>
         <p style={{ textAlign: 'center', marginTop: '40px', color: 'var(--text-dim)' }}>
           Sto attivando il tuo accesso...
@@ -77,7 +77,7 @@ function GrazieContent() {
     return (
       <div className="canvas">
         <div className="topbar">
-          <div className="brand">✦ Luna Astrologica</div>
+          <div className="brand">✦ tuFELIA</div>
         </div>
         <div style={{ textAlign: 'center', marginTop: '40px', padding: '0 20px' }}>
           <p style={{ fontSize: '15px', color: '#EF476F', marginBottom: '20px' }}>{messaggio}</p>
@@ -92,7 +92,7 @@ function GrazieContent() {
   return (
     <div className="canvas">
       <div className="topbar">
-        <div className="brand">✦ Luna Astrologica</div>
+        <div className="brand">✦ tuFELIA</div>
       </div>
 
       <div style={{ textAlign: 'center', marginTop: '40px', marginBottom: '30px' }}>
@@ -149,7 +149,7 @@ export default function GraziePage() {
     <Suspense fallback={
       <div className="canvas">
         <div className="topbar">
-          <div className="brand">✦ Luna Astrologica</div>
+          <div className="brand">✦ tuFELIA</div>
         </div>
         <p style={{ textAlign: 'center', marginTop: '40px', color: 'var(--text-dim)' }}>
           Caricamento...
