@@ -10,7 +10,7 @@ function FormContent() {
   const router = useRouter();
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
-  const [telefono, setTelefono] = useState(''); // <-- NUOVO
+  const [telefono, setTelefono] = useState('');
   const [sesso, setSesso] = useState('Donna');
   const [dataNascita, setDataNascita] = useState('');
   const [oraNascita, setOraNascita] = useState('');
@@ -19,23 +19,21 @@ function FormContent() {
   const [lon, setLon] = useState<number | null>(null);
   const [suggerimenti, setSuggerimenti] = useState<any[]>([]);
   const [showSuggerimenti, setShowSuggerimenti] = useState(false);
+  
+  // I TRE CONSENSI
   const [privacy, setPrivacy] = useState(false);
   const [marketing, setMarketing] = useState(false);
+  const [cessioneTerzi, setCessioneTerzi] = useState(false);
+  
   const [errore, setErrore] = useState('');
   const [inCaricamento, setInCaricamento] = useState(false);
 
   useEffect(() => {
-    if (citta.length < 3) {
-      setSuggerimenti([]);
-      return;
-    }
+    if (citta.length < 3) { setSuggerimenti([]); return; }
     const timeout = setTimeout(() => {
       fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(citta)}&limit=5`)
         .then(r => r.json())
-        .then(d => {
-          setSuggerimenti(d.features || []);
-          setShowSuggerimenti(true);
-        })
+        .then(d => { setSuggerimenti(d.features || []); setShowSuggerimenti(true); })
         .catch(() => {});
     }, 500);
     return () => clearTimeout(timeout);
@@ -74,7 +72,7 @@ function FormContent() {
         body: JSON.stringify({
           nome: nome,
           email: email,
-          telefono: telefono, // <-- NUOVO
+          telefono: telefono,
           sesso: sesso,
           birth_date: dataNascita,
           birth_time: oraNascita || '12:00',
@@ -83,6 +81,7 @@ function FormContent() {
           birth_lon: lon,
           wants_telegram: false,
           marketing_consent: marketing,
+          cessione_terzi: cessioneTerzi, // <-- NUOVO CAMPO
         }),
       });
 
@@ -130,7 +129,6 @@ function FormContent() {
           <input type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="La tua email" />
         </div>
 
-        {/* CAMPO TELEFONO AGGIUNTO */}
         <div className="field">
           <label>Telefono (facoltativo)</label>
           <input type="tel" value={telefono} onChange={e => setTelefono(e.target.value)} placeholder="Il tuo numero di telefono" />
@@ -173,13 +171,22 @@ function FormContent() {
         </div>
 
         <div style={{ marginTop: '20px' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', cursor: 'pointer' }}>
-            <input type="checkbox" checked={privacy} onChange={e => setPrivacy(e.target.checked)} required />
-            Accetto l'informativa sulla privacy (obbligatorio)
+          {/* 1. PRIVACY (OBBLIGATORIO) */}
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '13px', cursor: 'pointer', marginBottom: '12px' }}>
+            <input type="checkbox" checked={privacy} onChange={e => setPrivacy(e.target.checked)} required style={{ marginTop: '3px' }} />
+            <span>Accetto l'informativa sulla privacy e il trattamento dei dati per erogare il servizio (obbligatorio)</span>
           </label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', cursor: 'pointer', marginTop: '12px' }}>
-            <input type="checkbox" checked={marketing} onChange={e => setMarketing(e.target.checked)} />
-            Acconsento a ricevere comunicazioni e offerte (facoltativo)
+
+          {/* 2. MARKETING (FACOLTATIVO) */}
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '13px', cursor: 'pointer', marginBottom: '12px' }}>
+            <input type="checkbox" checked={marketing} onChange={e => setMarketing(e.target.checked)} style={{ marginTop: '3px' }} />
+            <span>Acconsento a ricevere comunicazioni, newsletter e offerte da tuFelia (facoltativo)</span>
+          </label>
+
+          {/* 3. CESSIONE A TERZI (FACOLTATIVO) */}
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '13px', cursor: 'pointer' }}>
+            <input type="checkbox" checked={cessioneTerzi} onChange={e => setCessioneTerzi(e.target.checked)} style={{ marginTop: '3px' }} />
+            <span>Acconsento alla cessione dei miei dati a terzi partner per finalità di marketing (facoltativo)</span>
           </label>
         </div>
 
