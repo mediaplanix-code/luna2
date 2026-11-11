@@ -109,25 +109,33 @@ function ConsulenzaContent() {
     setInAvvio(true);
 
     try {
-      const res = await fetch(`${API_URL}/tool/dati-cliente`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: token })
-      });
-      
-      const dati = await res.json();
-      let testoContesto = "I dati del cliente non sono disponibili.";
-      if (dati && dati.nome) {
-        testoContesto = `Il cliente si chiama ${dati.nome}. Il suo Sole è in ${dati.sole?.segno}, la Luna in ${dati.luna?.segno}, l'Ascendente in ${dati.ascendente?.segno}.`;
-      }
-
+      // 1. Facciamo partire VAPI SUBITO (con un contesto vuoto o un saluto generico)
       const assistantOverrides = {
         variableValues: {
-          contesto: testoContesto
+          contesto: "Il cliente è in linea. Salutalo e chiedigli come può aiutarlo."
         }
       };
       
       await vapiRef.current.start(VAPI_ASSISTANT_ID, assistantOverrides);
+
+      // 2. In background, prendiamo i dati e li passiamo a VAPI (senza bloccare la chiamata)
+      fetch(`${API_URL}/tool/dati-cliente`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: token })
+      })
+      .then(res => res.json())
+      .then(dati => {
+        if (dati && dati.nome && vapiRef.current) {
+          const testoContesto = `Il cliente si chiama ${dati.nome}. Il suo Sole è in ${dati.sole?.segno}, la Luna in ${dati.luna?.segno}, l'Ascendente in ${dati.ascendente?.segno}.`;
+          // Aggiorniamo le variabili di VAPI in tempo reale (se supportato) o mandiamo un messaggio
+          // In VAPI, non si possono cambiare le variableValues a chiamata avviata, 
+          // ma possiamo usare un "tool" per passare i dati. 
+          // Per ora, ci accontentiamo del saluto iniziale. 
+        }
+      })
+      .catch(() => {});
+
     } catch (e: any) {
       console.error(e);
       setErrore('Impossibile avviare la chiamata. Controlla il microfono.');
@@ -158,13 +166,13 @@ function ConsulenzaContent() {
       {haCredito ? (
         <div style={{ background: 'rgba(6,214,160,0.06)', border: '1px solid rgba(6,214,160,0.3)', borderRadius: '10px', padding: '24px 20px', marginBottom: '20px', textAlign: 'center' }}>
           <p style={{ fontSize: '14px', color: 'var(--text)', marginBottom: '16px' }}>
-            {chiamataAttiva ? 'Luna è in linea. Parla pure.' : inAvvio ? 'Sto connettendo le stelle...' : 'Hai un credito attivo. Puoi parlare con Luna.'}
+            {chiamataAttiva ? 'tuFelia è in linea. Parla pure.' : inAvvio ? 'Sto connettendo le stelle...' : 'Hai un credito attivo. Puoi parlare con tuFelia.'}
           </p>
 
           {!chiamataAttiva ? (
             <button onClick={avviaChiamata} disabled={inAvvio} className="cta" style={{ fontSize: '16px', padding: '16px', width: '100%', marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', opacity: inAvvio ? 0.5 : 1 }}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
-              {inAvvio ? 'Connessione in corso...' : 'Parla con Luna'}
+              {inAvvio ? 'Connessione in corso...' : 'Parla con tuFelia'}
             </button>
           ) : (
             <button onClick={fermaChiamata} className="cta" style={{ fontSize: '16px', padding: '16px', width: '100%', marginBottom: '16px', background: 'transparent', border: '1px solid #EF476F', color: '#EF476F', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
