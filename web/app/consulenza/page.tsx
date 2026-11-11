@@ -109,33 +109,27 @@ function ConsulenzaContent() {
     setInAvvio(true);
 
     try {
-      // 1. Facciamo partire VAPI SUBITO (con un contesto vuoto o un saluto generico)
+      // 1. Prendiamo i dati dal backend PRIMA di far partire VAPI
+      const res = await fetch(`${API_URL}/tool/dati-cliente`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: token })
+      });
+      
+      const dati = await res.json();
+      let testoContesto = "I dati del cliente non sono disponibili.";
+      if (dati && dati.nome) {
+        testoContesto = `Il cliente si chiama ${dati.nome}. Il suo Sole è in ${dati.sole?.segno}, la Luna in ${dati.luna?.segno}, l'Ascendente in ${dati.ascendente?.segno}.`;
+      }
+
+      // 2. Ora che abbiamo i dati, facciamo partire VAPI con il contesto già pronto
       const assistantOverrides = {
         variableValues: {
-          contesto: "Il cliente è in linea. Salutalo e chiedigli come può aiutarlo."
+          contesto: testoContesto
         }
       };
       
       await vapiRef.current.start(VAPI_ASSISTANT_ID, assistantOverrides);
-
-      // 2. In background, prendiamo i dati e li passiamo a VAPI (senza bloccare la chiamata)
-      fetch(`${API_URL}/tool/dati-cliente`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: token })
-      })
-      .then(res => res.json())
-      .then(dati => {
-        if (dati && dati.nome && vapiRef.current) {
-          const testoContesto = `Il cliente si chiama ${dati.nome}. Il suo Sole è in ${dati.sole?.segno}, la Luna in ${dati.luna?.segno}, l'Ascendente in ${dati.ascendente?.segno}.`;
-          // Aggiorniamo le variabili di VAPI in tempo reale (se supportato) o mandiamo un messaggio
-          // In VAPI, non si possono cambiare le variableValues a chiamata avviata, 
-          // ma possiamo usare un "tool" per passare i dati. 
-          // Per ora, ci accontentiamo del saluto iniziale. 
-        }
-      })
-      .catch(() => {});
-
     } catch (e: any) {
       console.error(e);
       setErrore('Impossibile avviare la chiamata. Controlla il microfono.');
