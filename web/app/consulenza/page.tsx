@@ -24,6 +24,9 @@ function ConsulenzaContent() {
   const [confermato, setConfermato] = useState(false);
   const [chiamataAttiva, setChiamataAttiva] = useState(false);
   const [inAvvio, setInAvvio] = useState(false);
+  
+  // NUOVO STATO: Il contesto viene preparato all'avvio
+  const [contestoPronto, setContestoPronto] = useState<string>("");
 
   const vapiRef = useRef<Vapi | null>(null);
 
@@ -38,6 +41,22 @@ function ConsulenzaContent() {
     const t = localStorage.getItem('luna2_token');
     if (!t) { router.push('/form'); return; }
     setToken(t);
+
+    // PREPARIAMO IL CONTESTO IN ANTICIPO
+    fetch(`${API_URL}/tool/dati-cliente`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: t })
+    })
+    .then(res => res.json())
+    .then(dati => {
+      if (dati && dati.nome) {
+        setContestoPronto(`Il cliente si chiama ${dati.nome}. Il suo Sole è in ${dati.sole?.segno}, la Luna in ${dati.luna?.segno}, l'Ascendente in ${dati.ascendente?.segno}.`);
+      } else {
+        setContestoPronto("I dati del cliente non sono disponibili.");
+      }
+    })
+    .catch(() => setContestoPronto("I dati del cliente non sono disponibili."));
 
     try {
       const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
@@ -109,23 +128,12 @@ function ConsulenzaContent() {
     setInAvvio(true);
 
     try {
-      // 1. Prendiamo i dati dal backend PRIMA di far partire VAPI
-      const res = await fetch(`${API_URL}/tool/dati-cliente`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: token })
-      });
+      // Usiamo il contesto già pronto (se non è ancora arrivato, usiamo un fallback)
+      const contestoDaUsare = contestoPronto || "Il cliente è in linea. Salutalo e chiedigli come puoi aiutarlo.";
       
-      const dati = await res.json();
-      let testoContesto = "I dati del cliente non sono disponibili.";
-      if (dati && dati.nome) {
-        testoContesto = `Il cliente si chiama ${dati.nome}. Il suo Sole è in ${dati.sole?.segno}, la Luna in ${dati.luna?.segno}, l'Ascendente in ${dati.ascendente?.segno}.`;
-      }
-
-      // 2. Ora che abbiamo i dati, facciamo partire VAPI con il contesto già pronto
       const assistantOverrides = {
         variableValues: {
-          contesto: testoContesto
+          contesto: contestoDaUsare
         }
       };
       
