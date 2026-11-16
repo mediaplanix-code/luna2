@@ -795,20 +795,19 @@ async def get_copione_voce(token: str, focus: str = None):
 @app.post("/tool/dati-cliente")
 async def tool_dati_cliente(request: Request):
     try:
-        # Leggiamo il body della richiesta (che può essere il vecchio token o il nuovo from_number)
+        # Leggiamo il body della richiesta
         body = await request.json()
         
-        # Estraiamo il numero di telefono (Dograh) o il token (vecchio sistema)
+        # Estraiamo il token (vecchio sistema) o il numero di telefono (Dograh)
         token = body.get("token")
         from_number = body.get("call_inbound", {}).get("from_number")
         
         sb = create_client(SUPABASE_URL, SUPABASE_KEY)
         
-        # Cerchiamo il profilo per token (se c'è) o per telefono (se c'è)
+        # Cerchiamo il profilo
         if token:
             res = sb.table("profiles").select("*").eq("access_token", token).execute()
         elif from_number:
-            # Dograh manda il numero con il prefisso, dobbiamo pulirlo
             numero_pulito = from_number.replace("+", "").strip()
             res = sb.table("profiles").select("*").eq("telefono", numero_pulito).execute()
         else:
@@ -820,23 +819,27 @@ async def tool_dati_cliente(request: Request):
         profile = res.data[0]
         nome = profile.get("nome", "Cliente")
         
+        # Calcolo tema natale
         tema = calcola_tema_completo(
             str(profile["birth_date"]), str(profile["birth_time"])[:5],
             float(profile["birth_lat"]), float(profile["birth_lon"]), 1.0,
         )
         report = genera_report_interno(profile, tema, sb)
         
-        dati = {
-            "nome": nome,
-            "sole": tema["planets"].get("Sole"),
-            "luna": tema["planets"].get("Luna"),
-            "ascendente": lon_to_sign(tema["ascendant"]),
-            "mc": lon_to_sign(tema["mc"]),
-            "transiti": report.get("transiti", []),
-            "riepilogo": report.get("riepilogo_testuale", "")
-        }
+        # Estraiamo i segni in modo sicuro
+        sole_segno = tema["planets"].get("Sole", {}).get("segno", "")
+        luna_segno = tema["planets"].get("Luna", {}).get("segno", "")
+        ascendente_segno = lon_to_sign(tema["ascendant"]).get("segno", "")
         
-        return dati
+        # Formato richiesto da Dograh (initial_context)
+        return {
+            "initial_context": {
+                "nome": nome,
+                "sole_segno": sole_segno,
+                "luna_segno": luna_segno,
+                "ascendente_segno": ascendente_segno,
+            }
+        }
         
     except Exception as e:
         print(f"=== ERRORE TOOL DATI CLIENTE: {e} ===")
