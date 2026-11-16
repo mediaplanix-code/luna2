@@ -793,15 +793,32 @@ async def get_copione_voce(token: str, focus: str = None):
 # =========================================================
 
 @app.post("/tool/dati-cliente")
-async def tool_dati_cliente(req: ToolRequest):
+async def tool_dati_cliente(request: Request):
     try:
+        # Leggiamo il body della richiesta (che può essere il vecchio token o il nuovo from_number)
+        body = await request.json()
+        
+        # Estraiamo il numero di telefono (Dograh) o il token (vecchio sistema)
+        token = body.get("token")
+        from_number = body.get("call_inbound", {}).get("from_number")
+        
         sb = create_client(SUPABASE_URL, SUPABASE_KEY)
-        res = sb.table("profiles").select("*").eq("access_token", req.token).execute()
+        
+        # Cerchiamo il profilo per token (se c'è) o per telefono (se c'è)
+        if token:
+            res = sb.table("profiles").select("*").eq("access_token", token).execute()
+        elif from_number:
+            # Dograh manda il numero con il prefisso, dobbiamo pulirlo
+            numero_pulito = from_number.replace("+", "").strip()
+            res = sb.table("profiles").select("*").eq("telefono", numero_pulito).execute()
+        else:
+            return {"error": "Nessun token o numero fornito."}
+        
         if not res.data:
             return {"error": "Cliente non trovato."}
         
         profile = res.data[0]
-        nome = profile.get("nome", "")
+        nome = profile.get("nome", "Cliente")
         
         tema = calcola_tema_completo(
             str(profile["birth_date"]), str(profile["birth_time"])[:5],
