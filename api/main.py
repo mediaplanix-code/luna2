@@ -100,8 +100,6 @@ class ChatRequest(BaseModel):
 class RecuperoRequest(BaseModel):
     email: str
 
-class ToolRequest(BaseModel):
-    token: str
 
 def lon_to_sign(lon: float) -> dict:
     lon = lon % 360
@@ -789,41 +787,82 @@ async def get_copione_voce(token: str, focus: str = None):
     return {"copione": copione}
 
 # =========================================================
-# TOOL PER VAPI (Tool Calling)
+# VOCE REALTIME — credenziale temporanea per il browser
 # =========================================================
 
-@app.post("/tool/dati-cliente")
-async def tool_dati_cliente(req: ToolRequest):
-    try:
-        sb = create_client(SUPABASE_URL, SUPABASE_KEY)
-        res = sb.table("profiles").select("*").eq("access_token", req.token).execute()
-        if not res.data:
-            return {"error": "Cliente non trovato."}
-        
-        profile = res.data[0]
-        nome = profile.get("nome", "")
-        
-        tema = calcola_tema_completo(
-            str(profile["birth_date"]), str(profile["birth_time"])[:5],
-            float(profile["birth_lat"]), float(profile["birth_lon"]), 1.0,
-        )
+@app.post("/voce/sessione/{token}")
+async def crea_sessione_voce(token: str, focus: str = "generico"):
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=503, detail="Voce non configurata: manca OPENAI_API_KEY sul server.")
+
+    sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+    res = sb.table("profiles").select("*").eq("access_token", token).execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Profilo non trovato")
+    profile = res.data[0]
+    if int(profile.get("credito_secondi") or 0) < 30:
+        raise HTTPException(status_code=402, detail="Credito insufficiente per avviare la voce.")
+
+    # Riutilizza il copione astrologico già previsto dal progetto, rispettando il focus richiesto.
+    if focus.startswith("compatibilita"):
+        dati_comp = profile.get("ultima_compatibilita")
+        if not dati_comp:
+            raise HTTPException(status_code=400, detail="Nessun confronto recente trovato.")
+        tipo_focus = focus.replace("compatibilita_", "") if focus != "compatibilita" else "generico"
+        copione = await genera_copione_voce_compatibilita(dati_comp, tipo_focus)
+    elif focus.startswith("tema"):
+        tema = calcola_tema_completo(str(profile["birth_date"]), str(profile["birth_time"])[:5], float(profile["birth_lat"]), float(profile["birth_lon"]), 1.0)
         report = genera_report_interno(profile, tema, sb)
-        
-        dati = {
-            "nome": nome,
-            "sole": tema["planets"].get("Sole"),
-            "luna": tema["planets"].get("Luna"),
-            "ascendente": lon_to_sign(tema["ascendant"]),
-            "mc": lon_to_sign(tema["mc"]),
-            "transiti": report.get("transiti", []),
-            "riepilogo": report.get("riepilogo_testuale", "")
+        copione = await genera_copione_voce_tema(report, focus.replace("tema_", ""))
+    else:
+        tema = calcola_tema_completo(str(profile["birth_date"]), str(profile["birth_time"])[:5], float(profile["birth_lat"]), float(profile["birth_lon"]), 1.0)
+        report = genera_report_interno(profile, tema, sb)
+        copione = await genera_copione_voce(report)
+
+    if not copione:
+        raise HTTPException(status_code=503, detail="Il consulto non è disponibile. Riprova più tardi.")
+
+    instructions = (
+        "Sei tuFelia, consulente astrologica italiana. Parla sempre in italiano naturale, "
+        "con voce femminile calda, spontanea e rassicurante. Conversa in modo libero e fluido: "
+        "ascolta fino alla fine, non interrompere, rispondi in modo diretto e non recitare testi "
+        "lunghi se non richiesti. Fai una domanda alla volta quando serve. Non inventare dati "
+        "del tema natale e distingui sempre interpretazione astrologica da fatti certi. "
+        "Mantieni il contesto del consulto per tutta la conversazione.\n\n"
+        "CONTESTO E MATERIALE ASTROLOGICO DEL CLIENTE:\n" + str(copione)
+    )
+    payload = {
+        "session": {
+            "type": "realtime",
+            "model": "gpt-realtime-2.1",
+            "instructions": instructions,
+            "audio": {
+                "output": {"voice": "marin"},
+                "input": {"turn_detection": {"type": "semantic_vad", "eagerness": "medium"}}
+            }
         }
-        
-        return dati
-        
+    }
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                "https://api.openai.com/v1/realtime/client_secrets",
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json=payload,
+            )
+        if response.status_code >= 400:
+            print(f"Realtime client secret error {response.status_code}: {response.text[:1000]}")
+            raise HTTPException(status_code=502, detail="Il servizio vocale non è al momento disponibile.")
+        data = response.json()
+        secret = data.get("value") or data.get("client_secret", {}).get("value")
+        if not secret:
+            raise HTTPException(status_code=502, detail="Risposta non valida dal servizio vocale.")
+        return {"client_secret": secret}
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"=== ERRORE TOOL DATI CLIENTE: {e} ===")
-        return {"error": f"Errore: {type(e).__name__}"}
+        print(f"=== ERRORE CREAZIONE SESSIONE REALTIME: {e} ===")
+        raise HTTPException(status_code=502, detail="Errore durante la preparazione della sessione vocale.")
 
 # =========================================================
 # ALTRI ENDPOINT (transits, telegram, cron)
