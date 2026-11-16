@@ -3,12 +3,9 @@
 import { useState, useEffect, Suspense, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import Vapi from '@vapi-ai/web';
 
 const STRIPE_PAYMENT_LINK = "https://buy.stripe.com/test_fZu14pfFefK76BRgk8e3e00";
 const API_URL = "https://luna2-api.onrender.com";
-const VAPI_PUBLIC_KEY = "5ca95508-9fa5-4cba-82dc-7860f7962780"; 
-const VAPI_ASSISTANT_ID = "7a6e8b6e-1683-4247-bfb8-024cc92d02e7";
 
 function ConsulenzaContent() {
   const router = useRouter();
@@ -25,7 +22,11 @@ function ConsulenzaContent() {
   const [chiamataAttiva, setChiamataAttiva] = useState(false);
   const [inAvvio, setInAvvio] = useState(false);
 
-  const vapiRef = useRef<Vapi | null>(null);
+  const peerRef = useRef<RTCPeerConnection | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const channelRef = useRef<RTCDataChannel | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const timerStartedRef = useRef(false);
 
   const etichetteFocus: Record<string, string> = {
     generico: 'Consulto Generale', tema_amore: 'Approfondimento Amore', tema_lavoro: 'Approfondimento Lavoro', tema_salute: 'Approfondimento Salute', tema_crescita: 'Approfondimento Crescita Personale', tema_previsioni: 'Approfondimento Previsioni', tema_pianeti: 'Approfondimento Pianeti', tema_case: 'Approfondimento Case', tema_aspetti: 'Approfondimento Aspetti', tema_transiti: 'Approfondimento Transiti', compatibilita_amore: 'Compatibilità Amorosa', compatibilita_lavoro: 'Compatibilità Lavorativa', compatibilita_salute: 'Compatibilità Salute', compatibilita_crescita: 'Compatibilità Crescita', compatibilita_previsioni: 'Compatibilità Previsioni', compatibilita: 'Compatibilità Generale',
@@ -39,43 +40,17 @@ function ConsulenzaContent() {
     if (!t) { router.push('/form'); return; }
     setToken(t);
 
-    try {
-      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-      if (AudioContext) {
-        const audioCtx = new AudioContext();
-        if (audioCtx.state === 'suspended') audioCtx.resume();
-      }
-    } catch (e) {}
-
-    const vapi = new Vapi(VAPI_PUBLIC_KEY);
-    vapiRef.current = vapi;
-
-    vapi.on('call-start', () => {
-      setChiamataAttiva(true);
-      setInAvvio(false);
-      fetch(`${API_URL}/avvia-voce/${t}`, { method: 'POST' }).catch(() => {});
-    });
-
-    vapi.on('call-end', () => {
-      setChiamataAttiva(false);
-      setInAvvio(false);
-      fetch(`${API_URL}/ferma-voce/${t}`, { method: 'POST' })
-        .then(r => r.json())
-        .then(d => { if (d.credito_secondi !== undefined) setCredito(d.credito_secondi); })
-        .catch(() => {});
-    });
-
-    vapi.on('error', (e) => {
-      console.error('Errore Vapi:', e);
-      setErrore('Errore di connessione con la voce. Riprova.');
-      setChiamataAttiva(false);
-      setInAvvio(false);
-    });
-
-    return () => {
-      vapi.stop();
-    };
   }, [router]);
+
+  useEffect(() => () => {
+    channelRef.current?.close();
+    peerRef.current?.close();
+    streamRef.current?.getTracks().forEach(track => track.stop());
+    if (token && timerStartedRef.current) {
+      timerStartedRef.current = false;
+      fetch(`${API_URL}/ferma-voce/${token}`, { method: 'POST', keepalive: true }).catch(() => {});
+    }
+  }, [token]);
 
   useEffect(() => {
     if (!token) return;
@@ -104,39 +79,124 @@ function ConsulenzaContent() {
   const vaiAlPagamento = () => { window.location.href = STRIPE_PAYMENT_LINK; };
 
   const avviaChiamata = async () => {
-    if (!vapiRef.current || !token) return;
+    if (!token || inAvvio || chiamataAttiva) return;
     setErrore('');
     setInAvvio(true);
 
     try {
-      const res = await fetch(`${API_URL}/tool/dati-cliente`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: token })
+      const sessionRes = await fetch(`${API_URL}/voce/sessione/${token}?focus=${encodeURIComponent(focus)}`, {
+        method: 'POST'
       });
-      
-      const dati = await res.json();
-      let testoContesto = "I dati del cliente non sono disponibili.";
-      if (dati && dati.nome) {
-        testoContesto = `Il cliente si chiama ${dati.nome}. Il suo Sole è in ${dati.sole?.segno}, la Luna in ${dati.luna?.segno}, l'Ascendente in ${dati.ascendente?.segno}.`;
+      const sessionData = await sessionRes.json();
+      if (!sessionRes.ok || !sessionData.client_secret) {
+        throw new Error(sessionData.detail || 'Impossibile preparare la sessione vocale.');
       }
 
-      const assistantOverrides = {
-        variableValues: {
-          contesto: testoContesto
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      const pc = new RTCPeerConnection();
+      peerRef.current = pc;
+      stream.getTracks().forEach(track => pc.addTrack(track, stream));
+
+      pc.ontrack = (event) => {
+        if (!audioRef.current) {
+          audioRef.current = new Audio();
+          audioRef.current.autoplay = true;
+        }
+        audioRef.current.srcObject = event.streams[0];
+        audioRef.current.play().catch(() => {});
+      };
+
+      const channel = pc.createDataChannel('oai-events');
+      channelRef.current = channel;
+      channel.onopen = async () => {
+        try {
+          const timerRes = await fetch(`${API_URL}/avvia-voce/${token}`, { method: 'POST' });
+          if (!timerRes.ok) throw new Error('Non riesco ad avviare il conteggio del credito.');
+          timerStartedRef.current = true;
+          if (pc.connectionState === 'failed' || pc.connectionState === 'closed' || channel.readyState !== 'open') {
+            timerStartedRef.current = false;
+            await fetch(`${API_URL}/ferma-voce/${token}`, { method: 'POST' }).catch(() => {});
+            return;
+          }
+          setChiamataAttiva(true);
+          setInAvvio(false);
+        } catch (err: any) {
+          setErrore(err?.message || 'Errore durante l’avvio del conteggio del credito.');
+          setInAvvio(false);
+          channel.close();
+          pc.close();
         }
       };
-      
-      await vapiRef.current.start(VAPI_ASSISTANT_ID, assistantOverrides);
+      channel.onerror = () => {
+        setErrore('Connessione audio interrotta. Riprova.');
+        setChiamataAttiva(false);
+        setInAvvio(false);
+        pc.close();
+        stream.getTracks().forEach(track => track.stop());
+        if (audioRef.current) audioRef.current.srcObject = null;
+      };
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+          setChiamataAttiva(false);
+          setInAvvio(false);
+          stream.getTracks().forEach(track => track.stop());
+          if (audioRef.current) audioRef.current.srcObject = null;
+          if (timerStartedRef.current) {
+            timerStartedRef.current = false;
+            fetch(`${API_URL}/ferma-voce/${token}`, { method: 'POST' })
+              .then(r => r.json())
+              .then(d => { if (d.credito_secondi !== undefined) setCredito(d.credito_secondi); })
+              .catch(() => {});
+          }
+        }
+      };
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      const sdpRes = await fetch('https://api.openai.com/v1/realtime/calls', {
+        method: 'POST',
+        body: offer.sdp,
+        headers: {
+          'Authorization': `Bearer ${sessionData.client_secret}`,
+          'Content-Type': 'application/sdp'
+        }
+      });
+      if (!sdpRes.ok) {
+        const detail = await sdpRes.text();
+        throw new Error(detail || 'OpenAI non ha accettato la connessione audio.');
+      }
+      const answerSdp = await sdpRes.text();
+      await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
     } catch (e: any) {
-      console.error(e);
-      setErrore('Impossibile avviare la chiamata. Controlla il microfono.');
+      console.error('Errore voce Realtime:', e);
+      setErrore(e?.message || 'Impossibile avviare la voce. Controlla il microfono.');
       setInAvvio(false);
+      peerRef.current?.close();
+      peerRef.current = null;
+      streamRef.current?.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+      channelRef.current = null;
     }
   };
 
   const fermaChiamata = () => {
-    if (vapiRef.current) vapiRef.current.stop();
+    channelRef.current?.close();
+    peerRef.current?.close();
+    peerRef.current = null;
+    channelRef.current = null;
+    streamRef.current?.getTracks().forEach(track => track.stop());
+    streamRef.current = null;
+    if (audioRef.current) audioRef.current.srcObject = null;
+    setChiamataAttiva(false);
+    setInAvvio(false);
+    if (token && timerStartedRef.current) {
+      timerStartedRef.current = false;
+      fetch(`${API_URL}/ferma-voce/${token}`, { method: 'POST' })
+        .then(r => r.json())
+        .then(d => { if (d.credito_secondi !== undefined) setCredito(d.credito_secondi); })
+        .catch(() => {});
+    }
   };
 
   if (inCaricamento) {
