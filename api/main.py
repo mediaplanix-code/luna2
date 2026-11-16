@@ -793,41 +793,33 @@ async def get_copione_voce(token: str, focus: str = None):
 # =========================================================
 
 @app.post("/tool/dati-cliente")
-async def tool_dati_cliente(request: Request):
+async def tool_dati_cliente(req: ToolRequest):
     try:
-        # Legge il token dall'URL (es. ?token=xxx)
-        token = request.query_params.get("token")
-        
         sb = create_client(SUPABASE_URL, SUPABASE_KEY)
-        
-        if token:
-            res = sb.table("profiles").select("*").eq("access_token", token).execute()
-        else:
-            # Se il token non c'è, Dograh manda il body (con il numero di telefono, ma per ora lo ignoriamo)
-            return {"error": "Token mancante nell'URL."}
-        
+        res = sb.table("profiles").select("*").eq("access_token", req.token).execute()
         if not res.data:
             return {"error": "Cliente non trovato."}
         
         profile = res.data[0]
-        nome = profile.get("nome", "Cliente")
+        nome = profile.get("nome", "")
         
-        # Calcolo tema natale
         tema = calcola_tema_completo(
             str(profile["birth_date"]), str(profile["birth_time"])[:5],
             float(profile["birth_lat"]), float(profile["birth_lon"]), 1.0,
         )
         report = genera_report_interno(profile, tema, sb)
         
-        # Formato richiesto da Dograh (initial_context)
-        return {
-            "initial_context": {
-                "nome": nome,
-                "sole_segno": tema["planets"].get("Sole", {}).get("segno", ""),
-                "luna_segno": tema["planets"].get("Luna", {}).get("segno", ""),
-                "ascendente_segno": lon_to_sign(tema["ascendant"]).get("segno", ""),
-            }
+        dati = {
+            "nome": nome,
+            "sole": tema["planets"].get("Sole"),
+            "luna": tema["planets"].get("Luna"),
+            "ascendente": lon_to_sign(tema["ascendant"]),
+            "mc": lon_to_sign(tema["mc"]),
+            "transiti": report.get("transiti", []),
+            "riepilogo": report.get("riepilogo_testuale", "")
         }
+        
+        return dati
         
     except Exception as e:
         print(f"=== ERRORE TOOL DATI CLIENTE: {e} ===")
