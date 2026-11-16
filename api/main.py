@@ -795,23 +795,16 @@ async def get_copione_voce(token: str, focus: str = None):
 @app.post("/tool/dati-cliente")
 async def tool_dati_cliente(request: Request):
     try:
-        # Leggiamo il body della richiesta
-        body = await request.json()
-        
-        # Estraiamo il token (vecchio sistema) o il numero di telefono (Dograh)
-        token = body.get("token")
-        from_number = body.get("call_inbound", {}).get("from_number")
+        # Legge il token dall'URL (es. ?token=xxx)
+        token = request.query_params.get("token")
         
         sb = create_client(SUPABASE_URL, SUPABASE_KEY)
         
-        # Cerchiamo il profilo
         if token:
             res = sb.table("profiles").select("*").eq("access_token", token).execute()
-        elif from_number:
-            numero_pulito = from_number.replace("+", "").strip()
-            res = sb.table("profiles").select("*").eq("telefono", numero_pulito).execute()
         else:
-            return {"error": "Nessun token o numero fornito."}
+            # Se il token non c'è, Dograh manda il body (con il numero di telefono, ma per ora lo ignoriamo)
+            return {"error": "Token mancante nell'URL."}
         
         if not res.data:
             return {"error": "Cliente non trovato."}
@@ -826,18 +819,13 @@ async def tool_dati_cliente(request: Request):
         )
         report = genera_report_interno(profile, tema, sb)
         
-        # Estraiamo i segni in modo sicuro
-        sole_segno = tema["planets"].get("Sole", {}).get("segno", "")
-        luna_segno = tema["planets"].get("Luna", {}).get("segno", "")
-        ascendente_segno = lon_to_sign(tema["ascendant"]).get("segno", "")
-        
         # Formato richiesto da Dograh (initial_context)
         return {
             "initial_context": {
                 "nome": nome,
-                "sole_segno": sole_segno,
-                "luna_segno": luna_segno,
-                "ascendente_segno": ascendente_segno,
+                "sole_segno": tema["planets"].get("Sole", {}).get("segno", ""),
+                "luna_segno": tema["planets"].get("Luna", {}).get("segno", ""),
+                "ascendente_segno": lon_to_sign(tema["ascendant"]).get("segno", ""),
             }
         }
         
