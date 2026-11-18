@@ -112,8 +112,10 @@ REGOLE TASSATIVE:
 - Massimo 70 parole.
 - Tono: caldo, diretto, professionale.
 - NON usare MAI asterischi o markdown, solo testo fluido.
+- **Formulazione**: Non dare mai certezze assolute (es. "domani trovi l'amore"). Usa formule come "le stelle ti sono particolarmente favorevoli in questo periodo", "potresti trovare", "è un buon momento per". Sii aderente al dato astrologico (il calcolo), ma morbido nella formulazione.
 - Dai una risposta soddisfacente ma NON spiegare TUTTO. Lascia un velo di mistero.
 - Chiudi sempre con una frase che suggerisce che c'è un livello più profondo da scoprire.
+- Usa il nome del cliente all'inizio della risposta o al massimo una volta durante il discorso per attrarre l'attenzione, ma non in ogni frase.
 
 REPORT INTERNO:
 {riepilogo}
@@ -163,6 +165,7 @@ REGOLE TASSATIVE:
 - Massimo 70 parole.
 - Tono: caldo, diretto, professionale.
 - NON usare MAI asterischi o markdown, solo testo fluido.
+- **Formulazione**: Non dare mai certezze assolute. Usa formule come "le stelle ti sono particolarmente favorevoli", "potresti trovare", "è un buon momento per".
 - Dai una risposta soddisfacente ma NON spiegare TUTTO. Lascia un velo di mistero.
 - Chiudi sempre con una frase che suggerisce che c'è un livello più profondo da scoprire.
 
@@ -210,8 +213,10 @@ REGOLE TASSATIVE:
 - Massimo 70 parole.
 - Tono: caldo, diretto, professionale.
 - NON usare MAI asterischi o markdown, solo testo fluido.
+- **Formulazione**: Non dare mai certezze assolute. Usa formule come "le stelle ti sono particolarmente favorevoli", "potresti trovare", "è un buon momento per".
 - Dai una risposta soddisfacente ma NON spiegare TUTTO. Lascia un velo di mistero.
 - Chiudi sempre con una frase che suggerisce che c'è un livello più profondo da scoprire.
+- Usa il nome del cliente all'inizio della risposta o al massimo una volta durante il discorso, ma non in ogni frase.
 
 REPORT INTERNO:
 {riepilogo}
@@ -231,8 +236,14 @@ async def genera_copione_voce(report: dict) -> str:
     riepilogo = report.get("riepilogo_testuale", "")
     nome = report.get("profile", {}).get("nome", "utente")
 
-    prompt = f"""Sei un'astrologa italiana. Stai per parlare al telefono con {nome} per 15 minuti. Basandoti ESCLUSIVAMENTE sul report qui sotto, scrivi un copione di apertura che duri circa 2 minuti. Tono: caldo, diretto, mistico ma professionale. Non inventare nulla. Non usare asterischi o markdown. Struttura:
+    prompt = f"""Sei un'astrologa italiana. Stai per parlare al telefono con {nome} per 15 minuti. Basandoti ESCLUSIVAMENTE sul report qui sotto, scrivi un copione di apertura che duri circa 2 minuti. Tono: caldo, diretto, mistico ma professionale. Non inventare nulla. Non usare asterischi o markdown.
 
+REGOLE PER LA VOCE:
+- Chiama il cliente per nome all'inizio (es. "Ciao {nome}, sono tuFelia...").
+- Usa il suo nome un'altra volta durante il discorso per attrarre l'attenzione, ma non in ogni frase.
+- Non dare certezze assolute. Usa formule come "le stelle ti sono particolarmente favorevoli", "potresti trovare", "è un buon momento per".
+
+Struttura:
 1. Saluto personalizzato con il nome
 2. I 3 pilastri del tema natale (Sole, Luna, Ascendente) in 2-3 frasi
 3. Il transito più importante dei prossimi mesi e cosa significa
@@ -271,7 +282,8 @@ async def genera_copione_voce_compatibilita(dati_compatibilita: dict, focus: str
 Ecco i dati tecnici del loro confronto:
 {aspetti_testo}
 
-Scrivi il copione di apertura (circa 2 minuti). Tono: caldo, diretto, mistico ma professionale. Non usare asterischi o markdown. Struttura:
+Scrivi il copione di apertura (circa 2 minuti). Tono: caldo, diretto, mistico ma professionale. Non usare asterischi o markdown. 
+Chiama il cliente per nome all'inizio. Non dare certezze assolute. Struttura:
 
 1. Saluto personalizzato
 2. Introduzione all'argomento specifico
@@ -298,6 +310,7 @@ REGOLE TASSATIVE:
 - NON spiegare tutto. Lascia un velo di mistero.
 - Tono: caldo, diretto.
 - Non usare mai asterischi o markdown.
+- Non dare certezze assolute. Usa formule come "le stelle ti sono particolarmente favorevoli", "potresti trovare".
 
 REPORT INTERNO:
 {riepilogo}
@@ -311,7 +324,6 @@ PREVISIONI: [testo]"""
 
     risposta = await _chiama_ai(prompt, max_tokens=500)
     
-    # Parser semplice della risposta
     testi = {"amore": "", "lavoro": "", "salute": "", "crescita": "", "previsioni": ""}
     for riga in risposta.split("\n"):
         if riga.startswith("AMORE:"):
@@ -350,7 +362,8 @@ async def genera_copione_voce_tema(report: dict, focus: str) -> str:
 REPORT INTERNO:
 {riepilogo}
 
-Scrivi il copione di apertura (circa 2 minuti). Tono: caldo, diretto, mistico ma professionale. Non usare asterischi o markdown. Struttura:
+Scrivi il copione di apertura (circa 2 minuti). Tono: caldo, diretto, mistico ma professionale. Non usare asterischi o markdown. 
+Chiama il cliente per nome all'inizio. Non dare certezze assolute. Struttura:
 
 1. Saluto personalizzato
 2. Introduzione all'argomento specifico
