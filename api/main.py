@@ -100,6 +100,8 @@ class ChatRequest(BaseModel):
 class RecuperoRequest(BaseModel):
     email: str
 
+class ToolRequest(BaseModel):
+    token: str
 
 def lon_to_sign(lon: float) -> dict:
     lon = lon % 360
@@ -787,82 +789,41 @@ async def get_copione_voce(token: str, focus: str = None):
     return {"copione": copione}
 
 # =========================================================
-# VOCE REALTIME — credenziale temporanea per il browser
+# TOOL PER VAPI (Tool Calling)
 # =========================================================
 
-@app.post("/voce/sessione/{token}")
-async def crea_sessione_voce(token: str, focus: str = "generico"):
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise HTTPException(status_code=503, detail="Voce non configurata: manca OPENAI_API_KEY sul server.")
-
-    sb = create_client(SUPABASE_URL, SUPABASE_KEY)
-    res = sb.table("profiles").select("*").eq("access_token", token).execute()
-    if not res.data:
-        raise HTTPException(status_code=404, detail="Profilo non trovato")
-    profile = res.data[0]
-    if int(profile.get("credito_secondi") or 0) < 30:
-        raise HTTPException(status_code=402, detail="Credito insufficiente per avviare la voce.")
-
-    # Riutilizza il copione astrologico già previsto dal progetto, rispettando il focus richiesto.
-    if focus.startswith("compatibilita"):
-        dati_comp = profile.get("ultima_compatibilita")
-        if not dati_comp:
-            raise HTTPException(status_code=400, detail="Nessun confronto recente trovato.")
-        tipo_focus = focus.replace("compatibilita_", "") if focus != "compatibilita" else "generico"
-        copione = await genera_copione_voce_compatibilita(dati_comp, tipo_focus)
-    elif focus.startswith("tema"):
-        tema = calcola_tema_completo(str(profile["birth_date"]), str(profile["birth_time"])[:5], float(profile["birth_lat"]), float(profile["birth_lon"]), 1.0)
-        report = genera_report_interno(profile, tema, sb)
-        copione = await genera_copione_voce_tema(report, focus.replace("tema_", ""))
-    else:
-        tema = calcola_tema_completo(str(profile["birth_date"]), str(profile["birth_time"])[:5], float(profile["birth_lat"]), float(profile["birth_lon"]), 1.0)
-        report = genera_report_interno(profile, tema, sb)
-        copione = await genera_copione_voce(report)
-
-    if not copione:
-        raise HTTPException(status_code=503, detail="Il consulto non è disponibile. Riprova più tardi.")
-
-    instructions = (
-        "Sei tuFelia, consulente astrologica italiana. Parla sempre in italiano naturale, "
-        "con voce femminile calda, spontanea e rassicurante. Conversa in modo libero e fluido: "
-        "ascolta fino alla fine, non interrompere, rispondi in modo diretto e non recitare testi "
-        "lunghi se non richiesti. Fai una domanda alla volta quando serve. Non inventare dati "
-        "del tema natale e distingui sempre interpretazione astrologica da fatti certi. "
-        "Mantieni il contesto del consulto per tutta la conversazione.\n\n"
-        "CONTESTO E MATERIALE ASTROLOGICO DEL CLIENTE:\n" + str(copione)
-    )
-    payload = {
-        "session": {
-            "type": "realtime",
-            "model": "gpt-realtime-2.1",
-            "instructions": instructions,
-            "audio": {
-                "output": {"voice": "marin"},
-                "input": {"turn_detection": {"type": "semantic_vad", "eagerness": "medium"}}
-            }
-        }
-    }
+@app.post("/tool/dati-cliente")
+async def tool_dati_cliente(req: ToolRequest):
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(
-                "https://api.openai.com/v1/realtime/client_secrets",
-                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-                json=payload,
-            )
-        if response.status_code >= 400:
-            print(f"Realtime client secret error {response.status_code}: {response.text[:1000]}")
-            raise HTTPException(status_code=502, detail="Il servizio vocale non è al momento disponibile.")
-        data = response.json()
-        secret = data.get("value") or data.get("client_secret", {}).get("value")
-        if not secret:
-            raise HTTPException(status_code=502, detail="Risposta non valida dal servizio vocale.")
-        return {"client_secret": secret}
-    except HTTPException:
-        raise
+        sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+        res = sb.table("profiles").select("*").eq("access_token", req.token).execute()
+        if not res.data:
+            return {"error": "Cliente non trovato."}
+        
+        profile = res.data[0]
+        nome = profile.get("nome", "")
+        
+        tema = calcola_tema_completo(
+            str(profile["birth_date"]), str(profile["birth_time"])[:5],
+            float(profile["birth_lat"]), float(profile["birth_lon"]), 1.0,
+        )
+        report = genera_report_interno(profile, tema, sb)
+        
+        dati = {
+            "nome": nome,
+            "sole": tema["planets"].get("Sole"),
+            "luna": tema["planets"].get("Luna"),
+            "ascendente": lon_to_sign(tema["ascendant"]),
+            "mc": lon_to_sign(tema["mc"]),
+            "transiti": report.get("transiti", []),
+            "riepilogo": report.get("riepilogo_testuale", "")
+        }
+        
+        return dati
+        
     except Exception as e:
-        print(f"=== ERRORE CREAZIONE SESSIONE REALTIME: {e} ===")
-        raise HTTPException(status_code=502, detail="Errore durante la preparazione della sessione vocale.")
+        print(f"=== ERRORE TOOL DATI CLIENTE: {e} ===")
+        return {"error": f"Errore: {type(e).__name__}"}
 
 # =========================================================
 # ALTRI ENDPOINT (transits, telegram, cron)
@@ -953,13 +914,62 @@ async def telegram_webhook(request: Request):
 # CRON
 # =========================================================
 
-        try:
-            # Calcola sempre un oroscopo nuovo per il benvenuto (settimana in corso)
-            tema = calcola_tema_completo(str(prof["birth_date"]), str(prof["birth_time"])[:5], float(prof["birth_lat"]), float(prof["birth_lon"]), 1.0)
-            report = genera_report_interno(prof, tema, sb)
-            oroscopo = await genera_oroscopo_settimanale(report)
-            if oroscopo:
-                sb.table("profiles").update({"ultimo_oroscopo_testo": oroscopo}).eq("id", prof["id"]).execute()
+@app.post("/cron/oroscopo-settimanale")
+async def cron_oroscopo_settimanale(request: Request):
+    try:
+        if not CRON_SECRET: raise HTTPException(status_code=500, detail="CRON_SECRET non configurato.")
+        if request.headers.get("x-cron-secret", "") != CRON_SECRET: raise HTTPException(status_code=403, detail="Non autorizzato.")
+        if not SUPABASE_URL or not SUPABASE_KEY: raise HTTPException(status_code=500, detail="Supabase non configurato.")
+
+        sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+        res = sb.table("profiles").select("*").execute()
+        utenti = [u for u in (res.data or []) if u.get("telegram_id")]
+        
+        adesso = datetime.now(timezone.utc)
+        inizio_settimana = adesso - timedelta(days=adesso.weekday(), hours=adesso.hour, minutes=adesso.minute, seconds=adesso.second)
+
+        inviati = 0
+        in_coda = 0
+        errori = 0
+
+        for u in utenti:
+            nome = u.get("nome", "?")
+            ultimo = u.get("ultimo_oroscopo_inviato")
+            if ultimo:
+                dt_ultimo = datetime.fromisoformat(ultimo.replace("Z", "+00:00"))
+                if dt_ultimo >= inizio_settimana:
+                    continue
+
+            try:
+                tema = calcola_tema_completo(str(u["birth_date"]), str(u["birth_time"])[:5], float(u["birth_lat"]), float(u["birth_lon"]), 1.0)
+                report = genera_report_interno(u, tema, sb)
+                oroscopo = await genera_oroscopo_settimanale(report)
+
+                if not oroscopo:
+                    sb.table("coda_invii").insert({"profile_id": u["id"], "tipo": "oroscopo", "contenuto": "", "tentativi": 0}).execute()
+                    in_coda += 1
+                    continue
+
+                sb.table("profiles").update({"ultimo_oroscopo_testo": oroscopo}).eq("id", u["id"]).execute()
+
+                data_inizio = adesso.strftime("%d/%m")
+                data_fine = (adesso + timedelta(days=6)).strftime("%d/%m")
+                testo = f"<b>Oroscopo settimanale dal {data_inizio} al {data_fine}</b>\n\n{oroscopo}\n\n🌐 <a href='{SITE_URL}/sala?token={u['access_token']}'>Approfondisci nella tua sala</a>"
+                
+                chat_id = int(u["telegram_id"])
+                await send_telegram(chat_id, testo)
+                
+                sb.table("profiles").update({"ultimo_oroscopo_inviato": adesso.isoformat()}).eq("id", u["id"]).execute()
+                inviati += 1
+            except Exception as e:
+                errori += 1
+                print(f"=== CRON: errore per {nome}: {e} ===")
+
+        return {"status": "ok", "inviati": inviati, "in_coda": in_coda, "errori": errori}
+    except HTTPException: raise
+    except Exception as e:
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Errore: {e}")
 
 @app.post("/cron/alert-mensili")
 async def cron_alert_mensili(request: Request):
