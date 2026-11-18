@@ -953,66 +953,13 @@ async def telegram_webhook(request: Request):
 # CRON
 # =========================================================
 
-@app.post("/cron/oroscopo-settimanale")
-async def cron_oroscopo_settimanale(request: Request):
-    try:
-        if not CRON_SECRET: raise HTTPException(status_code=500, detail="CRON_SECRET non configurato.")
-        if request.headers.get("x-cron-secret", "") != CRON_SECRET: raise HTTPException(status_code=403, detail="Non autorizzato.")
-        if not SUPABASE_URL or not SUPABASE_KEY: raise HTTPException(status_code=500, detail="Supabase non configurato.")
-
-        sb = create_client(SUPABASE_URL, SUPABASE_KEY)
-        res = sb.table("profiles").select("*").execute()
-        utenti = [u for u in (res.data or []) if u.get("telegram_id")]
-        
-        adesso = datetime.now(timezone.utc)
-
-        inviati = 0
-        in_coda = 0
-        errori = 0
-
-        for u in utenti:
-            nome = u.get("nome", "?")
-            ultimo = u.get("ultimo_oroscopo_inviato")
-            
-            # NUOVA LOGICA: salta solo se sono passati MENO di 6 giorni
-            if ultimo:
-                try:
-                    dt_ultimo = datetime.fromisoformat(ultimo.replace("Z", "+00:00"))
-                    if (adesso - dt_ultimo).days < 6:
-                        continue
-                except Exception:
-                    pass # Se la data è corrotta, invia comunque
-
-            try:
-                tema = calcola_tema_completo(str(u["birth_date"]), str(u["birth_time"])[:5], float(u["birth_lat"]), float(u["birth_lon"]), 1.0)
-                report = genera_report_interno(u, tema, sb)
-                oroscopo = await genera_oroscopo_settimanale(report)
-
-                if not oroscopo:
-                    sb.table("coda_invii").insert({"profile_id": u["id"], "tipo": "oroscopo", "contenuto": "", "tentativi": 0}).execute()
-                    in_coda += 1
-                    continue
-
-                sb.table("profiles").update({"ultimo_oroscopo_testo": oroscopo}).eq("id", u["id"]).execute()
-
-                data_inizio = adesso.strftime("%d/%m")
-                data_fine = (adesso + timedelta(days=6)).strftime("%d/%m")
-                testo = f"<b>Oroscopo settimanale dal {data_inizio} al {data_fine}</b>\n\n{oroscopo}\n\n🌐 <a href='{SITE_URL}/sala?token={u['access_token']}'>Approfondisci nella tua sala</a>"
-                
-                chat_id = int(u["telegram_id"])
-                await send_telegram(chat_id, testo)
-                
-                sb.table("profiles").update({"ultimo_oroscopo_inviato": adesso.isoformat()}).eq("id", u["id"]).execute()
-                inviati += 1
-            except Exception as e:
-                errori += 1
-                print(f"=== CRON: errore per {nome}: {e} ===")
-
-        return {"status": "ok", "inviati": inviati, "in_coda": in_coda, "errori": errori}
-    except HTTPException: raise
-    except Exception as e:
-        print(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"Errore: {e}")
+        try:
+            # Calcola sempre un oroscopo nuovo per il benvenuto (settimana in corso)
+            tema = calcola_tema_completo(str(prof["birth_date"]), str(prof["birth_time"])[:5], float(prof["birth_lat"]), float(prof["birth_lon"]), 1.0)
+            report = genera_report_interno(prof, tema, sb)
+            oroscopo = await genera_oroscopo_settimanale(report)
+            if oroscopo:
+                sb.table("profiles").update({"ultimo_oroscopo_testo": oroscopo}).eq("id", prof["id"]).execute()
 
 @app.post("/cron/alert-mensili")
 async def cron_alert_mensili(request: Request):
