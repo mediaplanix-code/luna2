@@ -926,7 +926,6 @@ async def cron_oroscopo_settimanale(request: Request):
         utenti = [u for u in (res.data or []) if u.get("telegram_id")]
         
         adesso = datetime.now(timezone.utc)
-        inizio_settimana = adesso - timedelta(days=adesso.weekday(), hours=adesso.hour, minutes=adesso.minute, seconds=adesso.second)
 
         inviati = 0
         in_coda = 0
@@ -935,10 +934,15 @@ async def cron_oroscopo_settimanale(request: Request):
         for u in utenti:
             nome = u.get("nome", "?")
             ultimo = u.get("ultimo_oroscopo_inviato")
+            
+            # NUOVA LOGICA: salta solo se sono passati MENO di 6 giorni
             if ultimo:
-                dt_ultimo = datetime.fromisoformat(ultimo.replace("Z", "+00:00"))
-                if dt_ultimo >= inizio_settimana:
-                    continue
+                try:
+                    dt_ultimo = datetime.fromisoformat(ultimo.replace("Z", "+00:00"))
+                    if (adesso - dt_ultimo).days < 6:
+                        continue
+                except Exception:
+                    pass # Se la data è corrotta, invia comunque
 
             try:
                 tema = calcola_tema_completo(str(u["birth_date"]), str(u["birth_time"])[:5], float(u["birth_lat"]), float(u["birth_lon"]), 1.0)
