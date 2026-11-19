@@ -787,14 +787,14 @@ async def get_copione_voce(token: str, focus: str = None):
     return {"copione": copione}
 
 # =========================================================
-# VOCE REALTIME — credenziale temporanea per il browser
+# VOCE REALTIME — Gemini Multimodal Live API
 # =========================================================
 
 @app.post("/voce/sessione/{token}")
 async def crea_sessione_voce(token: str, focus: str = "generico"):
-    api_key = os.getenv("OPENAI_API_KEY")
+    api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
-        raise HTTPException(status_code=503, detail="Voce non configurata: manca OPENAI_API_KEY sul server.")
+        raise HTTPException(status_code=503, detail="Voce non configurata: manca GEMINI_API_KEY sul server.")
 
     sb = create_client(SUPABASE_URL, SUPABASE_KEY)
     res = sb.table("profiles").select("*").eq("access_token", token).execute()
@@ -804,7 +804,7 @@ async def crea_sessione_voce(token: str, focus: str = "generico"):
     if int(profile.get("credito_secondi") or 0) < 30:
         raise HTTPException(status_code=402, detail="Credito insufficiente per avviare la voce.")
 
-    # Riutilizza il copione astrologico già previsto dal progetto, rispettando il focus richiesto.
+    # Generazione del copione astrologico (logica esistente)
     if focus.startswith("compatibilita"):
         dati_comp = profile.get("ultima_compatibilita")
         if not dati_comp:
@@ -832,37 +832,13 @@ async def crea_sessione_voce(token: str, focus: str = "generico"):
         "Mantieni il contesto del consulto per tutta la conversazione.\n\n"
         "CONTESTO E MATERIALE ASTROLOGICO DEL CLIENTE:\n" + str(copione)
     )
-    payload = {
-        "session": {
-            "type": "realtime",
-            "model": "gpt-realtime-2.1",
-            "instructions": instructions,
-            "audio": {
-                "output": {"voice": "marin"},
-                "input": {"turn_detection": {"type": "semantic_vad", "eagerness": "medium"}}
-            }
-        }
+
+    # Restituisce il prompt, la chiave API e il modello da usare
+    return {
+        "prompt": instructions,
+        "api_key": api_key,
+        "model": "gemini-2.0-flash-live-001"
     }
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(
-                "https://api.openai.com/v1/realtime/client_secrets",
-                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-                json=payload,
-            )
-        if response.status_code >= 400:
-            print(f"Realtime client secret error {response.status_code}: {response.text[:1000]}")
-            raise HTTPException(status_code=502, detail="Il servizio vocale non è al momento disponibile.")
-        data = response.json()
-        secret = data.get("value") or data.get("client_secret", {}).get("value")
-        if not secret:
-            raise HTTPException(status_code=502, detail="Risposta non valida dal servizio vocale.")
-        return {"client_secret": secret}
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"=== ERRORE CREAZIONE SESSIONE REALTIME: {e} ===")
-        raise HTTPException(status_code=502, detail="Errore durante la preparazione della sessione vocale.")
 
 # =========================================================
 # ALTRI ENDPOINT (transits, telegram, cron)
