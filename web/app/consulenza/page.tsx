@@ -218,7 +218,7 @@ function ConsulenzaContent() {
       audioContextRef.current = audioContext;
       await audioContext.resume();
 
-      const socketUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained?access_token=${encodeURIComponent(sessionData.ephemeral_token)}`;
+      const socketUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContentConstrained?access_token=${encodeURIComponent(sessionData.ephemeral_token)}`;
       const socket = new WebSocket(socketUrl);
       socketRef.current = socket;
 
@@ -233,7 +233,6 @@ function ConsulenzaContent() {
                 voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Leda' } }
               }
             },
-            enableAffectiveDialog: true,
             systemInstruction: { parts: [{ text: sessionData.instructions }] },
             realtimeInputConfig: {
               automaticActivityDetection: { disabled: false, silenceDurationMs: 700 }
@@ -306,16 +305,19 @@ function ConsulenzaContent() {
         }
       };
 
-      socket.onerror = () => {
-        if (!manualStopRef.current) setErrore('Connessione Gemini Live non riuscita. Controlla la chiave API e riprova.');
+      socket.onerror = (event) => {
+        console.error('[Gemini Live] Errore WebSocket:', event);
+        if (!manualStopRef.current) setErrore('Connessione Gemini Live non riuscita. Verifica la configurazione della sessione e riprova.');
         setChiamataAttiva(false);
         setInAvvio(false);
         pulisciAudioGemini();
         fermaTimerCredito();
       };
       socket.onclose = (event) => {
+        console.error('[Gemini Live] WebSocket chiuso:', { code: event.code, reason: event.reason, wasClean: event.wasClean });
         if (!manualStopRef.current && event.code !== 1000) {
-          setErrore(`Connessione vocale chiusa (codice ${event.code}). Riprova.`);
+          const dettaglio = event.reason ? ` — ${event.reason}` : '';
+          setErrore(`Connessione vocale chiusa (codice ${event.code}${dettaglio}). Riprova.`);
         }
         setChiamataAttiva(false);
         setInAvvio(false);
