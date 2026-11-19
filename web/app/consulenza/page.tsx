@@ -3,9 +3,12 @@
 import { useState, useEffect, Suspense, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import Vapi from '@vapi-ai/web';
 
 const STRIPE_PAYMENT_LINK = "https://buy.stripe.com/test_fZu14pfFefK76BRgk8e3e00";
 const API_URL = "https://luna2-api.onrender.com";
+const VAPI_PUBLIC_KEY = "5ca95508-9fa5-4cba-82dc-7860f7962780"; 
+const VAPI_ASSISTANT_ID = "7a6e8b6e-1683-4247-bfb8-024cc92d02e7";
 
 function ConsulenzaContent() {
   const router = useRouter();
@@ -21,6 +24,7 @@ function ConsulenzaContent() {
   const [confermato, setConfermato] = useState(false);
   const [chiamataAttiva, setChiamataAttiva] = useState(false);
   const [inAvvio, setInAvvio] = useState(false);
+  const [motoreVoce, setMotoreVoce] = useState<'vapi' | 'gemini'>('vapi');
 
   const socketRef = useRef<WebSocket | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -34,6 +38,8 @@ function ConsulenzaContent() {
   const playbackTimeRef = useRef(0);
   const playbackSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
 
+  const vapiRef = useRef<Vapi | null>(null);
+
   const etichetteFocus: Record<string, string> = {
     generico: 'Consulto Generale', tema_amore: 'Approfondimento Amore', tema_lavoro: 'Approfondimento Lavoro', tema_salute: 'Approfondimento Salute', tema_crescita: 'Approfondimento Crescita Personale', tema_previsioni: 'Approfondimento Previsioni', tema_pianeti: 'Approfondimento Pianeti', tema_case: 'Approfondimento Case', tema_aspetti: 'Approfondimento Aspetti', tema_transiti: 'Approfondimento Transiti', compatibilita_amore: 'Compatibilità Amorosa', compatibilita_lavoro: 'Compatibilità Lavorativa', compatibilita_salute: 'Compatibilità Salute', compatibilita_crescita: 'Compatibilità Crescita', compatibilita_previsioni: 'Compatibilità Previsioni', compatibilita: 'Compatibilità Generale',
   };
@@ -46,13 +52,48 @@ function ConsulenzaContent() {
     if (!t) { router.push('/form'); return; }
     setToken(t);
 
+    try {
+      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioContext) {
+        const audioCtx = new AudioContext();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+      }
+    } catch (e) {}
+
+    const vapi = new Vapi(VAPI_PUBLIC_KEY);
+    vapiRef.current = vapi;
+
+    vapi.on('call-start', () => {
+      setChiamataAttiva(true);
+      setInAvvio(false);
+      fetch(`${API_URL}/avvia-voce/${t}`, { method: 'POST' }).catch(() => {});
+    });
+
+    vapi.on('call-end', () => {
+      setChiamataAttiva(false);
+      setInAvvio(false);
+      fetch(`${API_URL}/ferma-voce/${t}`, { method: 'POST' })
+        .then(r => r.json())
+        .then(d => { if (d.credito_secondi !== undefined) setCredito(d.credito_secondi); })
+        .catch(() => {});
+    });
+
+    vapi.on('error', (e) => {
+      console.error('Errore Vapi:', e);
+      setErrore('Errore di connessione con la voce. Riprova.');
+      setChiamataAttiva(false);
+      setInAvvio(false);
+    });
+
+    return () => {
+      vapi.stop();
+    };
   }, [router]);
 
   useEffect(() => () => {
     manualStopRef.current = true;
     setupReadyRef.current = false;
     socketRef.current?.close();
-    socketRef.current = null;
     processorRef.current?.disconnect();
     sourceRef.current?.disconnect();
     muteRef.current?.disconnect();
@@ -92,6 +133,42 @@ function ConsulenzaContent() {
 
   const vaiAlPagamento = () => { window.location.href = STRIPE_PAYMENT_LINK; };
 
+  const avviaChiamata = async () => {
+    if (!vapiRef.current || !token) return;
+    setErrore('');
+    setInAvvio(true);
+
+    try {
+      const res = await fetch(`${API_URL}/tool/dati-cliente`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: token })
+      });
+      
+      const dati = await res.json();
+      let testoContesto = "I dati del cliente non sono disponibili.";
+      if (dati && dati.nome) {
+        testoContesto = `Il cliente si chiama ${dati.nome}. Il suo Sole è in ${dati.sole?.segno}, la Luna in ${dati.luna?.segno}, l'Ascendente in ${dati.ascendente?.segno}.`;
+      }
+
+      const assistantOverrides = {
+        variableValues: {
+          contesto: testoContesto
+        }
+      };
+      
+      await vapiRef.current.start(VAPI_ASSISTANT_ID, assistantOverrides);
+    } catch (e: any) {
+      console.error(e);
+      setErrore('Impossibile avviare la chiamata. Controlla il microfono.');
+      setInAvvio(false);
+    }
+  };
+
+  const fermaChiamata = () => {
+    if (vapiRef.current) vapiRef.current.stop();
+  };
+
   const fermaTimerCredito = () => {
     if (!token || !timerStartedRef.current) return;
     timerStartedRef.current = false;
@@ -118,7 +195,7 @@ function ConsulenzaContent() {
     if (context && context.state !== 'closed') context.close().catch(() => {});
   };
 
-  const avviaChiamata = async () => {
+  const avviaChiamataGemini = async () => {
     if (!token || inAvvio || chiamataAttiva) return;
     setErrore('');
     setInAvvio(true);
@@ -290,7 +367,7 @@ function ConsulenzaContent() {
     }
   };
 
-  const fermaChiamata = () => {
+  const fermaChiamataGemini = () => {
     manualStopRef.current = true;
     socketRef.current?.close(1000, 'User ended call');
     socketRef.current = null;
@@ -299,6 +376,7 @@ function ConsulenzaContent() {
     setInAvvio(false);
     fermaTimerCredito();
   };
+
 
   if (inCaricamento) {
     return <div className="canvas"><div className="topbar"><div className="brand">✦ tuFelia</div></div><p style={{ textAlign: 'center', marginTop: '40px', color: 'var(--text-dim)' }}>Caricamento...</p></div>;
@@ -314,8 +392,14 @@ function ConsulenzaContent() {
       </div>
 
       <h1 style={{ fontFamily: 'Georgia, serif', fontSize: '22px', fontWeight: 400, textAlign: 'center', marginBottom: '6px' }}>{etichetta}</h1>
-      <p style={{ textAlign: 'center', fontSize: '12px', color: 'var(--text-dim)', marginBottom: '22px' }}>Parla con tuFelia in tempo reale. Il credito viene conteggiato durante la chiamata.</p>
-      <p style={{ textAlign: 'center', fontSize: '11px', color: 'var(--text-dim)', marginBottom: '18px' }}>Il consulto utilizza il tuo tema natale e i dati già presenti nel tuo profilo.</p>
+      <p style={{ textAlign: 'center', fontSize: '12px', color: 'var(--text-dim)', marginBottom: '22px' }}>15 minuti di accesso a tutto: chat, voce e approfondimenti.</p>
+
+      {haCredito && (
+        <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginBottom: '14px' }}>
+          <button type="button" onClick={() => setMotoreVoce('vapi')} disabled={chiamataAttiva || inAvvio} className="cta" style={{ flex: 1, padding: '10px', opacity: motoreVoce === 'vapi' ? 1 : 0.55, border: motoreVoce === 'vapi' ? '1px solid #06D6A0' : '1px solid var(--text-dim)' }}>Voce originale</button>
+          <button type="button" onClick={() => setMotoreVoce('gemini')} disabled={chiamataAttiva || inAvvio} className="cta" style={{ flex: 1, padding: '10px', opacity: motoreVoce === 'gemini' ? 1 : 0.55, border: motoreVoce === 'gemini' ? '1px solid #06D6A0' : '1px solid var(--text-dim)' }}>Gemini Live</button>
+        </div>
+      )}
 
       {haCredito ? (
         <div style={{ background: 'rgba(6,214,160,0.06)', border: '1px solid rgba(6,214,160,0.3)', borderRadius: '10px', padding: '24px 20px', marginBottom: '20px', textAlign: 'center' }}>
@@ -324,12 +408,12 @@ function ConsulenzaContent() {
           </p>
 
           {!chiamataAttiva ? (
-            <button onClick={avviaChiamata} disabled={inAvvio} className="cta" style={{ fontSize: '16px', padding: '16px', width: '100%', marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', opacity: inAvvio ? 0.5 : 1 }}>
+            <button onClick={motoreVoce === 'gemini' ? avviaChiamataGemini : avviaChiamata} disabled={inAvvio} className="cta" style={{ fontSize: '16px', padding: '16px', width: '100%', marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', opacity: inAvvio ? 0.5 : 1 }}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
               {inAvvio ? 'Connessione in corso...' : 'Parla con Luna'}
             </button>
           ) : (
-            <button onClick={fermaChiamata} className="cta" style={{ fontSize: '16px', padding: '16px', width: '100%', marginBottom: '16px', background: 'transparent', border: '1px solid #EF476F', color: '#EF476F', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+            <button onClick={motoreVoce === 'gemini' ? fermaChiamataGemini : fermaChiamata} className="cta" style={{ fontSize: '16px', padding: '16px', width: '100%', marginBottom: '16px', background: 'transparent', border: '1px solid #EF476F', color: '#EF476F', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
               Termina chiamata
             </button>
           )}
@@ -348,11 +432,11 @@ function ConsulenzaContent() {
       )}
 
       <div style={{ fontSize: '14px', lineHeight: '1.7', color: 'var(--text)', marginBottom: '20px', marginTop: '24px' }}>
-        <p style={{ marginBottom: '12px' }}><strong>Il tuo consulto include:</strong></p>
+        <p style={{ marginBottom: '12px' }}><strong>Cosa include:</strong></p>
         <ul style={{ paddingLeft: '20px', marginBottom: '16px' }}>
-          <li>il tuo tema natale e i transiti</li>
-          <li>le tue domande e gli approfondimenti richiesti</li>
-          <li>una conversazione vocale naturale in tempo reale</li>
+          <li>15 minuti di accesso a chat, voce e approfondimenti</li>
+          <li>Analisi del tuo tema natale e dei transiti attuali</li>
+          <li>Risposte alle tue domande specifiche</li>
         </ul>
       </div>
 
