@@ -834,26 +834,26 @@ async def crea_sessione_voce_gemini(token: str, focus: str = "generico"):
         "CONTESTO E MATERIALE ASTROLOGICO REALE DEL CLIENTE:\n" + str(copione)
     )
     now = datetime.now(timezone.utc)
+    # La REST API v1beta /auth_tokens riceve direttamente un AuthToken:
+    # NON va racchiuso in {"authToken": ...}.
     token_payload = {
-        "authToken": {
-            "uses": 1,
-            "expireTime": (now + timedelta(minutes=30)).isoformat().replace("+00:00", "Z"),
-            "newSessionExpireTime": (now + timedelta(minutes=1)).isoformat().replace("+00:00", "Z"),
-            "bidiGenerateContentSetup": {
-                "model": "models/gemini-2.5-flash-native-audio-preview-12-2025",
-                "generationConfig": {
-                    "responseModalities": ["AUDIO"],
-                    "speechConfig": {
-                        "languageCode": "it-IT",
-                        "voiceConfig": {"prebuiltVoiceConfig": {"voiceName": "Leda"}},
-                    },
-                },
-                "systemInstruction": {"parts": [{"text": instructions}]},
-                "realtimeInputConfig": {
-                    "automaticActivityDetection": {"disabled": False, "silenceDurationMs": 700}
+        "uses": 1,
+        "expireTime": (now + timedelta(minutes=30)).isoformat().replace("+00:00", "Z"),
+        "newSessionExpireTime": (now + timedelta(minutes=1)).isoformat().replace("+00:00", "Z"),
+        "bidiGenerateContentSetup": {
+            "model": "models/gemini-2.5-flash-native-audio-preview-12-2025",
+            "generationConfig": {
+                "responseModalities": ["AUDIO"],
+                "speechConfig": {
+                    "languageCode": "it-IT",
+                    "voiceConfig": {"prebuiltVoiceConfig": {"voiceName": "Leda"}},
                 },
             },
-        }
+            "systemInstruction": {"parts": [{"text": instructions}]},
+            "realtimeInputConfig": {
+                "automaticActivityDetection": {"disabled": False, "silenceDurationMs": 700}
+            },
+        },
     }
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
