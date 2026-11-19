@@ -3,7 +3,6 @@
 # =========================================================
 
 import os
-import json
 import traceback
 import random
 import string
@@ -101,8 +100,6 @@ class ChatRequest(BaseModel):
 class RecuperoRequest(BaseModel):
     email: str
 
-class ToolRequest(BaseModel):
-    token: str
 
 def lon_to_sign(lon: float) -> dict:
     lon = lon % 360
@@ -790,129 +787,82 @@ async def get_copione_voce(token: str, focus: str = None):
     return {"copione": copione}
 
 # =========================================================
-# TOOL PER VAPI (Tool Calling)
+# VOCE REALTIME — credenziale temporanea per il browser
 # =========================================================
 
-@app.post("/tool/dati-cliente")
-async def tool_dati_cliente(req: ToolRequest):
-    try:
-        sb = create_client(SUPABASE_URL, SUPABASE_KEY)
-        res = sb.table("profiles").select("*").eq("access_token", req.token).execute()
-        if not res.data:
-            return {"error": "Cliente non trovato."}
-        
-        profile = res.data[0]
-        nome = profile.get("nome", "")
-        
-        tema = calcola_tema_completo(
-            str(profile["birth_date"]), str(profile["birth_time"])[:5],
-            float(profile["birth_lat"]), float(profile["birth_lon"]), 1.0,
-        )
-        report = genera_report_interno(profile, tema, sb)
-        
-        dati = {
-            "nome": nome,
-            "sole": tema["planets"].get("Sole"),
-            "luna": tema["planets"].get("Luna"),
-            "ascendente": lon_to_sign(tema["ascendant"]),
-            "mc": lon_to_sign(tema["mc"]),
-            "transiti": report.get("transiti", []),
-            "riepilogo": report.get("riepilogo_testuale", "")
-        }
-        
-        return dati
-        
-    except Exception as e:
-        print(f"=== ERRORE TOOL DATI CLIENTE: {e} ===")
-        return {"error": f"Errore: {type(e).__name__}"}
-
-# =========================================================
-# VOCE GEMINI LIVE — aggiunta isolata, senza sostituire gli endpoint esistenti
-# =========================================================
-
-@app.post("/voce/sessione-gemini/{token}")
-async def crea_sessione_voce_gemini(token: str, focus: str = "generico"):
-    """Prepara una sessione Gemini usando gli stessi dati astrologici del tool originale.
-
-    Non richiama i generatori di copioni AI (Groq/DeepSeek): il contesto è composto
-    dai dati reali già calcolati da Luna2, come nell'endpoint Vapi preesistente.
-    """
-    api_key = os.getenv("GEMINI_API_KEY")
+@app.post("/voce/sessione/{token}")
+async def crea_sessione_voce(token: str, focus: str = "generico"):
+    api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        raise HTTPException(status_code=503, detail="Voce Gemini non configurata: manca GEMINI_API_KEY.")
-    try:
-        sb = create_client(SUPABASE_URL, SUPABASE_KEY)
-        res = sb.table("profiles").select("*").eq("access_token", token).execute()
-        if not res.data:
-            raise HTTPException(status_code=404, detail="Profilo non trovato")
-        profile = res.data[0]
-        if int(profile.get("credito_secondi") or 0) < 30:
-            raise HTTPException(status_code=402, detail="Credito insufficiente per avviare la voce.")
+        raise HTTPException(status_code=503, detail="Voce non configurata: manca OPENAI_API_KEY sul server.")
 
-        # Stesso calcolo e stessa fonte del precedente /tool/dati-cliente.
-        tema = calcola_tema_completo(
-            str(profile["birth_date"]), str(profile["birth_time"])[:5],
-            float(profile["birth_lat"]), float(profile["birth_lon"]), 1.0,
-        )
+    sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+    res = sb.table("profiles").select("*").eq("access_token", token).execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Profilo non trovato")
+    profile = res.data[0]
+    if int(profile.get("credito_secondi") or 0) < 30:
+        raise HTTPException(status_code=402, detail="Credito insufficiente per avviare la voce.")
+
+    # Riutilizza il copione astrologico già previsto dal progetto, rispettando il focus richiesto.
+    if focus.startswith("compatibilita"):
+        dati_comp = profile.get("ultima_compatibilita")
+        if not dati_comp:
+            raise HTTPException(status_code=400, detail="Nessun confronto recente trovato.")
+        tipo_focus = focus.replace("compatibilita_", "") if focus != "compatibilita" else "generico"
+        copione = await genera_copione_voce_compatibilita(dati_comp, tipo_focus)
+    elif focus.startswith("tema"):
+        tema = calcola_tema_completo(str(profile["birth_date"]), str(profile["birth_time"])[:5], float(profile["birth_lat"]), float(profile["birth_lon"]), 1.0)
         report = genera_report_interno(profile, tema, sb)
-        dati = {
-            "nome": profile.get("nome", ""),
-            "sole": tema["planets"].get("Sole"),
-            "luna": tema["planets"].get("Luna"),
-            "ascendente": lon_to_sign(tema["ascendant"]),
-            "mc": lon_to_sign(tema["mc"]),
-            "transiti": report.get("transiti", []),
-            "riepilogo": report.get("riepilogo_testuale", ""),
+        copione = await genera_copione_voce_tema(report, focus.replace("tema_", ""))
+    else:
+        tema = calcola_tema_completo(str(profile["birth_date"]), str(profile["birth_time"])[:5], float(profile["birth_lat"]), float(profile["birth_lon"]), 1.0)
+        report = genera_report_interno(profile, tema, sb)
+        copione = await genera_copione_voce(report)
+
+    if not copione:
+        raise HTTPException(status_code=503, detail="Il consulto non è disponibile. Riprova più tardi.")
+
+    instructions = (
+        "Sei tuFelia, consulente astrologica italiana. Parla sempre in italiano naturale, "
+        "con voce femminile calda, spontanea e rassicurante. Conversa in modo libero e fluido: "
+        "ascolta fino alla fine, non interrompere, rispondi in modo diretto e non recitare testi "
+        "lunghi se non richiesti. Fai una domanda alla volta quando serve. Non inventare dati "
+        "del tema natale e distingui sempre interpretazione astrologica da fatti certi. "
+        "Mantieni il contesto del consulto per tutta la conversazione.\n\n"
+        "CONTESTO E MATERIALE ASTROLOGICO DEL CLIENTE:\n" + str(copione)
+    )
+    payload = {
+        "session": {
+            "type": "realtime",
+            "model": "gpt-realtime-2.1",
+            "instructions": instructions,
+            "audio": {
+                "output": {"voice": "marin"},
+                "input": {"turn_detection": {"type": "semantic_vad", "eagerness": "medium"}}
+            }
         }
-        instructions = (
-            "Sei tuFelia, consulente astrologica italiana. Parla in italiano naturale, "
-            "con tono caldo, spontaneo e rassicurante. Conversa liberamente, ascolta "
-            "senza interrompere e rispondi in modo diretto. Non inventare dati astrologici; "
-            "distingui sempre interpretazione astrologica da fatti certi. Mantieni il contesto.\n\n"
-            f"FOCUS DEL CONSULTO: {focus}\n"
-            "DATI REALI DEL CLIENTE (calcolati da Luna2):\n"
-            + json.dumps(dati, ensure_ascii=False, default=str)
-        )
-        now = datetime.now(timezone.utc)
-        token_payload = {
-            "uses": 1,
-            "expireTime": (now + timedelta(minutes=30)).isoformat().replace("+00:00", "Z"),
-            "newSessionExpireTime": (now + timedelta(minutes=1)).isoformat().replace("+00:00", "Z"),
-            "bidiGenerateContentSetup": {
-                "model": "models/gemini-2.5-flash-native-audio-preview-12-2025",
-                "generationConfig": {
-                    "responseModalities": ["AUDIO"],
-                    "speechConfig": {
-                        "languageCode": "it-IT",
-                        "voiceConfig": {"prebuiltVoiceConfig": {"voiceName": "Leda"}},
-                    },
-                },
-                "systemInstruction": {"parts": [{"text": instructions}]},
-                "realtimeInputConfig": {
-                    "automaticActivityDetection": {"disabled": False, "silenceDurationMs": 700}
-                },
-            },
-        }
+    }
+    try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
-                "https://generativelanguage.googleapis.com/v1alpha/auth_tokens",
-                headers={"x-goog-api-key": api_key, "Content-Type": "application/json"},
-                json=token_payload,
+                "https://api.openai.com/v1/realtime/client_secrets",
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json=payload,
             )
         if response.status_code >= 400:
-            print(f"Gemini ephemeral token error {response.status_code}: {response.text[:1000]}")
-            raise HTTPException(status_code=502, detail="Google Gemini non ha autorizzato la sessione vocale.")
+            print(f"Realtime client secret error {response.status_code}: {response.text[:1000]}")
+            raise HTTPException(status_code=502, detail="Il servizio vocale non è al momento disponibile.")
         data = response.json()
-        ephemeral_token = data.get("name")
-        if not ephemeral_token:
-            raise HTTPException(status_code=502, detail="Risposta non valida dal servizio Gemini.")
-        return {"ephemeral_token": ephemeral_token, "instructions": instructions}
+        secret = data.get("value") or data.get("client_secret", {}).get("value")
+        if not secret:
+            raise HTTPException(status_code=502, detail="Risposta non valida dal servizio vocale.")
+        return {"client_secret": secret}
     except HTTPException:
         raise
     except Exception as e:
-        print(f"=== ERRORE CREAZIONE SESSIONE GEMINI LIVE: {type(e).__name__}: {e} ===")
-        raise HTTPException(status_code=502, detail="Errore durante la preparazione della sessione vocale Gemini.")
-
+        print(f"=== ERRORE CREAZIONE SESSIONE REALTIME: {e} ===")
+        raise HTTPException(status_code=502, detail="Errore durante la preparazione della sessione vocale.")
 
 # =========================================================
 # ALTRI ENDPOINT (transits, telegram, cron)
@@ -1015,7 +965,6 @@ async def cron_oroscopo_settimanale(request: Request):
         utenti = [u for u in (res.data or []) if u.get("telegram_id")]
         
         adesso = datetime.now(timezone.utc)
-        inizio_settimana = adesso - timedelta(days=adesso.weekday(), hours=adesso.hour, minutes=adesso.minute, seconds=adesso.second)
 
         inviati = 0
         in_coda = 0
@@ -1024,10 +973,15 @@ async def cron_oroscopo_settimanale(request: Request):
         for u in utenti:
             nome = u.get("nome", "?")
             ultimo = u.get("ultimo_oroscopo_inviato")
+            
+            # NUOVA LOGICA: salta solo se sono passati MENO di 6 giorni
             if ultimo:
-                dt_ultimo = datetime.fromisoformat(ultimo.replace("Z", "+00:00"))
-                if dt_ultimo >= inizio_settimana:
-                    continue
+                try:
+                    dt_ultimo = datetime.fromisoformat(ultimo.replace("Z", "+00:00"))
+                    if (adesso - dt_ultimo).days < 6:
+                        continue
+                except Exception:
+                    pass # Se la data è corrotta, invia comunque
 
             try:
                 tema = calcola_tema_completo(str(u["birth_date"]), str(u["birth_time"])[:5], float(u["birth_lat"]), float(u["birth_lon"]), 1.0)
