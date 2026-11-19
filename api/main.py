@@ -895,7 +895,7 @@ async def crea_sessione_voce_gemini(token: str, focus: str = "generico"):
         }
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
-                "https://generativelanguage.googleapis.com/v1beta/auth_tokens",
+                "https://generativelanguage.googleapis.com/v1alpha/auth_tokens",
                 headers={"x-goog-api-key": api_key, "Content-Type": "application/json"},
                 json=token_payload,
             )
