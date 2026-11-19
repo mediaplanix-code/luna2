@@ -3,9 +3,20 @@
 import { useState, useEffect, Suspense, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { GoogleGenAI, Modality } from '@google/genai';
 
 const STRIPE_PAYMENT_LINK = "https://buy.stripe.com/test_fZu14pfFefK76BRgk8e3e00";
 const API_URL = "https://luna2-api.onrender.com";
+
+// Funzione per convertire l'audio in PCM16 (richiesto da Gemini)
+function float32ToInt16(buffer: Float32Array) {
+  let l = buffer.length;
+  let buf = new Int16Array(l);
+  while (l--) {
+    buf[l] = Math.min(1, Math.max(-1, buffer[l])) * 0x7FFF;
+  }
+  return buf.buffer;
+}
 
 function ConsulenzaContent() {
   const router = useRouter();
@@ -22,11 +33,11 @@ function ConsulenzaContent() {
   const [chiamataAttiva, setChiamataAttiva] = useState(false);
   const [inAvvio, setInAvvio] = useState(false);
 
-  const peerRef = useRef<RTCPeerConnection | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const channelRef = useRef<RTCDataChannel | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const timerStartedRef = useRef(false);
+  const sessionRef = useRef<any>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const processorRef = useRef<ScriptProcessorNode | null>(null);
 
   const etichetteFocus: Record<string, string> = {
     generico: 'Consulto Generale', tema_amore: 'Approfondimento Amore', tema_lavoro: 'Approfondimento Lavoro', tema_salute: 'Approfondimento Salute', tema_crescita: 'Approfondimento Crescita Personale', tema_previsioni: 'Approfondimento Previsioni', tema_pianeti: 'Approfondimento Pianeti', tema_case: 'Approfondimento Case', tema_aspetti: 'Approfondimento Aspetti', tema_transiti: 'Approfondimento Transiti', compatibilita_amore: 'Compatibilità Amorosa', compatibilita_lavoro: 'Compatibilità Lavorativa', compatibilita_salute: 'Compatibilità Salute', compatibilita_crescita: 'Compatibilità Crescita', compatibilita_previsioni: 'Compatibilità Previsioni', compatibilita: 'Compatibilità Generale',
@@ -39,17 +50,10 @@ function ConsulenzaContent() {
     const t = localStorage.getItem('luna2_token');
     if (!t) { router.push('/form'); return; }
     setToken(t);
-
   }, [router]);
 
   useEffect(() => () => {
-    channelRef.current?.close();
-    peerRef.current?.close();
-    streamRef.current?.getTracks().forEach(track => track.stop());
-    if (token && timerStartedRef.current) {
-      timerStartedRef.current = false;
-      fetch(`${API_URL}/ferma-voce/${token}`, { method: 'POST', keepalive: true }).catch(() => {});
-    }
+    fermaChiamata();
   }, [token]);
 
   useEffect(() => {
@@ -84,112 +88,129 @@ function ConsulenzaContent() {
     setInAvvio(true);
 
     try {
+      // 1. Chiedi al backend il prompt e la chiave API di Gemini
       const sessionRes = await fetch(`${API_URL}/voce/sessione/${token}?focus=${encodeURIComponent(focus)}`, {
         method: 'POST'
       });
       const sessionData = await sessionRes.json();
-      if (!sessionRes.ok || !sessionData.client_secret) {
+      
+      if (!sessionRes.ok || !sessionData.prompt) {
         throw new Error(sessionData.detail || 'Impossibile preparare la sessione vocale.');
       }
 
+      // 2. Setup Audio Context e Microfono
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
-      const pc = new RTCPeerConnection();
-      peerRef.current = pc;
-      stream.getTracks().forEach(track => pc.addTrack(track, stream));
+      
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
+      audioCtxRef.current = audioCtx;
+      const source = audioCtx.createMediaStreamSource(stream);
+      const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+      processorRef.current = processor;
 
-      pc.ontrack = (event) => {
-        if (!audioRef.current) {
-          audioRef.current = new Audio();
-          audioRef.current.autoplay = true;
-        }
-        audioRef.current.srcObject = event.streams[0];
-        audioRef.current.play().catch(() => {});
-      };
-
-      const channel = pc.createDataChannel('oai-events');
-      channelRef.current = channel;
-      channel.onopen = async () => {
-        try {
-          const timerRes = await fetch(`${API_URL}/avvia-voce/${token}`, { method: 'POST' });
-          if (!timerRes.ok) throw new Error('Non riesco ad avviare il conteggio del credito.');
-          timerStartedRef.current = true;
-          if (pc.connectionState === 'failed' || pc.connectionState === 'closed' || channel.readyState !== 'open') {
-            timerStartedRef.current = false;
-            await fetch(`${API_URL}/ferma-voce/${token}`, { method: 'POST' }).catch(() => {});
-            return;
+      // 3. Inizializza Gemini
+      const ai = new GoogleGenAI({ apiKey: sessionData.api_key });
+      
+      const session = await ai.live.connect({
+        model: sessionData.model || "gemini-2.0-flash-live-001",
+        config: {
+          responseModalities: [Modality.AUDIO],
+          systemInstruction: sessionData.prompt,
+        },
+        callbacks: {
+          onopen: async () => {
+            // Avvia il timer del credito sul backend
+            const timerRes = await fetch(`${API_URL}/avvia-voce/${token}`, { method: 'POST' });
+            if (timerRes.ok) {
+              timerStartedRef.current = true;
+              setChiamataAttiva(true);
+              setInAvvio(false);
+            } else {
+              throw new Error('Non riesco ad avviare il conteggio del credito.');
+            }
+          },
+          onmessage: (message: any) => {
+            // Ricezione audio da Gemini
+            const audioData = message.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
+            if (audioData && audioCtxRef.current) {
+              const binaryString = atob(audioData);
+              const bytes = new Uint8Array(binaryString.length);
+              for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+              }
+              // Conversione e riproduzione (PCM16 -> Float32)
+              const dataView = new DataView(bytes.buffer);
+              const audioBuffer = audioCtxRef.current.createBuffer(1, bytes.length / 2, 24000);
+              const channelData = audioBuffer.getChannelData(0);
+              for (let i = 0; i < audioBuffer.length; i++) {
+                channelData[i] = dataView.getInt16(i * 2, true) / 32768.0;
+              }
+              const sourceNode = audioCtxRef.current.createBufferSource();
+              sourceNode.buffer = audioBuffer;
+              sourceNode.connect(audioCtxRef.current.destination);
+              sourceNode.start();
+            }
+          },
+          onclose: () => {
+            fermaChiamata();
+          },
+          onerror: (err: any) => {
+            console.error('Gemini errore:', err);
+            setErrore('Connessione interrotta. Riprova.');
+            fermaChiamata();
           }
-          setChiamataAttiva(true);
-          setInAvvio(false);
-        } catch (err: any) {
-          setErrore(err?.message || 'Errore durante l’avvio del conteggio del credito.');
-          setInAvvio(false);
-          channel.close();
-          pc.close();
-        }
-      };
-      channel.onerror = () => {
-        setErrore('Connessione audio interrotta. Riprova.');
-        setChiamataAttiva(false);
-        setInAvvio(false);
-        pc.close();
-        stream.getTracks().forEach(track => track.stop());
-        if (audioRef.current) audioRef.current.srcObject = null;
-      };
-      pc.onconnectionstatechange = () => {
-        if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
-          setChiamataAttiva(false);
-          setInAvvio(false);
-          stream.getTracks().forEach(track => track.stop());
-          if (audioRef.current) audioRef.current.srcObject = null;
-          if (timerStartedRef.current) {
-            timerStartedRef.current = false;
-            fetch(`${API_URL}/ferma-voce/${token}`, { method: 'POST' })
-              .then(r => r.json())
-              .then(d => { if (d.credito_secondi !== undefined) setCredito(d.credito_secondi); })
-              .catch(() => {});
-          }
-        }
-      };
-
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      const sdpRes = await fetch('https://api.openai.com/v1/realtime/calls', {
-        method: 'POST',
-        body: offer.sdp,
-        headers: {
-          'Authorization': `Bearer ${sessionData.client_secret}`,
-          'Content-Type': 'application/sdp'
         }
       });
-      if (!sdpRes.ok) {
-        const detail = await sdpRes.text();
-        throw new Error(detail || 'OpenAI non ha accettato la connessione audio.');
-      }
-      const answerSdp = await sdpRes.text();
-      await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
+
+      sessionRef.current = session;
+
+      // Invia l'audio del microfono a Gemini
+      processor.onaudioprocess = (e) => {
+        if (!sessionRef.current) return;
+        const inputData = e.inputBuffer.getChannelData(0);
+        const pcm16 = float32ToInt16(inputData);
+        const base64Data = btoa(String.fromCharCode(...new Uint8Array(pcm16)));
+        
+        try {
+          sessionRef.current.sendRealtimeInput({
+            audio: { data: base64Data, mimeType: 'audio/pcm;rate=16000' }
+          });
+        } catch (err) {
+          // Ignora errori di invio se la sessione è chiusa
+        }
+      };
+
+      source.connect(processor);
+      processor.connect(audioCtx.destination);
+
     } catch (e: any) {
       console.error('Errore voce Realtime:', e);
       setErrore(e?.message || 'Impossibile avviare la voce. Controlla il microfono.');
-      setInAvvio(false);
-      peerRef.current?.close();
-      peerRef.current = null;
-      streamRef.current?.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
-      channelRef.current = null;
+      fermaChiamata();
     }
   };
 
   const fermaChiamata = () => {
-    channelRef.current?.close();
-    peerRef.current?.close();
-    peerRef.current = null;
-    channelRef.current = null;
-    streamRef.current?.getTracks().forEach(track => track.stop());
-    streamRef.current = null;
-    if (audioRef.current) audioRef.current.srcObject = null;
+    if (sessionRef.current) {
+      try { sessionRef.current.close(); } catch (e) {}
+      sessionRef.current = null;
+    }
+    if (processorRef.current) {
+      processorRef.current.disconnect();
+      processorRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    if (audioCtxRef.current) {
+      audioCtxRef.current.close();
+      audioCtxRef.current = null;
+    }
+    
     setChiamataAttiva(false);
     setInAvvio(false);
+
     if (token && timerStartedRef.current) {
       timerStartedRef.current = false;
       fetch(`${API_URL}/ferma-voce/${token}`, { method: 'POST' })
