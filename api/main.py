@@ -787,14 +787,14 @@ async def get_copione_voce(token: str, focus: str = None):
     return {"copione": copione}
 
 # =========================================================
-# VOCE REALTIME — credenziale temporanea per il browser
+# VOCE GEMINI LIVE — token effimero per il browser
 # =========================================================
 
-@app.post("/voce/sessione/{token}")
-async def crea_sessione_voce(token: str, focus: str = "generico"):
-    api_key = os.getenv("OPENAI_API_KEY")
+@app.post("/voce/sessione-gemini/{token}")
+async def crea_sessione_voce_gemini(token: str, focus: str = "generico"):
+    api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
-        raise HTTPException(status_code=503, detail="Voce non configurata: manca OPENAI_API_KEY sul server.")
+        raise HTTPException(status_code=503, detail="Voce Gemini non configurata: manca GEMINI_API_KEY sul server.")
 
     sb = create_client(SUPABASE_URL, SUPABASE_KEY)
     res = sb.table("profiles").select("*").eq("access_token", token).execute()
@@ -804,7 +804,8 @@ async def crea_sessione_voce(token: str, focus: str = "generico"):
     if int(profile.get("credito_secondi") or 0) < 30:
         raise HTTPException(status_code=402, detail="Credito insufficiente per avviare la voce.")
 
-    # Riutilizza il copione astrologico già previsto dal progetto, rispettando il focus richiesto.
+    # Genera il contesto reale già previsto da Luna2: compatibilità, approfondimento
+    # del tema natale oppure consulto generale. Nessun dato astrologico dimostrativo.
     if focus.startswith("compatibilita"):
         dati_comp = profile.get("ultima_compatibilita")
         if not dati_comp:
@@ -830,39 +831,50 @@ async def crea_sessione_voce(token: str, focus: str = "generico"):
         "lunghi se non richiesti. Fai una domanda alla volta quando serve. Non inventare dati "
         "del tema natale e distingui sempre interpretazione astrologica da fatti certi. "
         "Mantieni il contesto del consulto per tutta la conversazione.\n\n"
-        "CONTESTO E MATERIALE ASTROLOGICO DEL CLIENTE:\n" + str(copione)
+        "CONTESTO E MATERIALE ASTROLOGICO REALE DEL CLIENTE:\n" + str(copione)
     )
-    payload = {
-        "session": {
-            "type": "realtime",
-            "model": "gpt-realtime-2.1",
-            "instructions": instructions,
-            "audio": {
-                "output": {"voice": "marin"},
-                "input": {"turn_detection": {"type": "semantic_vad", "eagerness": "medium"}}
-            }
+    now = datetime.now(timezone.utc)
+    token_payload = {
+        "authToken": {
+            "uses": 1,
+            "expireTime": (now + timedelta(minutes=30)).isoformat().replace("+00:00", "Z"),
+            "newSessionExpireTime": (now + timedelta(minutes=1)).isoformat().replace("+00:00", "Z"),
+            "bidiGenerateContentSetup": {
+                "model": "models/gemini-2.5-flash-native-audio-preview-12-2025",
+                "generationConfig": {
+                    "responseModalities": ["AUDIO"],
+                    "speechConfig": {
+                        "languageCode": "it-IT",
+                        "voiceConfig": {"prebuiltVoiceConfig": {"voiceName": "Leda"}},
+                    },
+                },
+                "systemInstruction": {"parts": [{"text": instructions}]},
+                "realtimeInputConfig": {
+                    "automaticActivityDetection": {"disabled": False, "silenceDurationMs": 700}
+                },
+            },
         }
     }
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
-                "https://api.openai.com/v1/realtime/client_secrets",
-                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-                json=payload,
+                "https://generativelanguage.googleapis.com/v1beta/auth_tokens",
+                headers={"x-goog-api-key": api_key, "Content-Type": "application/json"},
+                json=token_payload,
             )
         if response.status_code >= 400:
-            print(f"Realtime client secret error {response.status_code}: {response.text[:1000]}")
-            raise HTTPException(status_code=502, detail="Il servizio vocale non è al momento disponibile.")
+            print(f"Gemini ephemeral token error {response.status_code}: {response.text[:1000]}")
+            raise HTTPException(status_code=502, detail="Google Gemini non ha autorizzato la sessione vocale.")
         data = response.json()
-        secret = data.get("value") or data.get("client_secret", {}).get("value")
-        if not secret:
-            raise HTTPException(status_code=502, detail="Risposta non valida dal servizio vocale.")
-        return {"client_secret": secret}
+        ephemeral_token = data.get("name")
+        if not ephemeral_token:
+            raise HTTPException(status_code=502, detail="Risposta non valida dal servizio Gemini.")
+        return {"ephemeral_token": ephemeral_token, "instructions": instructions}
     except HTTPException:
         raise
     except Exception as e:
-        print(f"=== ERRORE CREAZIONE SESSIONE REALTIME: {e} ===")
-        raise HTTPException(status_code=502, detail="Errore durante la preparazione della sessione vocale.")
+        print(f"=== ERRORE CREAZIONE SESSIONE GEMINI LIVE: {e} ===")
+        raise HTTPException(status_code=502, detail="Errore durante la preparazione della sessione vocale Gemini.")
 
 # =========================================================
 # ALTRI ENDPOINT (transits, telegram, cron)
@@ -965,6 +977,7 @@ async def cron_oroscopo_settimanale(request: Request):
         utenti = [u for u in (res.data or []) if u.get("telegram_id")]
         
         adesso = datetime.now(timezone.utc)
+        inizio_settimana = adesso - timedelta(days=adesso.weekday(), hours=adesso.hour, minutes=adesso.minute, seconds=adesso.second)
 
         inviati = 0
         in_coda = 0
@@ -973,15 +986,10 @@ async def cron_oroscopo_settimanale(request: Request):
         for u in utenti:
             nome = u.get("nome", "?")
             ultimo = u.get("ultimo_oroscopo_inviato")
-            
-            # NUOVA LOGICA: salta solo se sono passati MENO di 6 giorni
             if ultimo:
-                try:
-                    dt_ultimo = datetime.fromisoformat(ultimo.replace("Z", "+00:00"))
-                    if (adesso - dt_ultimo).days < 6:
-                        continue
-                except Exception:
-                    pass # Se la data è corrotta, invia comunque
+                dt_ultimo = datetime.fromisoformat(ultimo.replace("Z", "+00:00"))
+                if dt_ultimo >= inizio_settimana:
+                    continue
 
             try:
                 tema = calcola_tema_completo(str(u["birth_date"]), str(u["birth_time"])[:5], float(u["birth_lat"]), float(u["birth_lon"]), 1.0)
