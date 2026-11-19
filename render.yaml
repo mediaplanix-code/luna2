@@ -12,5 +12,5 @@ services:
         value: https://rfbrmoctathqzpwowbzr.supabase.co
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
-      - key: OPENAI_API_KEY
+      - key: GEMINI_API_KEY
         sync: false
