@@ -111,11 +111,12 @@ function ConsulenzaContent() {
       // 3. Inizializza Gemini
       const ai = new GoogleGenAI({ apiKey: sessionData.api_key });
       
+      // Usiamo il modello standard per l'API Live
       const session = await ai.live.connect({
-        model: sessionData.model || "gemini-2.0-flash-live-001",
+        model: "gemini-2.0-flash-exp", 
         config: {
           responseModalities: [Modality.AUDIO],
-          systemInstruction: sessionData.prompt,
+          systemInstruction: { parts: [{ text: sessionData.prompt }] },
         },
         callbacks: {
           onopen: async () => {
@@ -156,7 +157,7 @@ function ConsulenzaContent() {
           },
           onerror: (err: any) => {
             console.error('Gemini errore:', err);
-            setErrore('Connessione interrotta. Riprova.');
+            setErrore('Connessione audio interrotta o chiave API non valida.');
             fermaChiamata();
           }
         }
