@@ -7,7 +7,6 @@ import Link from 'next/link';
 const STRIPE_PAYMENT_LINK = "https://buy.stripe.com/test_fZu14pfFefK76BRgk8e3e00";
 const API_URL = "https://luna2-api.onrender.com";
 
-// Funzione per convertire l'audio in PCM16
 function float32ToInt16(buffer: Float32Array) {
   let l = buffer.length;
   let buf = new Int16Array(l);
@@ -87,17 +86,18 @@ function ConsulenzaContent() {
     setInAvvio(true);
 
     try {
-      // 1. Chiedi al backend il prompt e la chiave API di Gemini
+      console.log("1. Richiesta sessione al backend...");
       const sessionRes = await fetch(`${API_URL}/voce/sessione/${token}?focus=${encodeURIComponent(focus)}`, {
         method: 'POST'
       });
       const sessionData = await sessionRes.json();
+      console.log("2. Risposta backend:", sessionData);
       
       if (!sessionRes.ok || !sessionData.prompt) {
         throw new Error(sessionData.detail || 'Impossibile preparare la sessione vocale.');
       }
 
-      // 2. Setup Audio Context e Microfono
+      console.log("3. Richiesta microfono...");
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
       
@@ -107,13 +107,13 @@ function ConsulenzaContent() {
       const processor = audioCtx.createScriptProcessor(4096, 1, 1);
       processorRef.current = processor;
 
-      // 3. Connessione WebSocket Nativa a Gemini
+      console.log("4. Connessione WebSocket a Gemini...");
       const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${sessionData.api_key}`;
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
       ws.onopen = () => {
-        // Setup Iniziale richiesto da Gemini
+        console.log("5. WebSocket APERTO. Invio setup...");
         ws.send(JSON.stringify({
           setup: {
             model: "models/gemini-2.0-flash-exp",
@@ -128,6 +128,7 @@ function ConsulenzaContent() {
       };
 
       ws.onmessage = async (event) => {
+        console.log("6. Messaggio ricevuto da Gemini:", event.data);
         let msg;
         try {
           if (event.data instanceof Blob) {
@@ -137,18 +138,18 @@ function ConsulenzaContent() {
             msg = JSON.parse(event.data);
           }
         } catch (e) {
+          console.error("Errore parsing messaggio:", e);
           return;
         }
 
-        // Se il setup è completato, avviamo il timer e l'audio
         if (msg.setupComplete) {
+          console.log("7. Setup completato! Avvio timer e microfono...");
           const timerRes = await fetch(`${API_URL}/avvia-voce/${token}`, { method: 'POST' });
           if (timerRes.ok) {
             timerStartedRef.current = true;
             setChiamataAttiva(true);
             setInAvvio(false);
             
-            // Colleghiamo il microfono per inviare i dati
             processor.onaudioprocess = (e) => {
               if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
               const inputData = e.inputBuffer.getChannelData(0);
@@ -171,7 +172,6 @@ function ConsulenzaContent() {
           }
         }
 
-        // Ricezione audio da Gemini
         if (msg.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data) {
           const audioData = msg.serverContent.modelTurn.parts[0].inlineData.data;
           if (audioCtxRef.current) {
@@ -195,12 +195,13 @@ function ConsulenzaContent() {
       };
 
       ws.onerror = (err) => {
-        console.error('Gemini WebSocket errore:', err);
+        console.error('8. WebSocket ERRORE:', err);
         setErrore('Connessione interrotta. Controlla la chiave API e la connessione.');
         fermaChiamata();
       };
 
-      ws.onclose = () => {
+      ws.onclose = (event) => {
+        console.log("9. WebSocket CHIUSO:", event.code, event.reason);
         fermaChiamata();
       };
 
