@@ -3,12 +3,11 @@
 import { useState, useEffect, Suspense, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { GoogleGenAI, Modality } from '@google/genai';
 
 const STRIPE_PAYMENT_LINK = "https://buy.stripe.com/test_fZu14pfFefK76BRgk8e3e00";
 const API_URL = "https://luna2-api.onrender.com";
 
-// Funzione per convertire l'audio in PCM16 (richiesto da Gemini)
+// Funzione per convertire l'audio in PCM16
 function float32ToInt16(buffer: Float32Array) {
   let l = buffer.length;
   let buf = new Int16Array(l);
@@ -34,7 +33,7 @@ function ConsulenzaContent() {
   const [inAvvio, setInAvvio] = useState(false);
 
   const timerStartedRef = useRef(false);
-  const sessionRef = useRef<any>(null);
+  const wsRef = useRef<WebSocket | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
@@ -108,81 +107,102 @@ function ConsulenzaContent() {
       const processor = audioCtx.createScriptProcessor(4096, 1, 1);
       processorRef.current = processor;
 
-      // 3. Inizializza Gemini
-      const ai = new GoogleGenAI({ apiKey: sessionData.api_key });
-      
-      // Usiamo il modello standard per l'API Live
-      const session = await ai.live.connect({
-        model: "gemini-2.0-flash-exp", 
-        config: {
-          responseModalities: [Modality.AUDIO],
-          systemInstruction: { parts: [{ text: sessionData.prompt }] },
-        },
-        callbacks: {
-          onopen: async () => {
-            // Avvia il timer del credito sul backend
-            const timerRes = await fetch(`${API_URL}/avvia-voce/${token}`, { method: 'POST' });
-            if (timerRes.ok) {
-              timerStartedRef.current = true;
-              setChiamataAttiva(true);
-              setInAvvio(false);
-            } else {
-              throw new Error('Non riesco ad avviare il conteggio del credito.');
+      // 3. Connessione WebSocket Nativa a Gemini
+      const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${sessionData.api_key}`;
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        // Setup Iniziale richiesto da Gemini
+        ws.send(JSON.stringify({
+          setup: {
+            model: "models/gemini-2.0-flash-exp",
+            generation_config: {
+              response_modalities: ["AUDIO"]
+            },
+            system_instruction: {
+              parts: [{ text: sessionData.prompt }]
             }
-          },
-          onmessage: (message: any) => {
-            // Ricezione audio da Gemini
-            const audioData = message.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
-            if (audioData && audioCtxRef.current) {
-              const binaryString = atob(audioData);
-              const bytes = new Uint8Array(binaryString.length);
-              for (let i = 0; i < binaryString.length; i++) {
-                bytes[i] = binaryString.charCodeAt(i);
-              }
-              // Conversione e riproduzione (PCM16 -> Float32)
-              const dataView = new DataView(bytes.buffer);
-              const audioBuffer = audioCtxRef.current.createBuffer(1, bytes.length / 2, 24000);
-              const channelData = audioBuffer.getChannelData(0);
-              for (let i = 0; i < audioBuffer.length; i++) {
-                channelData[i] = dataView.getInt16(i * 2, true) / 32768.0;
-              }
-              const sourceNode = audioCtxRef.current.createBufferSource();
-              sourceNode.buffer = audioBuffer;
-              sourceNode.connect(audioCtxRef.current.destination);
-              sourceNode.start();
-            }
-          },
-          onclose: () => {
-            fermaChiamata();
-          },
-          onerror: (err: any) => {
-            console.error('Gemini errore:', err);
-            setErrore('Connessione audio interrotta o chiave API non valida.');
-            fermaChiamata();
+          }
+        }));
+      };
+
+      ws.onmessage = async (event) => {
+        let msg;
+        try {
+          if (event.data instanceof Blob) {
+            const text = await event.data.text();
+            msg = JSON.parse(text);
+          } else {
+            msg = JSON.parse(event.data);
+          }
+        } catch (e) {
+          return;
+        }
+
+        // Se il setup è completato, avviamo il timer e l'audio
+        if (msg.setupComplete) {
+          const timerRes = await fetch(`${API_URL}/avvia-voce/${token}`, { method: 'POST' });
+          if (timerRes.ok) {
+            timerStartedRef.current = true;
+            setChiamataAttiva(true);
+            setInAvvio(false);
+            
+            // Colleghiamo il microfono per inviare i dati
+            processor.onaudioprocess = (e) => {
+              if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+              const inputData = e.inputBuffer.getChannelData(0);
+              const pcm16 = float32ToInt16(inputData);
+              const base64Data = btoa(new Uint8Array(pcm16).reduce((data, byte) => data + String.fromCharCode(byte), ''));
+              
+              ws.send(JSON.stringify({
+                realtime_input: {
+                  media_chunks: [{
+                    mime_type: "audio/pcm;rate=16000",
+                    data: base64Data
+                  }]
+                }
+              }));
+            };
+            source.connect(processor);
+            processor.connect(audioCtx.destination);
+          } else {
+            throw new Error('Non riesco ad avviare il conteggio del credito.');
           }
         }
-      });
 
-      sessionRef.current = session;
-
-      // Invia l'audio del microfono a Gemini
-      processor.onaudioprocess = (e) => {
-        if (!sessionRef.current) return;
-        const inputData = e.inputBuffer.getChannelData(0);
-        const pcm16 = float32ToInt16(inputData);
-        const base64Data = btoa(String.fromCharCode(...new Uint8Array(pcm16)));
-        
-        try {
-          sessionRef.current.sendRealtimeInput({
-            audio: { data: base64Data, mimeType: 'audio/pcm;rate=16000' }
-          });
-        } catch (err) {
-          // Ignora errori di invio se la sessione è chiusa
+        // Ricezione audio da Gemini
+        if (msg.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data) {
+          const audioData = msg.serverContent.modelTurn.parts[0].inlineData.data;
+          if (audioCtxRef.current) {
+            const binaryString = atob(audioData);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+              bytes[i] = binaryString.charCodeAt(i);
+            }
+            const dataView = new DataView(bytes.buffer);
+            const audioBuffer = audioCtxRef.current.createBuffer(1, bytes.length / 2, 24000);
+            const channelData = audioBuffer.getChannelData(0);
+            for (let i = 0; i < audioBuffer.length; i++) {
+              channelData[i] = dataView.getInt16(i * 2, true) / 32768.0;
+            }
+            const sourceNode = audioCtxRef.current.createBufferSource();
+            sourceNode.buffer = audioBuffer;
+            sourceNode.connect(audioCtxRef.current.destination);
+            sourceNode.start();
+          }
         }
       };
 
-      source.connect(processor);
-      processor.connect(audioCtx.destination);
+      ws.onerror = (err) => {
+        console.error('Gemini WebSocket errore:', err);
+        setErrore('Connessione interrotta. Controlla la chiave API e la connessione.');
+        fermaChiamata();
+      };
+
+      ws.onclose = () => {
+        fermaChiamata();
+      };
 
     } catch (e: any) {
       console.error('Errore voce Realtime:', e);
@@ -192,9 +212,9 @@ function ConsulenzaContent() {
   };
 
   const fermaChiamata = () => {
-    if (sessionRef.current) {
-      try { sessionRef.current.close(); } catch (e) {}
-      sessionRef.current = null;
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
     }
     if (processorRef.current) {
       processorRef.current.disconnect();
