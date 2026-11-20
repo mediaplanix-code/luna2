@@ -108,23 +108,28 @@ function ConsulenzaContent() {
       processorRef.current = processor;
 
       console.log("4. Connessione WebSocket a Gemini...");
-      // Endpoint v1alpha
       const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${sessionData.api_key}`;
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
       ws.onopen = () => {
         console.log("5. WebSocket APERTO. Invio setup...");
-        // Usa il modello restituito dal backend (assicurandosi del prefisso models/)
-        const modelName = sessionData.model.startsWith('models/') ? sessionData.model : `models/${sessionData.model}`;
         
+        // Usiamo il modello attivo suggerito da Google e configuriamo la voce
         ws.send(JSON.stringify({
           setup: {
-            model: modelName,
-            generation_config: {
-              response_modalities: ["AUDIO"]
+            model: "models/gemini-3.8-live",
+            generationConfig: {
+              responseModalities: ["AUDIO"],
+              speechConfig: {
+                voiceConfig: {
+                  prebuiltVoiceConfig: {
+                    voiceName: "Puck" // Voce femminile morbida
+                  }
+                }
+              }
             },
-            system_instruction: {
+            systemInstruction: {
               parts: [{ text: sessionData.prompt }]
             }
           }
@@ -161,9 +166,9 @@ function ConsulenzaContent() {
               const base64Data = btoa(new Uint8Array(pcm16).reduce((data, byte) => data + String.fromCharCode(byte), ''));
               
               ws.send(JSON.stringify({
-                realtime_input: {
-                  media_chunks: [{
-                    mime_type: "audio/pcm;rate=16000",
+                realtimeInput: {
+                  mediaChunks: [{
+                    mimeType: "audio/pcm;rate=16000",
                     data: base64Data
                   }]
                 }
