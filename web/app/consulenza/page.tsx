@@ -108,20 +108,23 @@ function ConsulenzaContent() {
       processorRef.current = processor;
 
       console.log("4. Connessione WebSocket a Gemini...");
-      // Endpoint v1beta
-      const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${sessionData.api_key}`;
+      // Endpoint v1alpha
+      const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${sessionData.api_key}`;
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
       ws.onopen = () => {
         console.log("5. WebSocket APERTO. Invio setup...");
+        // Usa il modello restituito dal backend (assicurandosi del prefisso models/)
+        const modelName = sessionData.model.startsWith('models/') ? sessionData.model : `models/${sessionData.model}`;
+        
         ws.send(JSON.stringify({
           setup: {
-            model: "models/gemini-2.0-flash-exp",
-            generationConfig: {
-              responseModalities: ["AUDIO"]
+            model: modelName,
+            generation_config: {
+              response_modalities: ["AUDIO"]
             },
-            systemInstruction: {
+            system_instruction: {
               parts: [{ text: sessionData.prompt }]
             }
           }
@@ -158,9 +161,9 @@ function ConsulenzaContent() {
               const base64Data = btoa(new Uint8Array(pcm16).reduce((data, byte) => data + String.fromCharCode(byte), ''));
               
               ws.send(JSON.stringify({
-                realtimeInput: {
-                  mediaChunks: [{
-                    mimeType: "audio/pcm;rate=16000",
+                realtime_input: {
+                  media_chunks: [{
+                    mime_type: "audio/pcm;rate=16000",
                     data: base64Data
                   }]
                 }
