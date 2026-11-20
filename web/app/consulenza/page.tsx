@@ -108,7 +108,8 @@ function ConsulenzaContent() {
       processorRef.current = processor;
 
       console.log("4. Connessione WebSocket a Gemini...");
-      const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${sessionData.api_key}`;
+      // Endpoint v1beta
+      const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${sessionData.api_key}`;
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
@@ -116,11 +117,11 @@ function ConsulenzaContent() {
         console.log("5. WebSocket APERTO. Invio setup...");
         ws.send(JSON.stringify({
           setup: {
-            model: "models/gemini-2.0-flash-live-001", // Modello corretto per l'API Live
-            generation_config: {
-              response_modalities: ["AUDIO"]
+            model: "models/gemini-2.0-flash-exp",
+            generationConfig: {
+              responseModalities: ["AUDIO"]
             },
-            system_instruction: {
+            systemInstruction: {
               parts: [{ text: sessionData.prompt }]
             }
           }
@@ -157,9 +158,9 @@ function ConsulenzaContent() {
               const base64Data = btoa(new Uint8Array(pcm16).reduce((data, byte) => data + String.fromCharCode(byte), ''));
               
               ws.send(JSON.stringify({
-                realtime_input: {
-                  media_chunks: [{
-                    mime_type: "audio/pcm;rate=16000",
+                realtimeInput: {
+                  mediaChunks: [{
+                    mimeType: "audio/pcm;rate=16000",
                     data: base64Data
                   }]
                 }
