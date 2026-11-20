@@ -116,7 +116,7 @@ function ConsulenzaContent() {
         console.log("5. WebSocket APERTO. Invio setup...");
         ws.send(JSON.stringify({
           setup: {
-            model: "models/gemini-2.0-flash-exp",
+            model: "models/gemini-2.0-flash-live-001", // Modello corretto per l'API Live
             generation_config: {
               response_modalities: ["AUDIO"]
             },
