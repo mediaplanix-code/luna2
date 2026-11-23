@@ -282,7 +282,7 @@ async def genera_copione_voce_compatibilita(dati_compatibilita: dict, focus: str
 Ecco i dati tecnici del loro confronto:
 {aspetti_testo}
 
-Scrivi il copione di apertura (circa 2 minuti). Tono: caldo, diretto, mistico ma professionale. Non usare asterischi o markdown. 
+Scrivi un saluto di apertura di massimo 3 o 4 frasi (circa 30 secondi). Tono: caldo, diretto, mistico ma professionale. Non usare asterischi o markdown. 
 Chiama il cliente per nome all'inizio. Non dare certezze assolute. Struttura:
 
 1. Saluto personalizzato
