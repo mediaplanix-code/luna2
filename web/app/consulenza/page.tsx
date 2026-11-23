@@ -36,6 +36,9 @@ function ConsulenzaContent() {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
+  
+  // Gestione coda audio in uscita
+  const nextPlayTimeRef = useRef(0);
 
   const etichetteFocus: Record<string, string> = {
     generico: 'Consulto Generale', tema_amore: 'Approfondimento Amore', tema_lavoro: 'Approfondimento Lavoro', tema_salute: 'Approfondimento Salute', tema_crescita: 'Approfondimento Crescita Personale', tema_previsioni: 'Approfondimento Previsioni', tema_pianeti: 'Approfondimento Pianeti', tema_case: 'Approfondimento Case', tema_aspetti: 'Approfondimento Aspetti', tema_transiti: 'Approfondimento Transiti', compatibilita_amore: 'Compatibilità Amorosa', compatibilita_lavoro: 'Compatibilità Lavorativa', compatibilita_salute: 'Compatibilità Salute', compatibilita_crescita: 'Compatibilità Crescita', compatibilita_previsioni: 'Compatibilità Previsioni', compatibilita: 'Compatibilità Generale',
@@ -103,6 +106,10 @@ function ConsulenzaContent() {
       
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
       audioCtxRef.current = audioCtx;
+      
+      // SBLOCCO AUDIO BROWSER (richiesto da Gemini)
+      await audioCtx.resume(); 
+
       const source = audioCtx.createMediaStreamSource(stream);
       const processor = audioCtx.createScriptProcessor(4096, 1, 1);
       processorRef.current = processor;
@@ -114,8 +121,6 @@ function ConsulenzaContent() {
 
       ws.onopen = () => {
         console.log("5. WebSocket APERTO. Invio setup...");
-        
-        // Usiamo il modello attivo suggerito da Google e configuriamo la voce
         ws.send(JSON.stringify({
           setup: {
             model: "models/gemini-3.8-live",
@@ -124,7 +129,7 @@ function ConsulenzaContent() {
               speechConfig: {
                 voiceConfig: {
                   prebuiltVoiceConfig: {
-                    voiceName: "Puck" // Voce femminile morbida
+                    voiceName: "Puck"
                   }
                 }
               }
@@ -137,7 +142,6 @@ function ConsulenzaContent() {
       };
 
       ws.onmessage = async (event) => {
-        console.log("6. Messaggio ricevuto da Gemini:", event.data);
         let msg;
         try {
           if (event.data instanceof Blob) {
@@ -153,6 +157,18 @@ function ConsulenzaContent() {
 
         if (msg.setupComplete) {
           console.log("7. Setup completato! Avvio timer e microfono...");
+          
+          // TEST: Chiediamo a tuFelia di presentarsi per sentire la voce
+          ws.send(JSON.stringify({
+            clientContent: {
+              turns: [{
+                role: "user",
+                parts: [{ text: "Ciao tuFelia, presentati brevemente in due frasi." }]
+              }],
+              turnComplete: true
+            }
+          }));
+
           const timerRes = await fetch(`${API_URL}/avvia-voce/${token}`, { method: 'POST' });
           if (timerRes.ok) {
             timerStartedRef.current = true;
@@ -181,31 +197,42 @@ function ConsulenzaContent() {
           }
         }
 
-        if (msg.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data) {
-          const audioData = msg.serverContent.modelTurn.parts[0].inlineData.data;
-          if (audioCtxRef.current) {
-            const binaryString = atob(audioData);
-            const bytes = new Uint8Array(binaryString.length);
-            for (let i = 0; i < binaryString.length; i++) {
-              bytes[i] = binaryString.charCodeAt(i);
+        // Gestione audio in arrivo
+        const parts = msg.serverContent?.modelTurn?.parts || [];
+        for (const part of parts) {
+          if (part.inlineData?.data) {
+            const audioData = part.inlineData.data;
+            if (audioCtxRef.current) {
+              const binaryString = atob(audioData);
+              const bytes = new Uint8Array(binaryString.length);
+              for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+              }
+              const dataView = new DataView(bytes.buffer);
+              const audioBuffer = audioCtxRef.current.createBuffer(1, bytes.length / 2, 24000);
+              const channelData = audioBuffer.getChannelData(0);
+              for (let i = 0; i < audioBuffer.length; i++) {
+                channelData[i] = dataView.getInt16(i * 2, true) / 32768.0;
+              }
+              const sourceNode = audioCtxRef.current.createBufferSource();
+              sourceNode.buffer = audioBuffer;
+              sourceNode.connect(audioCtxRef.current.destination);
+              
+              // Accodamento fluido dell'audio (evita crepitii)
+              const currentTime = audioCtxRef.current.currentTime;
+              if (nextPlayTimeRef.current < currentTime) {
+                nextPlayTimeRef.current = currentTime;
+              }
+              sourceNode.start(nextPlayTimeRef.current);
+              nextPlayTimeRef.current += audioBuffer.duration;
             }
-            const dataView = new DataView(bytes.buffer);
-            const audioBuffer = audioCtxRef.current.createBuffer(1, bytes.length / 2, 24000);
-            const channelData = audioBuffer.getChannelData(0);
-            for (let i = 0; i < audioBuffer.length; i++) {
-              channelData[i] = dataView.getInt16(i * 2, true) / 32768.0;
-            }
-            const sourceNode = audioCtxRef.current.createBufferSource();
-            sourceNode.buffer = audioBuffer;
-            sourceNode.connect(audioCtxRef.current.destination);
-            sourceNode.start();
           }
         }
       };
 
       ws.onerror = (err) => {
         console.error('8. WebSocket ERRORE:', err);
-        setErrore('Connessione interrotta. Controlla la chiave API e la connessione.');
+        setErrore('Connessione interrotta. Controlla la connessione.');
         fermaChiamata();
       };
 
@@ -241,6 +268,7 @@ function ConsulenzaContent() {
     
     setChiamataAttiva(false);
     setInAvvio(false);
+    nextPlayTimeRef.current = 0;
 
     if (token && timerStartedRef.current) {
       timerStartedRef.current = false;
