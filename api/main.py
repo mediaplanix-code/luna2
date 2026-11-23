@@ -821,7 +821,8 @@ async def crea_sessione_voce(token: str, focus: str = "generico"):
         copione = await genera_copione_voce(report)
 
     if not copione:
-        raise HTTPException(status_code=503, detail="Il consulto non è disponibile. Riprova più tardi.")
+        print("=== ATTENZIONE: Copione vuoto, uso testo di fallback per non bloccare la voce ===")
+        copione = "Sei tuFelia, consulente astrologica italiana. Parla in modo caldo e professionale."
 
     instructions = (
         "Sei tuFelia, consulente astrologica italiana. Parla sempre in italiano naturale, "
