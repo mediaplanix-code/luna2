@@ -192,13 +192,12 @@ function ConsulenzaContent() {
         if (msg.setupComplete) {
           console.log("7. Setup completato! Avvio timer e microfono...");
           
-          // Invia il messaggio di test includendo il NOME
-          const messaggioTest = `Ciao tuFelia, sono ${nome || 'il cliente'}. Presentati brevemente in due frasi.`;
+          // Avvia la conversazione facendola partire per prima con un saluto
           ws.send(JSON.stringify({
             clientContent: {
               turns: [{
                 role: "user",
-                parts: [{ text: messaggioTest }]
+                parts: [{ text: "Avvia il consulto salutandomi." }] // Comando per farla partire subito
               }],
               turnComplete: true
             }
@@ -216,7 +215,6 @@ function ConsulenzaContent() {
               const pcm16 = float32ToInt16(inputData);
               const base64Data = arrayBufferToBase64(pcm16);
               
-              // CORREZIONE FORMATO: mediaChunks invece di audio
               ws.send(JSON.stringify({
                 realtimeInput: {
                   mediaChunks: [{
