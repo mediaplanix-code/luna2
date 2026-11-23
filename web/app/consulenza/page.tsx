@@ -47,7 +47,6 @@ function ConsulenzaContent() {
   const streamRef = useRef<MediaStream | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
   
-  // Array per tenere traccia dei nodi audio in riproduzione
   const activeAudioSourcesRef = useRef<AudioBufferSourceNode[]>([]);
   const nextPlayTimeRef = useRef(0);
 
@@ -94,7 +93,6 @@ function ConsulenzaContent() {
 
   const vaiAlPagamento = () => { window.location.href = STRIPE_PAYMENT_LINK; };
 
-  // FUNZIONE PER SVUOTARE LA CODA AUDIO
   const stopAndClearAudioQueue = () => {
     activeAudioSourcesRef.current.forEach(source => {
       try { source.stop(); } catch(e) {}
@@ -123,7 +121,6 @@ function ConsulenzaContent() {
       }
 
       console.log("3. Richiesta microfono...");
-      // Aggiunti filtri anti-eco
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: {
           echoCancellation: true,
@@ -139,7 +136,7 @@ function ConsulenzaContent() {
       await audioCtx.resume(); 
 
       const source = audioCtx.createMediaStreamSource(stream);
-      const processor = audioCtx.createScriptProcessor(2048, 1, 1); // 2048 per reattività
+      const processor = audioCtx.createScriptProcessor(2048, 1, 1);
       processorRef.current = processor;
 
       console.log("4. Connessione WebSocket a Gemini...");
@@ -162,7 +159,6 @@ function ConsulenzaContent() {
                 }
               }
             },
-            // CONFIGURAZIONE VAD E INTERRUZIONI
             realtimeInputConfig: {
               automaticActivityDetection: {
                 disabled: false,
@@ -196,11 +192,13 @@ function ConsulenzaContent() {
         if (msg.setupComplete) {
           console.log("7. Setup completato! Avvio timer e microfono...");
           
+          // Invia il messaggio di test includendo il NOME
+          const messaggioTest = `Ciao tuFelia, sono ${nome || 'il cliente'}. Presentati brevemente in due frasi.`;
           ws.send(JSON.stringify({
             clientContent: {
               turns: [{
                 role: "user",
-                parts: [{ text: "Ciao tuFelia, presentati brevemente in due frasi." }]
+                parts: [{ text: messaggioTest }]
               }],
               turnComplete: true
             }
@@ -218,12 +216,13 @@ function ConsulenzaContent() {
               const pcm16 = float32ToInt16(inputData);
               const base64Data = arrayBufferToBase64(pcm16);
               
+              // CORREZIONE FORMATO: mediaChunks invece di audio
               ws.send(JSON.stringify({
                 realtimeInput: {
-                  audio: {
+                  mediaChunks: [{
                     data: base64Data,
                     mimeType: "audio/pcm;rate=16000"
-                  }
+                  }]
                 }
               }));
             };
@@ -234,7 +233,6 @@ function ConsulenzaContent() {
           }
         }
 
-        // GESTIONE INTERRUZIONE UTENTE
         if (msg.serverContent?.interrupted) {
           console.log("L'utente ha interrotto. Svuoto la coda audio.");
           stopAndClearAudioQueue();
@@ -268,9 +266,7 @@ function ConsulenzaContent() {
               sourceNode.start(nextPlayTimeRef.current);
               nextPlayTimeRef.current += audioBuffer.duration;
 
-              // Aggiungi alla lista degli audio attivi
               activeAudioSourcesRef.current.push(sourceNode);
-              // Rimuovi quando finisce
               sourceNode.onended = () => {
                 activeAudioSourcesRef.current = activeAudioSourcesRef.current.filter(s => s !== sourceNode);
               };
