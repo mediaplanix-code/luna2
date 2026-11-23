@@ -16,7 +16,6 @@ function float32ToInt16(buffer: Float32Array) {
   return buf.buffer;
 }
 
-// Funzione robusta per convertire i byte in Base64 (evita crash del browser)
 function arrayBufferToBase64(buffer: ArrayBuffer) {
   let binary = '';
   const bytes = new Uint8Array(buffer);
@@ -48,6 +47,8 @@ function ConsulenzaContent() {
   const streamRef = useRef<MediaStream | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
   const nextPlayTimeRef = useRef(0);
+  const frameCountRef = useRef(0);
+  const maxVolumeRef = useRef(0);
 
   const etichetteFocus: Record<string, string> = {
     generico: 'Consulto Generale', tema_amore: 'Approfondimento Amore', tema_lavoro: 'Approfondimento Lavoro', tema_salute: 'Approfondimento Salute', tema_crescita: 'Approfondimento Crescita Personale', tema_previsioni: 'Approfondimento Previsioni', tema_pianeti: 'Approfondimento Pianeti', tema_case: 'Approfondimento Case', tema_aspetti: 'Approfondimento Aspetti', tema_transiti: 'Approfondimento Transiti', compatibilita_amore: 'Compatibilità Amorosa', compatibilita_lavoro: 'Compatibilità Lavorativa', compatibilita_salute: 'Compatibilità Salute', compatibilita_crescita: 'Compatibilità Crescita', compatibilita_previsioni: 'Compatibilità Previsioni', compatibilita: 'Compatibilità Generale',
@@ -96,6 +97,8 @@ function ConsulenzaContent() {
     if (!token || inAvvio || chiamataAttiva) return;
     setErrore('');
     setInAvvio(true);
+    frameCountRef.current = 0;
+    maxVolumeRef.current = 0;
 
     try {
       console.log("1. Richiesta sessione al backend...");
@@ -136,7 +139,7 @@ function ConsulenzaContent() {
               speechConfig: {
                 voiceConfig: {
                   prebuiltVoiceConfig: {
-                    voiceName: "Kore" // <--- VOCE FEMMINILE
+                    voiceName: "Kore"
                   }
                 }
               }
@@ -181,23 +184,32 @@ function ConsulenzaContent() {
             setChiamataAttiva(true);
             setInAvvio(false);
             
-            // INVIO MICROFONO CON LOG DI DEBUG
             processor.onaudioprocess = (e) => {
               if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
               const inputData = e.inputBuffer.getChannelData(0);
               
-              // Debug: verifica che il microfono stia catturando suoni
-              // console.log("Mic volume:", inputData[0]); 
+              // Debug: calcola volume massimo per capire se il microfono capta
+              let maxV = 0;
+              for (let i = 0; i < inputData.length; i++) {
+                const v = Math.abs(inputData[i]);
+                if (v > maxV) maxV = v;
+              }
+              if (maxV > maxVolumeRef.current) maxVolumeRef.current = maxV;
+              
+              frameCountRef.current++;
+              if (frameCountRef.current % 50 === 0) {
+                console.log(`[DEBUG MIC] Frame ${frameCountRef.current} - Volume max rilevato: ${maxVolumeRef.current.toFixed(4)} - Stato WS: ${wsRef.current.readyState}`);
+              }
               
               const pcm16 = float32ToInt16(inputData);
               const base64Data = arrayBufferToBase64(pcm16);
               
               ws.send(JSON.stringify({
                 realtimeInput: {
-                  mediaChunks: [{
-                    mimeType: "audio/pcm;rate=16000",
-                    data: base64Data
-                  }]
+                  audio: {
+                    data: base64Data,
+                    mimeType: "audio/pcm;rate=16000"
+                  }
                 }
               }));
             };
