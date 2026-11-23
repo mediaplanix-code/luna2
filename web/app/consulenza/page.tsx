@@ -16,6 +16,17 @@ function float32ToInt16(buffer: Float32Array) {
   return buf.buffer;
 }
 
+// Funzione robusta per convertire i byte in Base64 (evita crash del browser)
+function arrayBufferToBase64(buffer: ArrayBuffer) {
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return window.btoa(binary);
+}
+
 function ConsulenzaContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -36,8 +47,6 @@ function ConsulenzaContent() {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
-  
-  // Gestione coda audio in uscita
   const nextPlayTimeRef = useRef(0);
 
   const etichetteFocus: Record<string, string> = {
@@ -106,8 +115,6 @@ function ConsulenzaContent() {
       
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
       audioCtxRef.current = audioCtx;
-      
-      // SBLOCCO AUDIO BROWSER (richiesto da Gemini)
       await audioCtx.resume(); 
 
       const source = audioCtx.createMediaStreamSource(stream);
@@ -129,7 +136,7 @@ function ConsulenzaContent() {
               speechConfig: {
                 voiceConfig: {
                   prebuiltVoiceConfig: {
-                    voiceName: "Puck"
+                    voiceName: "Kore" // <--- VOCE FEMMINILE
                   }
                 }
               }
@@ -158,7 +165,6 @@ function ConsulenzaContent() {
         if (msg.setupComplete) {
           console.log("7. Setup completato! Avvio timer e microfono...");
           
-          // TEST: Chiediamo a tuFelia di presentarsi per sentire la voce
           ws.send(JSON.stringify({
             clientContent: {
               turns: [{
@@ -175,11 +181,16 @@ function ConsulenzaContent() {
             setChiamataAttiva(true);
             setInAvvio(false);
             
+            // INVIO MICROFONO CON LOG DI DEBUG
             processor.onaudioprocess = (e) => {
               if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
               const inputData = e.inputBuffer.getChannelData(0);
+              
+              // Debug: verifica che il microfono stia catturando suoni
+              // console.log("Mic volume:", inputData[0]); 
+              
               const pcm16 = float32ToInt16(inputData);
-              const base64Data = btoa(new Uint8Array(pcm16).reduce((data, byte) => data + String.fromCharCode(byte), ''));
+              const base64Data = arrayBufferToBase64(pcm16);
               
               ws.send(JSON.stringify({
                 realtimeInput: {
@@ -197,7 +208,6 @@ function ConsulenzaContent() {
           }
         }
 
-        // Gestione audio in arrivo
         const parts = msg.serverContent?.modelTurn?.parts || [];
         for (const part of parts) {
           if (part.inlineData?.data) {
@@ -218,7 +228,6 @@ function ConsulenzaContent() {
               sourceNode.buffer = audioBuffer;
               sourceNode.connect(audioCtxRef.current.destination);
               
-              // Accodamento fluido dell'audio (evita crepitii)
               const currentTime = audioCtxRef.current.currentTime;
               if (nextPlayTimeRef.current < currentTime) {
                 nextPlayTimeRef.current = currentTime;
