@@ -838,7 +838,7 @@ async def crea_sessione_voce(token: str, focus: str = "generico"):
     return {
         "prompt": instructions,
         "api_key": api_key,
-        "model": "gemini-2.0-flash-live-001"
+        "model": "gemini-3.8-live"
     }
 
 # =========================================================
