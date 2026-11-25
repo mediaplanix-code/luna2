@@ -49,6 +49,9 @@ function ConsulenzaContent() {
   const nextPlayTimeRef = useRef(0);
   const frameCountRef = useRef(0);
   const maxVolumeRef = useRef(0);
+  
+  // NUOVO: Array per tenere traccia degli audio in riproduzione
+  const activeAudioSourcesRef = useRef<AudioBufferSourceNode[]>([]);
 
   const etichetteFocus: Record<string, string> = {
     generico: 'Consulto Generale', tema_amore: 'Approfondimento Amore', tema_lavoro: 'Approfondimento Lavoro', tema_salute: 'Approfondimento Salute', tema_crescita: 'Approfondimento Crescita Personale', tema_previsioni: 'Approfondimento Previsioni', tema_pianeti: 'Approfondimento Pianeti', tema_case: 'Approfondimento Case', tema_aspetti: 'Approfondimento Aspetti', tema_transiti: 'Approfondimento Transiti', compatibilita_amore: 'Compatibilità Amorosa', compatibilita_lavoro: 'Compatibilità Lavorativa', compatibilita_salute: 'Compatibilità Salute', compatibilita_crescita: 'Compatibilità Crescita', compatibilita_previsioni: 'Compatibilità Previsioni', compatibilita: 'Compatibilità Generale',
@@ -93,6 +96,17 @@ function ConsulenzaContent() {
 
   const vaiAlPagamento = () => { window.location.href = STRIPE_PAYMENT_LINK; };
 
+  // NUOVO: Funzione per svuotare la coda audio
+  const stopAndClearAudioQueue = () => {
+    activeAudioSourcesRef.current.forEach(source => {
+      try { source.stop(); } catch(e) {}
+    });
+    activeAudioSourcesRef.current = [];
+    if (audioCtxRef.current) {
+      nextPlayTimeRef.current = audioCtxRef.current.currentTime;
+    }
+  };
+
   const avviaChiamata = async () => {
     if (!token || inAvvio || chiamataAttiva) return;
     setErrore('');
@@ -121,6 +135,7 @@ function ConsulenzaContent() {
       await audioCtx.resume(); 
 
       const source = audioCtx.createMediaStreamSource(stream);
+      // MANTENUTO 4096 (se funziona, non lo tocchiamo)
       const processor = audioCtx.createScriptProcessor(4096, 1, 1);
       processorRef.current = processor;
 
@@ -143,6 +158,17 @@ function ConsulenzaContent() {
                   }
                 }
               }
+            },
+            // NUOVO: Configurazione per l'interruzione immediata
+            realtimeInputConfig: {
+              automaticActivityDetection: {
+                disabled: false,
+                startOfSpeechSensitivity: "START_SENSITIVITY_HIGH",
+                endOfSpeechSensitivity: "END_SENSITIVITY_HIGH",
+                prefixPaddingMs: 100,
+                silenceDurationMs: 400
+              },
+              activityHandling: "START_OF_ACTIVITY_INTERRUPTS"
             },
             systemInstruction: {
               parts: [{ text: sessionData.prompt }]
@@ -188,7 +214,6 @@ function ConsulenzaContent() {
               if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
               const inputData = e.inputBuffer.getChannelData(0);
               
-              // Debug: calcola volume massimo per capire se il microfono capta
               let maxV = 0;
               for (let i = 0; i < inputData.length; i++) {
                 const v = Math.abs(inputData[i]);
@@ -220,6 +245,13 @@ function ConsulenzaContent() {
           }
         }
 
+        // NUOVO: Se l'utente interrompe, svuota l'audio in riproduzione
+        if (msg.serverContent?.interrupted) {
+          console.log("L'utente ha interrotto. Svuoto la coda audio.");
+          stopAndClearAudioQueue();
+          return;
+        }
+
         const parts = msg.serverContent?.modelTurn?.parts || [];
         for (const part of parts) {
           if (part.inlineData?.data) {
@@ -246,6 +278,12 @@ function ConsulenzaContent() {
               }
               sourceNode.start(nextPlayTimeRef.current);
               nextPlayTimeRef.current += audioBuffer.duration;
+
+              // NUOVO: Aggiungi alla lista degli audio attivi
+              activeAudioSourcesRef.current.push(sourceNode);
+              sourceNode.onended = () => {
+                activeAudioSourcesRef.current = activeAudioSourcesRef.current.filter(s => s !== sourceNode);
+              };
             }
           }
         }
@@ -287,6 +325,7 @@ function ConsulenzaContent() {
       audioCtxRef.current = null;
     }
     
+    stopAndClearAudioQueue();
     setChiamataAttiva(false);
     setInAvvio(false);
     nextPlayTimeRef.current = 0;
