@@ -192,12 +192,12 @@ function ConsulenzaContent() {
         if (msg.setupComplete) {
           console.log("7. Setup completato! Avvio timer e microfono...");
           
-          // Avvia la conversazione facendola partire per prima con un saluto
+          // COMANDO DI INNESCO: Diciamo a tuFelia di iniziare lei per prima
           ws.send(JSON.stringify({
             clientContent: {
               turns: [{
                 role: "user",
-                parts: [{ text: "Avvia il consulto salutandomi." }] // Comando per farla partire subito
+                parts: [{ text: "Inizia la conversazione tu per prima. Salutami usando il mio nome e chiedimi di cosa vogliamo parlare oggi." }] 
               }],
               turnComplete: true
             }
@@ -225,7 +225,11 @@ function ConsulenzaContent() {
               }));
             };
             source.connect(processor);
-            processor.connect(audioCtx.destination);
+            
+            // IMPORTANTE: NON COLLEGARE processor a audioCtx.destination
+            // Altrimenti l'audio del microfono va nelle casse, tuFelia si ascolta e va in loop!
+            // processor.connect(audioCtx.destination); <--- RIMOSSO PER SEMPRE
+
           } else {
             throw new Error('Non riesco ad avviare il conteggio del credito.');
           }
@@ -241,7 +245,9 @@ function ConsulenzaContent() {
         for (const part of parts) {
           if (part.inlineData?.data) {
             const audioData = part.inlineData.data;
-            if (audioCtxRef.current) {
+            const mimeType = part.inlineData.mimeType || "audio/pcm";
+            
+            if (audioCtxRef.current && mimeType.includes("audio/pcm")) {
               const binaryString = atob(audioData);
               const bytes = new Uint8Array(binaryString.length);
               for (let i = 0; i < binaryString.length; i++) {
