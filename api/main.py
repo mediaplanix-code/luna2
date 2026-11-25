@@ -823,9 +823,7 @@ async def crea_sessione_voce(token: str, focus: str = "generico"):
     if not copione:
         print("=== ATTENZIONE: Copione vuoto, uso testo di fallback per non bloccare la voce ===")
         copione = "Sei tuFelia, consulente astrologica italiana. Parla in modo caldo e professionale."
-        nome_cliente = profile.get("nome", "cliente")
-    istruzione_saluto = f"Il tuo PRIMO messaggio deve essere esattamente e solo questo saluto: 'Ciao {nome_cliente}, sono tuFelia. Di cosa parliamo oggi?'. Non aggiungere altre parole prima di questa frase."
-
+        
     instructions = (
         "Sei tuFelia, una consulente astrologica italiana. Parla sempre in italiano naturale, "
         "con voce femminile calda, spontanea, empatica e rassicurante.\n\n"
