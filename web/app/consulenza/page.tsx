@@ -46,9 +46,9 @@ function ConsulenzaContent() {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
-  
-  const activeAudioSourcesRef = useRef<AudioBufferSourceNode[]>([]);
   const nextPlayTimeRef = useRef(0);
+  const frameCountRef = useRef(0);
+  const maxVolumeRef = useRef(0);
 
   const etichetteFocus: Record<string, string> = {
     generico: 'Consulto Generale', tema_amore: 'Approfondimento Amore', tema_lavoro: 'Approfondimento Lavoro', tema_salute: 'Approfondimento Salute', tema_crescita: 'Approfondimento Crescita Personale', tema_previsioni: 'Approfondimento Previsioni', tema_pianeti: 'Approfondimento Pianeti', tema_case: 'Approfondimento Case', tema_aspetti: 'Approfondimento Aspetti', tema_transiti: 'Approfondimento Transiti', compatibilita_amore: 'Compatibilità Amorosa', compatibilita_lavoro: 'Compatibilità Lavorativa', compatibilita_salute: 'Compatibilità Salute', compatibilita_crescita: 'Compatibilità Crescita', compatibilita_previsioni: 'Compatibilità Previsioni', compatibilita: 'Compatibilità Generale',
@@ -93,20 +93,12 @@ function ConsulenzaContent() {
 
   const vaiAlPagamento = () => { window.location.href = STRIPE_PAYMENT_LINK; };
 
-  const stopAndClearAudioQueue = () => {
-    activeAudioSourcesRef.current.forEach(source => {
-      try { source.stop(); } catch(e) {}
-    });
-    activeAudioSourcesRef.current = [];
-    if (audioCtxRef.current) {
-      nextPlayTimeRef.current = audioCtxRef.current.currentTime;
-    }
-  };
-
   const avviaChiamata = async () => {
     if (!token || inAvvio || chiamataAttiva) return;
     setErrore('');
     setInAvvio(true);
+    frameCountRef.current = 0;
+    maxVolumeRef.current = 0;
 
     try {
       console.log("1. Richiesta sessione al backend...");
@@ -121,14 +113,7 @@ function ConsulenzaContent() {
       }
 
       console.log("3. Richiesta microfono...");
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-          sampleRate: 16000
-        } 
-      });
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
       
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
@@ -136,7 +121,7 @@ function ConsulenzaContent() {
       await audioCtx.resume(); 
 
       const source = audioCtx.createMediaStreamSource(stream);
-      const processor = audioCtx.createScriptProcessor(2048, 1, 1);
+      const processor = audioCtx.createScriptProcessor(4096, 1, 1);
       processorRef.current = processor;
 
       console.log("4. Connessione WebSocket a Gemini...");
@@ -149,27 +134,17 @@ function ConsulenzaContent() {
         ws.send(JSON.stringify({
           setup: {
             model: "models/gemini-3.8-live",
-            generation_config: { // <--- SNAKE CASE
-              response_modalities: ["AUDIO"], // <--- SNAKE CASE
-              speech_config: { // <--- SNAKE CASE
-                voice_config: { // <--- SNAKE CASE
-                  prebuilt_voice_config: { // <--- SNAKE CASE
-                    voice_name: "Kore" // <--- SNAKE CASE
+            generationConfig: {
+              responseModalities: ["AUDIO"],
+              speechConfig: {
+                voiceConfig: {
+                  prebuiltVoiceConfig: {
+                    voiceName: "Kore"
                   }
                 }
               }
             },
-            realtime_input_config: { // <--- SNAKE CASE
-              automatic_activity_detection: { // <--- SNAKE CASE
-                disabled: false,
-                start_of_speech_sensitivity: "START_SENSITIVITY_HIGH", // <--- SNAKE CASE
-                end_of_speech_sensitivity: "END_SENSITIVITY_HIGH", // <--- SNAKE CASE
-                prefix_padding_ms: 100, // <--- SNAKE CASE
-                silence_duration_ms: 400 // <--- SNAKE CASE
-              },
-              activity_handling: "START_OF_ACTIVITY_INTERRUPTS" // <--- SNAKE CASE
-            },
-            system_instruction: { // <--- SNAKE CASE
+            systemInstruction: {
               parts: [{ text: sessionData.prompt }]
             }
           }
@@ -186,18 +161,18 @@ function ConsulenzaContent() {
             msg = JSON.parse(event.data);
           }
         } catch (e) {
+          console.error("Errore parsing messaggio:", e);
           return;
         }
 
         if (msg.setupComplete) {
           console.log("7. Setup completato! Avvio timer e microfono...");
           
-          // Innesco per farla partire subito
           ws.send(JSON.stringify({
             clientContent: {
               turns: [{
                 role: "user",
-                parts: [{ text: "Inizia la conversazione." }] 
+                parts: [{ text: "Ciao tuFelia, presentati brevemente in due frasi." }]
               }],
               turnComplete: true
             }
@@ -212,40 +187,44 @@ function ConsulenzaContent() {
             processor.onaudioprocess = (e) => {
               if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
               const inputData = e.inputBuffer.getChannelData(0);
+              
+              // Debug: calcola volume massimo per capire se il microfono capta
+              let maxV = 0;
+              for (let i = 0; i < inputData.length; i++) {
+                const v = Math.abs(inputData[i]);
+                if (v > maxV) maxV = v;
+              }
+              if (maxV > maxVolumeRef.current) maxVolumeRef.current = maxV;
+              
+              frameCountRef.current++;
+              if (frameCountRef.current % 50 === 0) {
+                console.log(`[DEBUG MIC] Frame ${frameCountRef.current} - Volume max rilevato: ${maxVolumeRef.current.toFixed(4)} - Stato WS: ${wsRef.current.readyState}`);
+              }
+              
               const pcm16 = float32ToInt16(inputData);
               const base64Data = arrayBufferToBase64(pcm16);
               
-              // SNAKE CASE PER L'AUDIO IN INGRESSO
               ws.send(JSON.stringify({
-                realtime_input: {
-                  media_chunks: [{
+                realtimeInput: {
+                  audio: {
                     data: base64Data,
-                    mime_type: "audio/pcm;rate=16000"
-                  }]
+                    mimeType: "audio/pcm;rate=16000"
+                  }
                 }
               }));
             };
             source.connect(processor);
-            
-            // NON COLLEGARE A destination PER EVITARE L'ECO
+            processor.connect(audioCtx.destination);
           } else {
             throw new Error('Non riesco ad avviare il conteggio del credito.');
           }
-        }
-
-        if (msg.serverContent?.interrupted) {
-          console.log("L'utente ha interrotto. Svuoto la coda audio.");
-          stopAndClearAudioQueue();
-          return;
         }
 
         const parts = msg.serverContent?.modelTurn?.parts || [];
         for (const part of parts) {
           if (part.inlineData?.data) {
             const audioData = part.inlineData.data;
-            const mimeType = part.inlineData.mimeType || "audio/pcm";
-            
-            if (audioCtxRef.current && mimeType.includes("audio/pcm")) {
+            if (audioCtxRef.current) {
               const binaryString = atob(audioData);
               const bytes = new Uint8Array(binaryString.length);
               for (let i = 0; i < binaryString.length; i++) {
@@ -267,11 +246,6 @@ function ConsulenzaContent() {
               }
               sourceNode.start(nextPlayTimeRef.current);
               nextPlayTimeRef.current += audioBuffer.duration;
-
-              activeAudioSourcesRef.current.push(sourceNode);
-              sourceNode.onended = () => {
-                activeAudioSourcesRef.current = activeAudioSourcesRef.current.filter(s => s !== sourceNode);
-              };
             }
           }
         }
@@ -313,9 +287,9 @@ function ConsulenzaContent() {
       audioCtxRef.current = null;
     }
     
-    stopAndClearAudioQueue();
     setChiamataAttiva(false);
     setInAvvio(false);
+    nextPlayTimeRef.current = 0;
 
     if (token && timerStartedRef.current) {
       timerStartedRef.current = false;
