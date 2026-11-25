@@ -149,27 +149,27 @@ function ConsulenzaContent() {
         ws.send(JSON.stringify({
           setup: {
             model: "models/gemini-3.8-live",
-            generationConfig: {
-              responseModalities: ["AUDIO"],
-              speechConfig: {
-                voiceConfig: {
-                  prebuiltVoiceConfig: {
-                    voiceName: "Kore"
+            generation_config: { // <--- SNAKE CASE
+              response_modalities: ["AUDIO"], // <--- SNAKE CASE
+              speech_config: { // <--- SNAKE CASE
+                voice_config: { // <--- SNAKE CASE
+                  prebuilt_voice_config: { // <--- SNAKE CASE
+                    voice_name: "Kore" // <--- SNAKE CASE
                   }
                 }
               }
             },
-            realtimeInputConfig: {
-              automaticActivityDetection: {
+            realtime_input_config: { // <--- SNAKE CASE
+              automatic_activity_detection: { // <--- SNAKE CASE
                 disabled: false,
-                startOfSpeechSensitivity: "START_SENSITIVITY_HIGH",
-                endOfSpeechSensitivity: "END_SENSITIVITY_HIGH",
-                prefixPaddingMs: 100,
-                silenceDurationMs: 400
+                start_of_speech_sensitivity: "START_SENSITIVITY_HIGH", // <--- SNAKE CASE
+                end_of_speech_sensitivity: "END_SENSITIVITY_HIGH", // <--- SNAKE CASE
+                prefix_padding_ms: 100, // <--- SNAKE CASE
+                silence_duration_ms: 400 // <--- SNAKE CASE
               },
-              activityHandling: "START_OF_ACTIVITY_INTERRUPTS"
+              activity_handling: "START_OF_ACTIVITY_INTERRUPTS" // <--- SNAKE CASE
             },
-            systemInstruction: {
+            system_instruction: { // <--- SNAKE CASE
               parts: [{ text: sessionData.prompt }]
             }
           }
@@ -192,12 +192,12 @@ function ConsulenzaContent() {
         if (msg.setupComplete) {
           console.log("7. Setup completato! Avvio timer e microfono...");
           
-          // COMANDO DI INNESCO: Diciamo a tuFelia di iniziare lei per prima
+          // Innesco per farla partire subito
           ws.send(JSON.stringify({
             clientContent: {
               turns: [{
                 role: "user",
-                parts: [{ text: "Inizia la conversazione tu per prima. Salutami usando il mio nome e chiedimi di cosa vogliamo parlare oggi." }] 
+                parts: [{ text: "Inizia la conversazione." }] 
               }],
               turnComplete: true
             }
@@ -215,21 +215,19 @@ function ConsulenzaContent() {
               const pcm16 = float32ToInt16(inputData);
               const base64Data = arrayBufferToBase64(pcm16);
               
+              // SNAKE CASE PER L'AUDIO IN INGRESSO
               ws.send(JSON.stringify({
-                realtimeInput: {
-                  mediaChunks: [{
+                realtime_input: {
+                  media_chunks: [{
                     data: base64Data,
-                    mimeType: "audio/pcm;rate=16000"
+                    mime_type: "audio/pcm;rate=16000"
                   }]
                 }
               }));
             };
             source.connect(processor);
             
-            // IMPORTANTE: NON COLLEGARE processor a audioCtx.destination
-            // Altrimenti l'audio del microfono va nelle casse, tuFelia si ascolta e va in loop!
-            // processor.connect(audioCtx.destination); <--- RIMOSSO PER SEMPRE
-
+            // NON COLLEGARE A destination PER EVITARE L'ECO
           } else {
             throw new Error('Non riesco ad avviare il conteggio del credito.');
           }
