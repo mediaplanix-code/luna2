@@ -14,6 +14,17 @@ def pulisci_testo(testo: str) -> str:
     testo = re.sub(r'[^\w\s\.\,\;\:\!\?\'\"\(\)\-àèéìòùÀÈÉÌÒÙ]', '', testo)
     return testo
 
+# --- FUNZIONE BLINDATA CONTRO I VUOTI DELL'AI ---
+async def _chiama_ai_con_retry(prompt: str, max_tokens: int, min_len: int = 40) -> str:
+    for tentativo in range(3):
+        risposta = await _chiama_ai(prompt, max_tokens)
+        risposta_pulita = pulisci_testo(risposta)
+        if risposta_pulita and len(risposta_pulita) >= min_len:
+            return risposta_pulita
+        print(f"=== RETRY AI (Tentativo {tentativo+1}/3 fallito, risposta vuota o troppo corta) ===")
+        await asyncio.sleep(2)
+    return ""
+
 def genera_ruota_svg(tema: dict) -> str:
     segni = ["♈", "♉", "♊", "♋", "♌", "♍", "♎", "♏", "♐", "♑", "♒", "♓"]
     svg = f'<svg viewBox="0 0 600 600" xmlns="http://www.w3.org/2000/svg" style="width: 100%; max-width: 500px; display: block; margin: 0 auto;">'
@@ -96,7 +107,6 @@ SIGNIFICATI_CASE = {
     11: "Amicizie, gruppi, ideali, progetti futuri.", 12: "Inconscio, sogni, spiritualità, isolamento."
 }
 
-# Segno solare per ogni mese
 SEGNI_MESI = {
     "Gennaio": ("Acquario", "♒"), "Febbraio": ("Pesci", "♓"), "Marzo": ("Ariete", "♈"),
     "Aprile": ("Toro", "♉"), "Maggio": ("Gemelli", "♊"), "Giugno": ("Cancro", "♋"),
@@ -126,7 +136,7 @@ async def genera_libro_completo(profile: dict, report: dict, tema: dict, settori
         grado = round(dati_p.get('grado', 0), 2)
         await asyncio.sleep(0.2)
         prompt_sig = f"In una frase brevissima (max 10 parole), spiega il significato di {nome_p} in {segno}."
-        significato = pulisci_testo(await _chiama_ai(prompt_sig, max_tokens=50)) or "Influenza il tuo carattere."
+        significato = await _chiama_ai_con_retry(prompt_sig, max_tokens=50, min_len=10) or "Influenza il tuo carattere."
         tab_pianeti += f"<tr><td>{nome_p}</td><td>{segno} {grado}°</td><td>{significato}</td></tr>"
     tab_pianeti += "</table>"
 
@@ -144,7 +154,7 @@ async def genera_libro_completo(profile: dict, report: dict, tema: dict, settori
         p1, p2, tipo = asp.get('pianeta1'), asp.get('pianeta2'), asp.get('tipo')
         await asyncio.sleep(0.2)
         prompt_asp = f"In una frase brevissima (max 10 parole), spiega il significato dell'aspetto {tipo} tra {p1} e {p2}."
-        significato_asp = pulisci_testo(await _chiama_ai(prompt_asp, max_tokens=50)) or "Tensione o armonia."
+        significato_asp = await _chiama_ai_con_retry(prompt_asp, max_tokens=50, min_len=10) or "Tensione o armonia."
         tab_aspetti += f"<tr><td>{p1}</td><td>{tipo}</td><td>{p2}</td><td>{significato_asp}</td></tr>"
     tab_aspetti += "</table>"
 
@@ -158,18 +168,14 @@ async def genera_libro_completo(profile: dict, report: dict, tema: dict, settori
     tab_transiti += "</table>"
 
     # IDENTITÀ
-    await asyncio.sleep(0.5)
-    sole_txt = pulisci_testo(await _chiama_ai(f"Scrivi 100 parole sull'identità di {nome} con Sole in {segno_sole}. Non includere il conteggio delle parole nel testo.", max_tokens=300)) or "Il tuo Sole brilla."
-    await asyncio.sleep(0.5)
+    sole_txt = await _chiama_ai_con_retry(f"Scrivi 100 parole sull'identità di {nome} con Sole in {segno_sole}. Non includere il conteggio delle parole nel testo.", max_tokens=300) or "Il tuo Sole brilla."
     asc_segno = get_segno_da_longitudine(tema.get("ascendant", 0))
-    asc_txt = pulisci_testo(await _chiama_ai(f"Scrivi 100 parole sull'Ascendente in {asc_segno} di {nome}.", max_tokens=300)) or "Il tuo Ascendente ti guida."
-    await asyncio.sleep(0.5)
-    luna_txt = pulisci_testo(await _chiama_ai(f"Scrivi 100 parole sulla Luna in {segno_luna} di {nome}.", max_tokens=300)) or "La tua Luna ti dona sensibilità."
-    await asyncio.sleep(0.5)
+    asc_txt = await _chiama_ai_con_retry(f"Scrivi 100 parole sull'Ascendente in {asc_segno} di {nome}.", max_tokens=300) or "Il tuo Ascendente ti guida."
+    luna_txt = await _chiama_ai_con_retry(f"Scrivi 100 parole sulla Luna in {segno_luna} di {nome}.", max_tokens=300) or "La tua Luna ti dona sensibilità."
     mc_segno = get_segno_da_longitudine(tema.get("mc", 0))
-    mc_txt = pulisci_testo(await _chiama_ai(f"Scrivi 100 parole sul Medio Cielo in {mc_segno} di {nome}.", max_tokens=300)) or "Il tuo Medio Cielo indica la strada."
+    mc_txt = await _chiama_ai_con_retry(f"Scrivi 100 parole sul Medio Cielo in {mc_segno} di {nome}.", max_tokens=300) or "Il tuo Medio Cielo indica la strada."
 
-    # SEGNI COMPATIBILI (Griglia elegante)
+    # SEGNI COMPATIBILI (Lista elegante con testo più corposo)
     COMPATIBILI = {
         "Ariete": ["Leone", "Sagittario", "Gemelli", "Acquario"], "Toro": ["Vergine", "Capricorno", "Cancro", "Pesci"],
         "Gemelli": ["Bilancia", "Acquario", "Ariete", "Leone"], "Cancro": ["Scorpione", "Pesci", "Toro", "Vergine"],
@@ -180,56 +186,50 @@ async def genera_libro_completo(profile: dict, report: dict, tema: dict, settori
     }
     
     compatibili = COMPATIBILI.get(segno_sole, [])
-    compatibili_html = "<div style='display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px;'>"
+    compatibili_html = "<ul style='list-style: none; padding: 0;'>"
     for c in compatibili:
-        await asyncio.sleep(0.3)
-        prompt_comp = f"In una frase breve (max 15 parole), descrivi la compatibilità tra il segno {segno_sole} e il segno {c}, menzionando l'affinità generale."
-        testo_comp = pulisci_testo(await _chiama_ai(prompt_comp, max_tokens=40)) or "Affinità naturale e scambio reciproco."
+        prompt_comp = f"Scrivi una frase di massimo 25 parole che descriva la compatibilità tra il segno {segno_sole} e il segno {c}. Parla di come si completano in amore o in amicizia."
+        testo_comp = await _chiama_ai_con_retry(prompt_comp, max_tokens=60, min_len=15) or "Affinità naturale e scambio reciproco."
         
         compatibili_html += f"""
-        <div style='background: #f8f6f0; border: 1px solid #e0d5c1; padding: 15px; border-radius: 8px; text-align: center; page-break-inside: avoid;'>
-            <div style='font-size: 28pt; color: #b89752; margin-bottom: 5px;'>{simboli_segni.get(c, '')}</div>
-            <div style='font-family: Cinzel, serif; font-size: 14pt; color: #0d1321; margin-bottom: 8px;'>{c}</div>
-            <div style='font-size: 10pt; color: #555; line-height: 1.4;'>{testo_comp}</div>
-        </div>
+        <li style='margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 15px;'>
+            <div style='font-size: 28pt; color: #b89752; float: left; margin-right: 15px; line-height: 1;'>{simboli_segni.get(c, '')}</div>
+            <div style='font-family: Cinzel, serif; font-size: 16pt; color: #0d1321; margin-bottom: 5px;'>{c}</div>
+            <div style='font-size: 12pt; color: #555; font-style: italic; line-height: 1.6;'>{testo_comp}</div>
+            <div style='clear: both;'></div>
+        </li>
         """
-    compatibili_html += "</div>"
+    compatibili_html += "</ul>"
 
-    # RESOCONTO ANNUALE (Con retry e fallback)
+    # RESOCONTO ANNUALE (Blindato)
     stelle_anno = get_stelle_finte(nome, "2027")
     stelle_anno_html = f"<div style='text-align: center; margin-bottom: 20px; font-size: 20pt; color: #b89752;'>{render_stelle(stelle_anno)}</div>"
     
     prompt_resoconto = f"Scrivi un resoconto annuale per il 2027 per {nome} (Sole in {segno_sole}). Massimo 300 parole. Tono: ispirazionale."
-    resoconto = ""
-    for _ in range(2): # Riprova 2 volte
-        resoconto = pulisci_testo(await _chiama_ai(prompt_resoconto, max_tokens=600))
-        if resoconto and len(resoconto) > 50: break
-        await asyncio.sleep(2)
+    resoconto = await _chiama_ai_con_retry(prompt_resoconto, max_tokens=600, min_len=100)
     
-    if not resoconto or len(resoconto) < 50:
+    if not resoconto:
         resoconto = f"Caro {nome}, il 2027 si prospetta come un anno di profonda evoluzione. Le stelle ti invitano a guardare dentro te stesso e a coltivare i tuoi talenti nascosti. È il momento di lasciare andare ciò che non ti serve più e di abbracciare le nuove opportunità che l'universo ha in serbo per te. Con il tuo Sole in {segno_sole}, la tua sensibilità sarà la tua guida."
     
     if resoconto:
         resoconto = f"<span style='font-size: 40pt; float: left; line-height: 1; margin-right: 10px; color: #b89752; font-family: Cinzel;'>{resoconto[0]}</span>{resoconto[1:]}"
 
-    # MESI con stelle e decorazione finale per riempire il vuoto
+    # MESI
     mesi_nomi = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"]
     capitoli_mesi = ""
     
     for mese in mesi_nomi:
-        await asyncio.sleep(1)
         stelle_mese = get_stelle_finte(nome, mese)
         stelline_html = f"<span style='color: #b89752; font-size: 14pt;'>{render_stelle(stelle_mese)}</span>"
         
         prompt_mese = f"Scrivi un testo di almeno 200 parole per il mese di {mese} 2027 per {nome} (Sole in {segno_sole}). Parla dell'energia del mese."
-        testo_mese = pulisci_testo(await _chiama_ai(prompt_mese, max_tokens=500)) or f"Il mese di {mese} porta nuove energie."
+        testo_mese = await _chiama_ai_con_retry(prompt_mese, max_tokens=500, min_len=100) or f"Il mese di {mese} porta nuove energie e ti invita a riflettere sui tuoi obiettivi."
         
         if testo_mese:
             testo_mese = f"<span style='font-size: 40pt; float: left; line-height: 1; margin-right: 10px; color: #b89752; font-family: Cinzel;'>{testo_mese[0]}</span>{testo_mese[1:]}"
         
         stelle_box = f"<div style='text-align: center; margin-bottom: 15px; font-size: 12pt; color: #333;'><strong>Le stelle indicano:</strong> {stelline_html}</div>"
         
-        # DECORAZIONE FINALE DEL MESE (Segno del periodo)
         segno_mese, sym_mese = SEGNI_MESI.get(mese, ("Ariete", "♈"))
         decorazione_mese = f"""
         <div style='margin-top: 50px; text-align: center; border-top: 1px solid #e0d5c1; padding-top: 20px; page-break-inside: avoid;'>
@@ -240,23 +240,19 @@ async def genera_libro_completo(profile: dict, report: dict, tema: dict, settori
         
         capitoli_mesi += f"<div class='capitolo'><h2>{mese} 2027</h2>{stelle_box}<p>{testo_mese}</p>{decorazione_mese}</div>"
 
-    # AMBITI
+    # AMBITI (Blindati)
     settori_html = ""
     ambiti = [("Amore e Relazioni", f"Venere in {tema.get('planets', {}).get('Venere', {}).get('segno', '')}"), ("Lavoro e Carriera", f"Marte in {tema.get('planets', {}).get('Marte', {}).get('segno', '')}"), ("Salute e Benessere", f"Luna in {segno_luna}"), ("Crescita Personale", f"Nodo Nord in {tema.get('planets', {}).get('NodoNord', {}).get('segno', '')}")]
+    
     for titolo, contesto in ambiti:
-        await asyncio.sleep(1)
         stelle_ambito = get_stelle_finte(nome, titolo)
         stelline_ambito = f"<span style='color: #b89752; font-size: 14pt;'>{render_stelle(stelle_ambito)}</span>"
         
-        prompt_ambito = f"Scrivi un capitolo di almeno 250 parole sull'ambito '{titolo}' per {nome} nel 2027. Contesto: {contesto}. Tono: empatico."
-        testo_ambito = pulisci_testo(await _chiama_ai(prompt_ambito, max_tokens=600))
+        prompt_ambito = f"Scrivi un capitolo di almeno 250 parole sull'ambito '{titolo}' per {nome} nel 2027. Contesto: {contesto}. Tono: empatico. Sii dettagliato."
+        testo_ambito = await _chiama_ai_con_retry(prompt_ambito, max_tokens=600, min_len=150)
         
         if not testo_ambito:
-            await asyncio.sleep(2)
-            testo_ambito = pulisci_testo(await _chiama_ai(prompt_ambito, max_tokens=800))
-            
-        if not testo_ambito:
-            testo_ambito = f"Quest'anno l'energia del tuo tema natale ti guida a esplorare nuove dimensioni di {titolo.lower()}. Le stelle suggeriscono di ascoltare il tuo intuito e di muoverti con coraggio."
+            testo_ambito = f"Quest'anno l'energia del tuo tema natale ti guida a esplorare nuove dimensioni di {titolo.lower()}. Le stelle suggeriscono di ascoltare il tuo intuito e di muoverti con coraggio verso ciò che desideri."
         
         settori_html += f"<div class='capitolo'><h2>{titolo}</h2><div style='text-align: center; margin-bottom: 15px; font-size: 14pt;'>Le stelle indicano: {stelline_ambito}</div><p>{testo_ambito}</p></div>"
 
@@ -275,7 +271,7 @@ async def genera_libro_completo(profile: dict, report: dict, tema: dict, settori
             <p class="testo-dedica">Tu, Felia: tu che questo cielo lo abiti, tu a cui le stelle parlano al singolare.</p>
             <p class="testo-dedica">Le pagine che seguono non vogliono dirti cosa accadrà, ma aiutarti a leggere ciò che già sei. Il tuo cielo personalizzato comincia qui, con il tuo nome sulla prima riga e il tuo tempo scritto nelle pagine.</p>
             <p class="testo-dedica">Che questo sia un anno felice. Che le stelle ti siano, come si dice, favorevoli — e che tu sappia riconoscerle anche quando si nascondono.</p>
-            <p class="testo-dedica" style="margin-top: 40px; font-size: 20pt; color: #0d1321;">Con affetto,<br>tuFelia</p>
+            <p class="testo-dedica firma-dedica" style="margin-top: 40px;">Con affetto,<br>tuFelia</p>
         </div>
     </div>
     """
