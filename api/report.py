@@ -4,7 +4,8 @@
 # documento pronto per l'AI (chat + voce).
 # =========================================================
 
-from transiti import calcola_transiti_lenti
+from datetime import datetime
+from transiti import calcola_transiti_lenti, calcola_transiti_veloci
 
 
 def assembla_report(
@@ -16,12 +17,9 @@ def assembla_report(
 ):
     """
     profile: riga dalla tabella profiles
-    tema: risultato di calcola_tema_completo (planets, houses, aspects, planets_in_houses, ascendant, mc)
-    significati_ps: righe da significati_pianeti_segni (dict: {pianeta, segno, testo})
-    significati_pc: righe da significati_pianeti_case (dict: {pianeta, casa, testo})
-    significati_tr: righe da significati_transiti (dict: {pianeta_transito, aspetto, punto_natale, testo, durata_mesi})
-
-    Ritorna un dict pronto per essere salvato in internal_reports e passato all'AI.
+    tema: risultato di calcola_tema_completo
+    significati_ps, pc, tr: dataset astrologici
+    Ritorna un dict pronto per essere passato all'AI.
     """
 
     # --- 1. Indici per lookup veloce ---
@@ -69,20 +67,29 @@ def assembla_report(
             "lettura": f"{a['pianeta1']} in {a['tipo']} con {a['pianeta2']} (orbita {a['orb']}°)",
         })
 
-    # --- 5. Transiti lenti prossimi 12 mesi con significato ---
-    data_iscrizione = str(profile.get("created_at", ""))[:10]
-    if not data_iscrizione:
-        from datetime import datetime
-        data_iscrizione = datetime.utcnow().strftime("%Y-%m-%d")
-
+    # --- 5. Calcolo Transiti (Veloci e Lenti) ---
+    oggi_str = datetime.now().strftime("%Y-%m-%d")
+    
+    # Transiti lenti (12 mesi)
     transiti_lenti = calcola_transiti_lenti(
-        data_inizio=data_iscrizione,
+        data_inizio=oggi_str,
         planets=tema["planets"],
         houses=tema["houses"],
         ascendant=tema["ascendant"],
         mc=tema["mc"],
         planets_in_houses=tema["planets_in_houses"],
         mesi_finestra=12,
+    )
+    
+    # Transiti veloci (30 giorni)
+    transiti_veloci = calcola_transiti_veloci(
+        data_inizio=oggi_str,
+        planets=tema["planets"],
+        houses=tema["houses"],
+        ascendant=tema["ascendant"],
+        mc=tema["mc"],
+        planets_in_houses=tema["planets_in_houses"],
+        giorni_finestra=30,
     )
 
     transiti_report = []
@@ -98,11 +105,26 @@ def assembla_report(
             "settore": t["settore"],
             "significato": significato,
             "durata_mesi": durata,
+            "tipo_transito": "lento"
         })
 
-    # --- 6. Raggruppa i transiti per settore, per l'AI ---
+    transiti_veloci_report = []
+    for t in transiti_veloci:
+        transiti_veloci_report.append({
+            "data_esatta": t["data_esatta"],
+            "pianeta_transito": t["pianeta_transito"],
+            "aspetto": t["aspetto"],
+            "punto_natale": t["punto_natale"],
+            "casa_natale": t["casa_natale"],
+            "settore": t["settore"],
+            "significato": "Transito veloce: energia passeggera e concreta.",
+            "durata_mesi": 1,
+            "tipo_transito": "veloce"
+        })
+
+    # --- 6. Raggruppa i transiti per settore ---
     settori = {}
-    for t in transiti_report:
+    for t in transiti_report + transiti_veloci_report:
         s = t["settore"]
         if s not in settori:
             settori[s] = []
@@ -110,6 +132,7 @@ def assembla_report(
 
     # --- 7. Riepilogo testuale per l'AI ---
     riepilogo = []
+    riepilogo.append(f"DATA ODIERNA: {datetime.now().strftime('%d/%m/%Y')}")
     riepilogo.append(f"Cliente: {profile.get('nome')}")
     riepilogo.append(f"Nato il: {profile.get('birth_date')} alle {profile.get('birth_time')}")
     riepilogo.append(f"Luogo: {profile.get('birth_city')}")
@@ -126,21 +149,34 @@ def assembla_report(
     if mc_sign:
         riepilogo.append(f"- Medio Cielo in {mc_sign}")
     riepilogo.append("")
+    
     if aspetti_report:
         riepilogo.append("ASPETTI PRINCIPALI:")
         for a in aspetti_report[:10]:
             riepilogo.append(f"- {a['lettura']}")
         riepilogo.append("")
-    if transiti_report:
-        riepilogo.append("TRANSITI LENTI DEI PROSSIMI 12 MESI:")
-        for t in transiti_report:
-            riepilogo.append(
-                f"- {t['data_esatta']}: {t['pianeta_transito']} in {t['aspetto']} "
-                f"al tuo {t['punto_natale']} (settore: {t['settore']}, "
-                f"durata ~{t['durata_mesi']} mesi)"
-            )
-            if t["significato"]:
-                riepilogo.append(f"  {t['significato']}")
+
+    riepilogo.append("TRANSITI VELOCI (PROSSIMI 30 GIORNI - PER L'IMMEDIATO):")
+    if not transiti_veloci_report:
+         riepilogo.append("- Nessun transito veloce rilevante nel prossimo mese.")
+    for t in transiti_veloci_report:
+        riepilogo.append(
+            f"- {t['data_esatta']}: {t['pianeta_transito']} in {t['aspetto']} "
+            f"al tuo {t['punto_natale']} (settore: {t['settore']})"
+        )
+    riepilogo.append("")
+
+    riepilogo.append("TRANSITI LENTI (PROSSIMI 12 MESI - PER IL FUTURO):")
+    if not transiti_report:
+         riepilogo.append("- Nessun transito lento rilevante nei prossimi 12 mesi.")
+    for t in transiti_report:
+        riepilogo.append(
+            f"- {t['data_esatta']}: {t['pianeta_transito']} in {t['aspetto']} "
+            f"al tuo {t['punto_natale']} (settore: {t['settore']}, "
+            f"durata ~{t['durata_mesi']} mesi)"
+        )
+        if t["significato"]:
+            riepilogo.append(f"  {t['significato']}")
 
     return {
         "profile": {
@@ -154,6 +190,7 @@ def assembla_report(
         "medio_cielo": {"longitude": mc_lon, "segno": mc_sign},
         "aspetti": aspetti_report,
         "transiti_lenti_12_mesi": transiti_report,
+        "transiti_veloci_30_giorni": transiti_veloci_report,
         "settori": settori,
         "riepilogo_testuale": "\n".join(riepilogo),
     }
