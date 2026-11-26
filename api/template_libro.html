@@ -9,7 +9,7 @@
             size: A4;
             margin: 2cm 2.5cm;
             @bottom-center { content: counter(page); font-family: 'Cinzel', serif; font-size: 10pt; color: #b89752; }
-            @top-center { content: "Il Tuo Cielo 2027"; font-family: 'Cinzel', serif; font-size: 9pt; color: #a0a0a0; letter-spacing: 2px; }
+            @top-center { content: "Il Cielo di {{NOME_CLIENTE}} 2027"; font-family: 'Cinzel', serif; font-size: 9pt; color: #a0a0a0; letter-spacing: 2px; }
         }
         
         @page cover { margin: 0; @bottom-center { content: none; } @top-center { content: none; } }
@@ -20,19 +20,21 @@
         .cornice { position: absolute; top: 40px; bottom: 40px; left: 40px; right: 40px; border: 2px solid #b89752; box-shadow: inset 0 0 0 6px #0d1321, inset 0 0 0 8px #b89752; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 40px; }
         
         /* NUOVA COPERTINA */
-        .titolo-libro { font-family: 'Cinzel', serif; font-size: 38pt; color: #ffd700; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 3px; line-height: 1.1; }
-        .sottotitolo-libro { font-family: 'Cinzel', serif; font-size: 24pt; color: #e2c792; margin-bottom: 60px; letter-spacing: 5px; }
-        .simbolo-centrale { font-size: 60pt; color: #b89752; margin-bottom: 60px; }
-        .dedicato-da { font-family: 'Playfair Display', serif; font-size: 16pt; font-style: italic; color: #a0a0a0; margin-top: 30px; border-top: 1px solid #b89752; padding-top: 20px; width: 60%; }
+        .riga-copertina-1 { font-family: 'Cinzel', serif; font-size: 32pt; color: #ffd700; text-transform: uppercase; letter-spacing: 3px; margin-bottom: 10px; }
+        .riga-copertina-2 { font-size: 40pt; font-style: italic; color: #ffffff; margin-bottom: 10px; border-bottom: 1px solid #b89752; padding-bottom: 10px; min-width: 60%; }
+        .riga-copertina-3 { font-family: 'Cinzel', serif; font-size: 36pt; color: #e2c792; letter-spacing: 5px; margin-bottom: 60px; }
+        .simbolo-centrale { font-size: 60pt; color: #b89752; margin-bottom: 40px; }
+        .dedicato-da { font-family: 'Playfair Display', serif; font-size: 16pt; font-style: italic; color: #a0a0a0; margin-top: 20px; border-top: 1px solid #b89752; padding-top: 20px; width: 60%; }
 
         .capitolo { page-break-before: always; color: #1a1a1a; }
         .capitolo h2 { font-family: 'Cinzel', serif; font-size: 22pt; color: #0d1321; text-align: center; border-bottom: 2px solid #b89752; padding-bottom: 10px; margin-bottom: 30px; text-transform: uppercase; letter-spacing: 2px; }
         .capitolo p { font-size: 11pt; line-height: 1.7; text-align: justify; margin-bottom: 15px; }
 
-        /* DEDICA (Testo ingrandito) */
+        /* DEDICA (Testo ingrandito e firma ridotta) */
         .dedica { text-align: center; margin-top: 50px; }
         .simbolo-segno { font-size: 100pt; color: #b89752; margin-bottom: 20px; line-height: 1; }
-        .testo-dedica { font-size: 17pt; font-style: italic; line-height: 1.9; color: #333; margin-bottom: 20px; }
+        .testo-dedica { font-size: 18pt; font-style: italic; line-height: 1.9; color: #333; margin-bottom: 20px; }
+        .firma-dedica { font-size: 16pt !important; color: #0d1321; font-style: italic; font-weight: bold; }
 
         /* BOX CHE NON SI SPEZZANO */
         .box-identita { 
@@ -66,8 +68,9 @@
 <body>
     <div class="copertina">
         <div class="cornice">
-            <div class="titolo-libro">Il Cielo<br>di {{NOME_CLIENTE}}</div>
-            <div class="sottotitolo-libro">2027</div>
+            <div class="riga-copertina-1">Il Cielo di</div>
+            <div class="riga-copertina-2">{{NOME_CLIENTE}}</div>
+            <div class="riga-copertina-3">2027</div>
             <div class="simbolo-centrale">✦</div>
             <div class="dedicato-da">Dedicato da tuFelia</div>
         </div>
