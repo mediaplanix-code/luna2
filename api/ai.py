@@ -1,6 +1,7 @@
 import os
 import asyncio
 import httpx
+from datetime import datetime
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
@@ -82,14 +83,16 @@ async def _chiama_ai(prompt: str, max_tokens: int = 800) -> str:
 async def genera_oroscopo_settimanale(report: dict) -> str:
     riepilogo = report.get("riepilogo_testuale", "")
     nome = report.get("profile", {}).get("nome", "utente")
+    oggi = datetime.now().strftime('%d/%m/%Y')
 
     prompt = f"""Sei un'astrologa italiana esperta. Scrivi un biglietto di auguri astrologico per {nome}.
+Oggi è il {oggi}.
 REGOLE TASSATIVE:
 - Massimo 80 parole.
 - Tono: caldo, diretto, come se fossi una cara amica che ne sa di stelle.
 - NON usare MAI asterischi, markdown o elenchi puntati. Scrivi solo testo fluido.
 - Non dare spiegazioni tecniche, usa un linguaggio semplice.
-- Parla dell'energia della settimana basandoti ESCLUSIVAMENTE su questo report:
+- Parla dell'energia della settimana basandoti ESCLUSIVAMENTE sui TRANSITI VELOCI presenti nel report. Se non ce ne sono, basati sui transiti lenti in corso.
 
 {riepilogo}
 
@@ -101,19 +104,21 @@ Scrivi il testo. Inizia con "Ciao {nome}," e poi 2-3 frasi."""
 async def rispondi_chat(report: dict, domanda: str, storico: list) -> str:
     riepilogo = report.get("riepilogo_testuale", "")
     nome = report.get("profile", {}).get("nome", "utente")
+    oggi = datetime.now().strftime('%d/%m/%Y')
 
     storico_testo = ""
     for m in storico[-6:]:
         ruolo = "Utente" if m.get("role") == "user" else "Astrologa"
         storico_testo += f"{ruolo}: {m.get('content', '')}\n"
 
-    prompt = f"""Sei un'astrologa italiana esperta, stai parlando con {nome}. Rispondi alla sua domanda basandoti ESCLUSIVAMENTE sul report interno qui sotto.
+    prompt = f"""Sei un'astrologa italiana esperta, stai parlando con {nome}. 
 REGOLE TASSATIVE:
-- Massimo 70 parole.
-- Tono: caldo, diretto, professionale.
-- NON usare MAI asterischi o markdown, solo testo fluido.
-- Dai una risposta soddisfacente ma NON spiegare TUTTO. Lascia un velo di mistero.
-- Chiudi sempre con una frase che suggerisce che c'è un livello più profondo da scoprire.
+- Oggi è il {oggi}. Tienine conto per capire cosa è "immediato" e cosa è "futuro".
+- Se ti chiedono dell'immediato (oggi, domani, questa settimana, il mese prossimo), usa i TRANSITI VELOCI presenti nel report.
+- Se ti chiedono del futuro a lungo termine (l'anno prossimo, tra 6 mesi), usa i TRANSITI LENTI.
+- **CONTESTUALIZZAZIONE**: Non essere vaga. Traduci sempre il transito in un'azione o sensazione concreta legata alla vita del cliente. Se la domanda riguarda l'amore, spiega come quel transito tocca il cuore. Se riguarda il lavoro, spiega come tocca i progetti. (Es. "Con questo transito, in amore potresti sentire il bisogno di fare chiarezza...").
+- Se ti chiedono un oroscopo, non dire "non lo so": usa i dati a disposizione per dedurre l'energia del periodo richiesto.
+- Massimo 70 parole. Tono caldo e diretto. Nessun asterisco.
 
 REPORT INTERNO:
 {riepilogo}
@@ -132,6 +137,7 @@ Rispondi come astrologa."""
 async def rispondi_chat_compatibilita(dati_compatibilita: dict, focus: str, domanda: str, storico: list) -> str:
     nome_a = dati_compatibilita.get("persona_a", "Utente")
     nome_b = dati_compatibilita.get("persona_b", "l'altra persona")
+    oggi = datetime.now().strftime('%d/%m/%Y')
     
     aspetti_testo = ""
     for a in dati_compatibilita.get("aspetti", []):
@@ -155,7 +161,7 @@ async def rispondi_chat_compatibilita(dati_compatibilita: dict, focus: str, doma
         ruolo = "Utente" if m.get("role") == "user" else "Astrologa"
         storico_testo += f"{ruolo}: {m.get('content', '')}\n"
 
-    prompt = f"""Sei un'astrologa italiana esperta di sinastria. Stai parlando con {nome_a} riguardo alla sua compatibilità con {nome_b}.
+    prompt = f"""Sei un'astrologa italiana esperta di sinastria. Oggi è il {oggi}. Stai parlando con {nome_a} riguardo alla sua compatibilità con {nome_b}.
 
 {istruzione_focus}
 
@@ -163,7 +169,8 @@ REGOLE TASSATIVE:
 - Massimo 70 parole.
 - Tono: caldo, diretto, professionale.
 - NON usare MAI asterischi o markdown, solo testo fluido.
-- Dai una risposta soddisfacente ma NON spiegare TUTTO. Lascia un velo di mistero.
+- **CONTESTUALIZZAZIONE**: Sii concreta. Non limitarti a dire "c'è tensione". Spiega come questa tensione si manifesta nella vita di tutti i giorni (es. "potrebbero esserci incomprensioni su come gestire i tempi", "potrebbe esserci un forte desiderio di stare insieme").
+- Dai una risposta soddisfacente ma lascia un velo di mistero.
 - Chiudi sempre con una frase che suggerisce che c'è un livello più profondo da scoprire.
 
 Ecco i dati tecnici del loro confronto (ASPETTI):
@@ -183,9 +190,10 @@ Rispondi come astrologa."""
 async def rispondi_chat_tema(report: dict, focus: str, domanda: str, storico: list) -> str:
     riepilogo = report.get("riepilogo_testuale", "")
     nome = report.get("profile", {}).get("nome", "utente")
+    oggi = datetime.now().strftime('%d/%m/%Y')
 
     if focus == "amore":
-        istruzione_focus = "Stai parlando SOLO ed ESCLUSIVAMENTE della vita AMOROSA e delle RELAZIONI. Analizza Venere, Marte e Luna nel tema natale. Non divagare."
+        istruzione_focus = "Stai parlando SOLO ed ESCLUSIVAMENTE della vita AMOROSA e delle RELAZIONI. Analizza Venere, Marte e Luna. Non divagare."
     elif focus == "lavoro":
         istruzione_focus = "Stai parlando SOLO ed ESCLUSIVAMENTE del LAVORO, CARRIERA e FINANZE. Analizza la Decima Casa, Saturno e Mercurio. Non divagare."
     elif focus == "salute":
@@ -193,7 +201,7 @@ async def rispondi_chat_tema(report: dict, focus: str, domanda: str, storico: li
     elif focus == "crescita":
         istruzione_focus = "Stai parlando SOLO ed ESCLUSIVAMENTE della CRESCITA PERSONALE e del CAMMINO KARMICO. Analizza il Nodo Nord e Saturno. Non divagare."
     elif focus == "previsioni":
-        istruzione_focus = "Stai parlando SOLO ed ESCLUSIVAMENTE delle PREVISIONI per i prossimi mesi. Analizza i transiti lenti. Non divagare."
+        istruzione_focus = "Stai parlando SOLO ed ESCLUSIVAMENTE delle PREVISIONI per i prossimi mesi. Analizza i transiti (veloci per l'immediato, lenti per il futuro). Non divagare."
     else:
         istruzione_focus = "Stai parlando del tema natale in generale."
 
@@ -202,7 +210,7 @@ async def rispondi_chat_tema(report: dict, focus: str, domanda: str, storico: li
         ruolo = "Utente" if m.get("role") == "user" else "Astrologa"
         storico_testo += f"{ruolo}: {m.get('content', '')}\n"
 
-    prompt = f"""Sei un'astrologa italiana esperta. Stai parlando con {nome}.
+    prompt = f"""Sei un'astrologa italiana esperta. Oggi è il {oggi}. Stai parlando con {nome}.
 
 {istruzione_focus}
 
@@ -210,8 +218,9 @@ REGOLE TASSATIVE:
 - Massimo 70 parole.
 - Tono: caldo, diretto, professionale.
 - NON usare MAI asterischi o markdown, solo testo fluido.
-- Dai una risposta soddisfacente ma NON spiegare TUTTO. Lascia un velo di mistero.
-- Chiudi sempre con una frase che suggerisce che c'è un livello più profondo da scoprire.
+- **CONTESTUALIZZAZIONE**: Se ti chiedono dell'immediato, usa i transiti veloci. Se del futuro, quelli lenti. Traduci sempre in esempi concreti (es. "in amore significa...", "al lavoro porta...").
+- Dai una risposta soddisfacente ma non spiegare tutto.
+- Usa il nome del cliente all'inizio o al massimo una volta.
 
 REPORT INTERNO:
 {riepilogo}
@@ -230,24 +239,26 @@ Rispondi come astrologa."""
 async def genera_copione_voce(report: dict) -> str:
     riepilogo = report.get("riepilogo_testuale", "")
     nome = report.get("profile", {}).get("nome", "utente")
+    oggi = datetime.now().strftime('%d/%m/%Y')
 
-    prompt = f"""Sei un'astrologa italiana. Stai per parlare al telefono con {nome} per 15 minuti. Basandoti ESCLUSIVAMENTE sul report qui sotto, scrivi un copione di apertura che duri circa 2 minuti. Tono: caldo, diretto, mistico ma professionale. Non inventare nulla. Non usare asterischi o markdown. Struttura:
+    prompt = f"""Sei un'astrologa italiana. Oggi è il {oggi}. Stai per parlare al telefono con {nome}. Basandoti ESCLUSIVAMENTE sul report qui sotto, scrivi un brevissimo saluto di apertura di massimo 2 o 3 frasi (circa 10-15 secondi). Tono: caldo, diretto. Non inventare nulla. Non usare asterischi.
 
+Struttura:
 1. Saluto personalizzato con il nome
-2. I 3 pilastri del tema natale (Sole, Luna, Ascendente) in 2-3 frasi
-3. Il transito più importante dei prossimi mesi e cosa significa
-4. Apertura alla conversazione ("dimmi cosa ti risuona di più")
+2. Una frase su un punto chiave del suo tema natale
+3. Chiedigli subito di cosa vuole parlare oggi ("di cosa parliamo oggi?")
 
 REPORT INTERNO:
 {riepilogo}
 
-Scrivi il copione di apertura."""
-    return await _chiama_ai(prompt, max_tokens=1000)
+Scrivi il saluto di apertura brevissimo."""
+    return await _chiama_ai(prompt, max_tokens=300)
 
 
 async def genera_copione_voce_compatibilita(dati_compatibilita: dict, focus: str) -> str:
     nome_a = dati_compatibilita.get("persona_a", "Utente")
     nome_b = dati_compatibilita.get("persona_b", "l'altra persona")
+    oggi = datetime.now().strftime('%d/%m/%Y')
     
     aspetti_testo = ""
     for a in dati_compatibilita.get("aspetti", []):
@@ -266,27 +277,29 @@ async def genera_copione_voce_compatibilita(dati_compatibilita: dict, focus: str
     else:
         istruzione_focus = f"Stai per parlare al telefono con {nome_a} della sua COMPATIBILITÀ GENERALE con {nome_b}."
 
-    prompt = f"""{istruzione_focus}
+    prompt = f"""Oggi è il {oggi}. {istruzione_focus}
 
 Ecco i dati tecnici del loro confronto:
 {aspetti_testo}
 
-Scrivi il copione di apertura (circa 2 minuti). Tono: caldo, diretto, mistico ma professionale. Non usare asterischi o markdown. Struttura:
+Scrivi un saluto di apertura di massimo 2 o 3 frasi (circa 10-15 secondi). Tono: caldo, diretto. Non usare asterischi. 
+Chiama il cliente per nome all'inizio. Struttura:
 
 1. Saluto personalizzato
 2. Introduzione all'argomento specifico
-3. Apertura alla conversazione ("dimmi cosa ti risuona di più")
+3. Apertura alla conversazione ("di cosa parliamo oggi?")
 
-Scrivi il copione."""
+Scrivi il saluto brevissimo."""
 
-    return await _chiama_ai(prompt, max_tokens=800)
+    return await _chiama_ai(prompt, max_tokens=300)
 
 
 async def genera_settori_tema(report: dict) -> dict:
     """Genera le brevi descrizioni per i 5 settori del tema natale."""
     riepilogo = report.get("riepilogo_testuale", "")
+    oggi = datetime.now().strftime('%d/%m/%Y')
 
-    prompt = f"""Sei un'astrologa italiana esperta. Basandoti sul tema natale qui sotto, scrivi 5 brevi descrizioni (massimo 25 parole ciascuna) per i seguenti 5 argomenti:
+    prompt = f"""Sei un'astrologa italiana esperta. Oggi è il {oggi}. Basandoti sul tema natale e sui transiti qui sotto, scrivi 5 brevi descrizioni (massimo 25 parole ciascuna) per i seguenti 5 argomenti:
 1. Amore e Relazioni
 2. Carriera e Finanze
 3. Salute e Benessere
@@ -294,7 +307,7 @@ async def genera_settori_tema(report: dict) -> dict:
 5. Previsioni Annuali
 
 REGOLE TASSATIVE:
-- Per ogni argomento, scrivi 2-3 frasi che incuriosiscano.
+- Per ogni argomento, scrivi 2-3 frasi che incuriosiscano. Sii concreta, non eterea.
 - NON spiegare tutto. Lascia un velo di mistero.
 - Tono: caldo, diretto.
 - Non usare mai asterischi o markdown.
@@ -311,7 +324,6 @@ PREVISIONI: [testo]"""
 
     risposta = await _chiama_ai(prompt, max_tokens=500)
     
-    # Parser semplice della risposta
     testi = {"amore": "", "lavoro": "", "salute": "", "crescita": "", "previsioni": ""}
     for riga in risposta.split("\n"):
         if riga.startswith("AMORE:"):
@@ -331,6 +343,7 @@ PREVISIONI: [testo]"""
 async def genera_copione_voce_tema(report: dict, focus: str) -> str:
     riepilogo = report.get("riepilogo_testuale", "")
     nome = report.get("profile", {}).get("nome", "utente")
+    oggi = datetime.now().strftime('%d/%m/%Y')
 
     if focus == "amore":
         istruzione_focus = "Stai per parlare al telefono con {nome} della sua vita AMOROSA. Apri la conversazione parlando di Venere, Marte e Luna."
@@ -341,21 +354,22 @@ async def genera_copione_voce_tema(report: dict, focus: str) -> str:
     elif focus == "crescita":
         istruzione_focus = "Stai per parlare al telefono con {nome} della sua CRESCITA PERSONALE. Apri la conversazione parlando del Nodo Nord e di Saturno."
     elif focus == "previsioni":
-        istruzione_focus = "Stai per parlare al telefono con {nome} delle PREVISIONI per i prossimi mesi. Apri la conversazione parlando dei transiti."
+        istruzione_focus = "Stai per parlare al telefono con {nome} delle PREVISIONI. Apri la conversazione parlando dei transiti veloci e lenti."
     else:
         istruzione_focus = "Stai per parlare al telefono con {nome} del suo tema natale."
 
-    prompt = f"""{istruzione_focus.format(nome=nome)}
+    prompt = f"""Oggi è il {oggi}. {istruzione_focus.format(nome=nome)}
 
 REPORT INTERNO:
 {riepilogo}
 
-Scrivi il copione di apertura (circa 2 minuti). Tono: caldo, diretto, mistico ma professionale. Non usare asterischi o markdown. Struttura:
+Scrivi un saluto di apertura di massimo 2 o 3 frasi (circa 10-15 secondi). Tono: caldo, diretto. Non usare asterischi. 
+Chiama il cliente per nome all'inizio. Struttura:
 
 1. Saluto personalizzato
 2. Introduzione all'argomento specifico
-3. Apertura alla conversazione ("dimmi cosa ti risuona di più")
+3. Apertura alla conversazione ("di cosa parliamo oggi?")
 
-Scrivi il copione."""
+Scrivi il saluto brevissimo."""
 
-    return await _chiama_ai(prompt, max_tokens=800)
+    return await _chiama_ai(prompt, max_tokens=300)
