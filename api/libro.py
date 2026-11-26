@@ -16,53 +16,95 @@ def pulisci_testo(testo: str) -> str:
     testo = re.sub(r'[^\w\s\.\,\;\:\!\?\'\"\(\)\-àèéìòùÀÈÉÌÒÙ]', '', testo)
     return testo
 
-# SVG Migliorato (Case + Pianeti Colorati)
+# SVG Migliorato (Grande, Leggibile, con Case e niente vuoti)
 def genera_ruota_svg(tema: dict) -> str:
     segni = ["♈", "♉", "♊", "♋", "♌", "♍", "♎", "♏", "♐", "♑", "♒", "♓"]
-    svg = f'<svg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg" style="width: 340px; height: 340px; display: block; margin: 0 auto;">'
-    # Sfondo e cerchi
-    svg += f'<circle cx="200" cy="200" r="195" fill="#fcfbf7" stroke="#b89752" stroke-width="2"/>'
-    svg += f'<circle cx="200" cy="200" r="165" fill="none" stroke="#b89752" stroke-width="1"/>'
-    svg += f'<circle cx="200" cy="200" r="110" fill="none" stroke="#b89752" stroke-width="1"/>'
+    svg = f'<svg viewBox="0 0 600 600" xmlns="http://www.w3.org/2000/svg" style="width: 100%; max-width: 500px; display: block; margin: 0 auto;">'
     
-    # Linee segni
+    # Sfondo e cerchi principali
+    svg += f'<circle cx="300" cy="300" r="290" fill="#fcfbf7" stroke="#b89752" stroke-width="2"/>'
+    svg += f'<circle cx="300" cy="300" r="250" fill="none" stroke="#b89752" stroke-width="1"/>'
+    svg += f'<circle cx="300" cy="300" r="160" fill="none" stroke="#b89752" stroke-width="1"/>'
+    svg += f'<circle cx="300" cy="300" r="80" fill="none" stroke="#b89752" stroke-width="1" stroke-dasharray="4,4"/>'
+
+    # Linee e simboli dei 12 Segni
     for i, segno in enumerate(segni):
         angle_start = (i * 30 - 90) * (math.pi / 180)
         angle_mid = (i * 30 + 15 - 90) * (math.pi / 180)
-        x1 = 200 + 195 * math.cos(angle_start)
-        y1 = 200 + 195 * math.sin(angle_start)
-        x2 = 200 + 110 * math.cos(angle_start)
-        y2 = 200 + 110 * math.sin(angle_start)
+        
+        # Linee divisorie dei segni
+        x1 = 300 + 290 * math.cos(angle_start)
+        y1 = 300 + 290 * math.sin(angle_start)
+        x2 = 300 + 160 * math.cos(angle_start)
+        y2 = 300 + 160 * math.sin(angle_start)
         svg += f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="#b89752" stroke-width="1"/>'
-        x_sym = 200 + 180 * math.cos(angle_mid)
-        y_sym = 200 + 180 * math.sin(angle_mid)
-        svg += f'<text x="{x_sym}" y="{y_sym}" fill="#b89752" font-size="18" text-anchor="middle" dominant-baseline="central">{segno}</text>'
+        
+        # Simbolo del segno (Ingrandito)
+        x_sym = 300 + 270 * math.cos(angle_mid)
+        y_sym = 300 + 270 * math.sin(angle_mid)
+        svg += f'<text x="{x_sym}" y="{y_sym}" fill="#b89752" font-size="28" text-anchor="middle" dominant-baseline="central">{segno}</text>'
 
-    # Linee Case (Raggi)
+    # Linee delle Case e numeri
     houses = tema.get("houses", [])
-    for cuspide in houses:
+    for idx, cuspide in enumerate(houses):
+        # Linea della casa
         angle = (cuspide - 90) * (math.pi / 180)
-        x1 = 200 + 110 * math.cos(angle)
-        y1 = 200 + 110 * math.sin(angle)
-        x2 = 200 + 195 * math.cos(angle)
-        y2 = 200 + 195 * math.sin(angle)
+        x1 = 300 + 80 * math.cos(angle)
+        y1 = 300 + 80 * math.sin(angle)
+        x2 = 300 + 160 * math.cos(angle)
+        y2 = 300 + 160 * math.sin(angle)
         svg += f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="#e0d6c3" stroke-width="1"/>'
+        
+        # Calcolo del centro della casa per mettere il numero
+        if idx < len(houses) - 1:
+            next_cuspide = houses[idx+1]
+        else:
+            next_cuspide = houses[0] + 360
+            
+        if next_cuspide < cuspide: 
+            next_cuspide += 360
+            
+        mid_angle = ((cuspide + next_cuspide) / 2 - 90) * (math.pi / 180)
+        hx = 300 + 120 * math.cos(mid_angle)
+        hy = 300 + 120 * math.sin(mid_angle)
+        svg += f'<text x="{hx}" y="{hy}" fill="#a0a0a0" font-size="16" text-anchor="middle" dominant-baseline="central">{idx+1}</text>'
 
-    # Pianeti
-    simboli_pianeti = {"Sole": "☉", "Luna": "☽", "Mercurio": "☿", "Venere": "♀", "Marte": "♂", "Giove": "♃", "Saturno": "♄", "Urano": "♅", "Nettuno": "♆", "Plutone": "♇"}
-    colori_pianeti = {"Sole": "#FFD700", "Luna": "#C0C0C0", "Mercurio": "#B0C4DE", "Venere": "#FFB6C1", "Marte": "#FF4500", "Giove": "#FFA500", "Saturno": "#8B4513", "Urano": "#00CED1", "Nettuno": "#0000FF", "Plutone": "#800080"}
+    # Pianeti (con sistema anti-sovrapposizione)
+    planets = tema.get("planets", {})
+    simboli_pianeti = {"Sole": "☉", "Luna": "☽", "Mercurio": "☿", "Venere": "♀", "Marte": "♂", "Giove": "♃", "Saturno": "♄", "Urano": "♅", "Nettuno": "♆", "Plutone": "♇", "NodoNord": "☊", "Chirone": "⚷"}
+    colori_pianeti = {"Sole": "#FFD700", "Luna": "#C0C0C0", "Mercurio": "#B0C4DE", "Venere": "#FFB6C1", "Marte": "#FF4500", "Giove": "#FFA500", "Saturno": "#8B4513", "Urano": "#00CED1", "Nettuno": "#0000FF", "Plutone": "#800080", "NodoNord": "#444", "Chirone": "#444"}
     
-    for nome_p, dati_p in tema.get("planets", {}).items():
+    # Ordiniamo i pianeti per longitudine per gestire le sovrapposizioni
+    pianeti_ordinati = sorted(planets.items(), key=lambda x: x[1].get("longitude", 0) if isinstance(x[1], dict) else 0)
+    
+    last_lon = -999
+    offset_radius = 0
+    
+    for nome_p, dati_p in pianeti_ordinati:
         if nome_p in simboli_pianeti:
             lon = dati_p.get("longitude", 0)
+            
+            # Se il pianeta è troppo vicino al precedente, lo spostiamo verso il centro
+            if lon - last_lon < 15: 
+                offset_radius += 22
+            else:
+                offset_radius = 0
+            last_lon = lon
+            
             angle = (lon - 90) * (math.pi / 180)
-            x = 200 + 140 * math.cos(angle)
-            y = 200 + 140 * math.sin(angle)
+            r_planet = 205 + offset_radius # Raggio base 205
+            x = 300 + r_planet * math.cos(angle)
+            y = 300 + r_planet * math.sin(angle)
             sym = simboli_pianeti[nome_p]
             colore = colori_pianeti.get(nome_p, "#0d1321")
-            # Aggiunge un cerchietto colorato dietro il pianeta
-            svg += f'<circle cx="{x}" cy="{y}" r="12" fill="{colore}" opacity="0.2"/>'
-            svg += f'<text x="{x}" y="{y}" fill="{colore}" font-size="20" text-anchor="middle" dominant-baseline="central">{sym}</text>'
+            
+            # Cerchietto colorato di sfondo e simbolo (Ingrandito)
+            svg += f'<circle cx="{x}" cy="{y}" r="16" fill="{colore}" opacity="0.15"/>'
+            svg += f'<text x="{x}" y="{y}" fill="{colore}" font-size="24" text-anchor="middle" dominant-baseline="central">{sym}</text>'
+
+    # Decorazione al centro per non lasciare vuoto
+    svg += f'<text x="300" y="300" fill="#b89752" font-size="36" text-anchor="middle" dominant-baseline="central">✦</text>'
+    
     svg += '</svg>'
     return svg
 
