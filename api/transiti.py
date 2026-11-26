@@ -1,5 +1,5 @@
 # =========================================================
-# LUNA2 — Motore dei transiti lenti
+# LUNA2 — Motore dei transiti (lenti e veloci)
 # =========================================================
 
 from datetime import datetime, timedelta
@@ -11,6 +11,13 @@ PIANETI_LENTI = {
     "Urano": swe.URANUS,
     "Nettuno": swe.NEPTUNE,
     "Plutone": swe.PLUTO,
+}
+
+PIANETI_VELOCI = {
+    "Sole": swe.SUN,
+    "Mercurio": swe.MERCURY,
+    "Venere": swe.VENUS,
+    "Marte": swe.MARS,
 }
 
 ASPETTI = {
@@ -39,45 +46,22 @@ def _diff_angle(a: float, b: float) -> float:
 
 
 def _settore_da_casa(casa: int) -> str:
-    if casa in (5, 7):
-        return "Amore e relazioni"
-    if casa in (6, 10):
-        return "Lavoro e carriera"
-    if casa in (2, 8):
-        return "Soldi e risorse"
-    if casa == 4:
-        return "Famiglia e radici"
-    if casa == 1:
-        return "Identità e corpo"
-    if casa == 9:
-        return "Crescita e fede"
-    if casa == 11:
-        return "Amicizie e progetti"
-    if casa == 12:
-        return "Interiorità"
-    if casa == 3:
-        return "Comunicazione e studi"
+    if casa in (5, 7): return "Amore e relazioni"
+    if casa in (6, 10): return "Lavoro e carriera"
+    if casa in (2, 8): return "Soldi e risorse"
+    if casa == 4: return "Famiglia e radici"
+    if casa == 1: return "Identità e corpo"
+    if casa == 9: return "Crescita e fede"
+    if casa == 11: return "Amicizie e progetti"
+    if casa == 12: return "Interiorità"
+    if casa == 3: return "Comunicazione e studi"
     return "Vita quotidiana"
 
 
-def calcola_transiti_lenti(
-    data_inizio: str,
-    planets: dict,
-    houses: list,
-    ascendant: float,
-    mc: float,
-    planets_in_houses: dict,
-    mesi_finestra: int = 12,
-):
-    """
-    Calcola i transiti dei pianeti lenti sui punti natale sensibili.
-    planets_in_houses: dict { "Sole": 10, "Luna": 11, ... } già calcolato
-    dal backend.
-    """
+def _calcola_transiti_generico(data_inizio: str, pianeti_da_calcolare: dict, planets: dict, houses: list, ascendant: float, mc: float, planets_in_houses: dict, giorni_finestra: int = 365):
     dt_start = datetime.strptime(data_inizio, "%Y-%m-%d")
-    dt_end = dt_start + timedelta(days=mesi_finestra * 30)
+    dt_end = dt_start + timedelta(days=giorni_finestra)
 
-    # Mappa: nome punto natale -> (longitudine, casa)
     punti = {}
     for nome in ["Sole", "Luna"]:
         lon = planets.get(nome, {}).get("longitude")
@@ -85,15 +69,12 @@ def calcola_transiti_lenti(
         if lon is not None and casa:
             punti[nome] = {"lon": lon, "casa": casa}
 
-    # Ascendente e MC: la loro casa è fissa (1 e 10)
-    if ascendant is not None:
-        punti["Ascendente"] = {"lon": ascendant, "casa": 1}
-    if mc is not None:
-        punti["MC"] = {"lon": mc, "casa": 10}
+    if ascendant is not None: punti["Ascendente"] = {"lon": ascendant, "casa": 1}
+    if mc is not None: punti["MC"] = {"lon": mc, "casa": 10}
 
     risultati = []
 
-    for planet_nome, planet_id in PIANETI_LENTI.items():
+    for planet_nome, planet_id in pianeti_da_calcolare.items():
         dt = dt_start
         prev_diff = {p: {} for p in punti}
         while dt <= dt_end:
@@ -111,7 +92,6 @@ def calcola_transiti_lenti(
                 for aspetto_nome, angolo in ASPETTI.items():
                     diff = _diff_angle(lon_transito, lon_punto)
                     delta = diff - angolo
-
                     chiave = f"{punto_nome}_{aspetto_nome}"
                     prev_val = prev_diff[punto_nome].get(chiave)
 
@@ -127,9 +107,7 @@ def calcola_transiti_lenti(
                                 "settore": settore,
                                 "orbita_gradi": round(abs(delta), 2),
                             })
-
                     prev_diff[punto_nome][chiave] = delta
-
             dt += timedelta(days=1)
 
     visti = set()
@@ -142,3 +120,10 @@ def calcola_transiti_lenti(
 
     filtrati.sort(key=lambda x: x["data_esatta"])
     return filtrati
+
+
+def calcola_transiti_lenti(data_inizio: str, planets: dict, houses: list, ascendant: float, mc: float, planets_in_houses: dict, mesi_finestra: int = 12):
+    return _calcola_transiti_generico(data_inizio, PIANETI_LENTI, planets, houses, ascendant, mc, planets_in_houses, giorni_finestra=mesi_finestra * 30)
+
+def calcola_transiti_veloci(data_inizio: str, planets: dict, houses: list, ascendant: float, mc: float, planets_in_houses: dict, giorni_finestra: int = 30):
+    return _calcola_transiti_generico(data_inizio, PIANETI_VELOCI, planets, houses, ascendant, mc, planets_in_houses, giorni_finestra=giorni_finestra)
