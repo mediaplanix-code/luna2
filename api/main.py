@@ -826,6 +826,9 @@ async def crea_sessione_voce(token: str, focus: str = "generico"):
 
     nome_cliente = profile.get("nome", "cliente")
 
+ # AGGIUNTA: Data di oggi per dare la percezione del tempo
+    oggi_str = datetime.now().strftime('%d/%m/%Y')
+    
     instructions = (
         "Sei tuFelia, consulente astrologica italiana. Parla sempre in italiano naturale, "
         "con voce femminile calda, spontanea e rassicurante.\n\n"
