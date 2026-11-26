@@ -10,44 +10,32 @@ from supabase import create_client
 
 def pulisci_testo(testo: str) -> str:
     if not testo: return ""
-    # Rimuove markdown e caratteri corrotti (come i simboli strani a pagina 19)
     testo = testo.replace("**", "").replace("*", "").replace("#", "").replace("_", "").strip()
-    # Mantiene solo lettere, numeri, punteggiatura base e lettere accentate italiane
     testo = re.sub(r'[^\w\s\.\,\;\:\!\?\'\"\(\)\-àèéìòùÀÈÉÌÒÙ]', '', testo)
     return testo
 
-# SVG Migliorato (Grande, Leggibile, con Case e niente vuoti)
 def genera_ruota_svg(tema: dict) -> str:
     segni = ["♈", "♉", "♊", "♋", "♌", "♍", "♎", "♏", "♐", "♑", "♒", "♓"]
     svg = f'<svg viewBox="0 0 600 600" xmlns="http://www.w3.org/2000/svg" style="width: 100%; max-width: 500px; display: block; margin: 0 auto;">'
-    
-    # Sfondo e cerchi principali
     svg += f'<circle cx="300" cy="300" r="290" fill="#fcfbf7" stroke="#b89752" stroke-width="2"/>'
     svg += f'<circle cx="300" cy="300" r="250" fill="none" stroke="#b89752" stroke-width="1"/>'
     svg += f'<circle cx="300" cy="300" r="160" fill="none" stroke="#b89752" stroke-width="1"/>'
     svg += f'<circle cx="300" cy="300" r="80" fill="none" stroke="#b89752" stroke-width="1" stroke-dasharray="4,4"/>'
 
-    # Linee e simboli dei 12 Segni
     for i, segno in enumerate(segni):
         angle_start = (i * 30 - 90) * (math.pi / 180)
         angle_mid = (i * 30 + 15 - 90) * (math.pi / 180)
-        
-        # Linee divisorie dei segni
         x1 = 300 + 290 * math.cos(angle_start)
         y1 = 300 + 290 * math.sin(angle_start)
         x2 = 300 + 160 * math.cos(angle_start)
         y2 = 300 + 160 * math.sin(angle_start)
         svg += f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="#b89752" stroke-width="1"/>'
-        
-        # Simbolo del segno (Ingrandito)
         x_sym = 300 + 270 * math.cos(angle_mid)
         y_sym = 300 + 270 * math.sin(angle_mid)
         svg += f'<text x="{x_sym}" y="{y_sym}" fill="#b89752" font-size="28" text-anchor="middle" dominant-baseline="central">{segno}</text>'
 
-    # Linee delle Case e numeri
     houses = tema.get("houses", [])
     for idx, cuspide in enumerate(houses):
-        # Linea della casa
         angle = (cuspide - 90) * (math.pi / 180)
         x1 = 300 + 80 * math.cos(angle)
         y1 = 300 + 80 * math.sin(angle)
@@ -55,56 +43,42 @@ def genera_ruota_svg(tema: dict) -> str:
         y2 = 300 + 160 * math.sin(angle)
         svg += f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="#e0d6c3" stroke-width="1"/>'
         
-        # Calcolo del centro della casa per mettere il numero
         if idx < len(houses) - 1:
             next_cuspide = houses[idx+1]
         else:
             next_cuspide = houses[0] + 360
-            
-        if next_cuspide < cuspide: 
-            next_cuspide += 360
-            
+        if next_cuspide < cuspide: next_cuspide += 360
         mid_angle = ((cuspide + next_cuspide) / 2 - 90) * (math.pi / 180)
         hx = 300 + 120 * math.cos(mid_angle)
         hy = 300 + 120 * math.sin(mid_angle)
         svg += f'<text x="{hx}" y="{hy}" fill="#a0a0a0" font-size="16" text-anchor="middle" dominant-baseline="central">{idx+1}</text>'
 
-    # Pianeti (con sistema anti-sovrapposizione)
     planets = tema.get("planets", {})
     simboli_pianeti = {"Sole": "☉", "Luna": "☽", "Mercurio": "☿", "Venere": "♀", "Marte": "♂", "Giove": "♃", "Saturno": "♄", "Urano": "♅", "Nettuno": "♆", "Plutone": "♇", "NodoNord": "☊", "Chirone": "⚷"}
     colori_pianeti = {"Sole": "#FFD700", "Luna": "#C0C0C0", "Mercurio": "#B0C4DE", "Venere": "#FFB6C1", "Marte": "#FF4500", "Giove": "#FFA500", "Saturno": "#8B4513", "Urano": "#00CED1", "Nettuno": "#0000FF", "Plutone": "#800080", "NodoNord": "#444", "Chirone": "#444"}
     
-    # Ordiniamo i pianeti per longitudine per gestire le sovrapposizioni
     pianeti_ordinati = sorted(planets.items(), key=lambda x: x[1].get("longitude", 0) if isinstance(x[1], dict) else 0)
-    
     last_lon = -999
     offset_radius = 0
     
     for nome_p, dati_p in pianeti_ordinati:
         if nome_p in simboli_pianeti:
             lon = dati_p.get("longitude", 0)
-            
-            # Se il pianeta è troppo vicino al precedente, lo spostiamo verso il centro
-            if lon - last_lon < 15: 
-                offset_radius += 22
-            else:
-                offset_radius = 0
+            if lon - last_lon < 15: offset_radius += 22
+            else: offset_radius = 0
             last_lon = lon
             
             angle = (lon - 90) * (math.pi / 180)
-            r_planet = 205 + offset_radius # Raggio base 205
+            r_planet = 205 + offset_radius
             x = 300 + r_planet * math.cos(angle)
             y = 300 + r_planet * math.sin(angle)
             sym = simboli_pianeti[nome_p]
             colore = colori_pianeti.get(nome_p, "#0d1321")
             
-            # Cerchietto colorato di sfondo e simbolo (Ingrandito)
             svg += f'<circle cx="{x}" cy="{y}" r="16" fill="{colore}" opacity="0.15"/>'
             svg += f'<text x="{x}" y="{y}" fill="{colore}" font-size="24" text-anchor="middle" dominant-baseline="central">{sym}</text>'
 
-    # Decorazione al centro per non lasciare vuoto
     svg += f'<text x="300" y="300" fill="#b89752" font-size="36" text-anchor="middle" dominant-baseline="central">✦</text>'
-    
     svg += '</svg>'
     return svg
 
@@ -114,18 +88,20 @@ def get_segno_da_longitudine(lon: float) -> str:
     return segni[idx]
 
 SIGNIFICATI_CASE = {
-    1: "Identità, aspetto fisico, approccio alla vita.",
-    2: "Denaro, risorse materiali, valori personali.",
-    3: "Comunicazione, fratelli, studi, spostamenti brevi.",
-    4: "Famiglia, radici, casa, sicurezza interiore.",
-    5: "Creatività, amore, figli, piacere, gioco.",
-    6: "Lavoro quotidiano, salute, routine, servizio.",
-    7: "Relazioni, matrimonio, soci, contratti.",
-    8: "Trasformazione, crisi, risorse condivise, intimità.",
-    9: "Viaggi, filosofia, fede, istruzione superiore.",
-    10: "Carriera, status, reputazione, obiettivi pubblici.",
-    11: "Amicizie, gruppi, ideali, progetti futuri.",
-    12: "Inconscio, sogni, spiritualità, isolamento."
+    1: "Identità, aspetto fisico, approccio alla vita.", 2: "Denaro, risorse materiali, valori personali.",
+    3: "Comunicazione, fratelli, studi, spostamenti brevi.", 4: "Famiglia, radici, casa, sicurezza interiore.",
+    5: "Creatività, amore, figli, piacere, gioco.", 6: "Lavoro quotidiano, salute, routine, servizio.",
+    7: "Relazioni, matrimonio, soci, contratti.", 8: "Trasformazione, crisi, risorse condivise, intimità.",
+    9: "Viaggi, filosofia, fede, istruzione superiore.", 10: "Carriera, status, reputazione, obiettivi pubblici.",
+    11: "Amicizie, gruppi, ideali, progetti futuri.", 12: "Inconscio, sogni, spiritualità, isolamento."
+}
+
+# Segno solare per ogni mese
+SEGNI_MESI = {
+    "Gennaio": ("Acquario", "♒"), "Febbraio": ("Pesci", "♓"), "Marzo": ("Ariete", "♈"),
+    "Aprile": ("Toro", "♉"), "Maggio": ("Gemelli", "♊"), "Giugno": ("Cancro", "♋"),
+    "Luglio": ("Leone", "♌"), "Agosto": ("Vergine", "♍"), "Settembre": ("Bilancia", "♎"),
+    "Ottobre": ("Scorpione", "♏"), "Novembre": ("Sagittario", "♐"), "Dicembre": ("Capricorno", "♑")
 }
 
 def get_stelle_finte(nome: str, contesto: str) -> int:
@@ -137,12 +113,10 @@ def render_stelle(num: int) -> str:
 
 async def genera_libro_completo(profile: dict, report: dict, tema: dict, settori: dict) -> str:
     nome = profile.get("nome", "Cliente")
-    
     segno_sole = tema.get("planets", {}).get("Sole", {}).get("segno", "")
     segno_luna = tema.get("planets", {}).get("Luna", {}).get("segno", "")
     simboli_segni = {"Ariete": "♈", "Toro": "♉", "Gemelli": "♊", "Cancro": "♋", "Leone": "♌", "Vergine": "♍", "Bilancia": "♎", "Scorpione": "♏", "Sagittario": "♐", "Capricorno": "♑", "Acquario": "♒", "Pesci": "♓"}
     simbolo_segno = simboli_segni.get(segno_sole, "✦")
-
     ruota_svg = genera_ruota_svg(tema)
 
     # TABELLE
@@ -167,25 +141,18 @@ async def genera_libro_completo(profile: dict, report: dict, tema: dict, settori
 
     tab_aspetti = "<table class='dati'><tr><th>Pianeta A</th><th>Aspetto</th><th>Pianeta B</th><th>Significato</th></tr>"
     for asp in tema.get("aspects", [])[:10]:
-        p1 = asp.get('pianeta1')
-        p2 = asp.get('pianeta2')
-        tipo = asp.get('tipo')
+        p1, p2, tipo = asp.get('pianeta1'), asp.get('pianeta2'), asp.get('tipo')
         await asyncio.sleep(0.2)
         prompt_asp = f"In una frase brevissima (max 10 parole), spiega il significato dell'aspetto {tipo} tra {p1} e {p2}."
         significato_asp = pulisci_testo(await _chiama_ai(prompt_asp, max_tokens=50)) or "Tensione o armonia."
         tab_aspetti += f"<tr><td>{p1}</td><td>{tipo}</td><td>{p2}</td><td>{significato_asp}</td></tr>"
     tab_aspetti += "</table>"
 
-    # TRANSITI (Rimessa la tabella senza colonna periodo per non far saltare la pagina)
     transiti_list = report.get("transiti_lenti_12_mesi", [])
     tab_transiti = "<table class='dati'><tr><th>Transito</th><th>Aspetto</th><th>Al tuo</th><th>Significato</th></tr>"
     if transiti_list:
         for t in transiti_list[:10]:
-            p_transito = t.get('pianeta_transito', '')
-            tipo_asp = t.get('aspetto', '')
-            p_natale = t.get('punto_natale', '')
-            significato_trans = t.get('significato', '') or "Trasformazione."
-            tab_transiti += f"<tr><td>{p_transito}</td><td>{tipo_asp}</td><td>{p_natale}</td><td>{pulisci_testo(significato_trans)}</td></tr>"
+            tab_transiti += f"<tr><td>{t.get('pianeta_transito')}</td><td>{t.get('aspetto')}</td><td>{t.get('punto_natale')}</td><td>{pulisci_testo(t.get('significato'))}</td></tr>"
     else:
         tab_transiti += "<tr><td colspan='4' style='text-align: center;'>Nessun transito rilevante per il 2027.</td></tr>"
     tab_transiti += "</table>"
@@ -194,17 +161,15 @@ async def genera_libro_completo(profile: dict, report: dict, tema: dict, settori
     await asyncio.sleep(0.5)
     sole_txt = pulisci_testo(await _chiama_ai(f"Scrivi 100 parole sull'identità di {nome} con Sole in {segno_sole}. Non includere il conteggio delle parole nel testo.", max_tokens=300)) or "Il tuo Sole brilla."
     await asyncio.sleep(0.5)
-    asc_lon = tema.get("ascendant", 0)
-    asc_segno = get_segno_da_longitudine(asc_lon)
+    asc_segno = get_segno_da_longitudine(tema.get("ascendant", 0))
     asc_txt = pulisci_testo(await _chiama_ai(f"Scrivi 100 parole sull'Ascendente in {asc_segno} di {nome}.", max_tokens=300)) or "Il tuo Ascendente ti guida."
     await asyncio.sleep(0.5)
     luna_txt = pulisci_testo(await _chiama_ai(f"Scrivi 100 parole sulla Luna in {segno_luna} di {nome}.", max_tokens=300)) or "La tua Luna ti dona sensibilità."
     await asyncio.sleep(0.5)
-    mc_lon = tema.get("mc", 0)
-    mc_segno = get_segno_da_longitudine(mc_lon)
+    mc_segno = get_segno_da_longitudine(tema.get("mc", 0))
     mc_txt = pulisci_testo(await _chiama_ai(f"Scrivi 100 parole sul Medio Cielo in {mc_segno} di {nome}.", max_tokens=300)) or "Il tuo Medio Cielo indica la strada."
 
-    # SEGNI COMPATIBILI (Lista con testo discorsivo)
+    # SEGNI COMPATIBILI (Griglia elegante)
     COMPATIBILI = {
         "Ariete": ["Leone", "Sagittario", "Gemelli", "Acquario"], "Toro": ["Vergine", "Capricorno", "Cancro", "Pesci"],
         "Gemelli": ["Bilancia", "Acquario", "Ariete", "Leone"], "Cancro": ["Scorpione", "Pesci", "Toro", "Vergine"],
@@ -215,27 +180,39 @@ async def genera_libro_completo(profile: dict, report: dict, tema: dict, settori
     }
     
     compatibili = COMPATIBILI.get(segno_sole, [])
-    compatibili_html = "<ul style='list-style: none; padding: 0;'>"
+    compatibili_html = "<div style='display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px;'>"
     for c in compatibili:
-        # Chiediamo all'AI una frase discorsiva unica
         await asyncio.sleep(0.3)
         prompt_comp = f"In una frase breve (max 15 parole), descrivi la compatibilità tra il segno {segno_sole} e il segno {c}, menzionando l'affinità generale."
         testo_comp = pulisci_testo(await _chiama_ai(prompt_comp, max_tokens=40)) or "Affinità naturale e scambio reciproco."
-        compatibili_html += f"<li style='font-size: 13pt; margin-bottom: 12px;'><span style='font-size: 18pt; color: #b89752;'>{simboli_segni.get(c, '')}</span> <strong>{c}</strong>: {testo_comp}</li>"
-    compatibili_html += "</ul>"
+        
+        compatibili_html += f"""
+        <div style='background: #f8f6f0; border: 1px solid #e0d5c1; padding: 15px; border-radius: 8px; text-align: center; page-break-inside: avoid;'>
+            <div style='font-size: 28pt; color: #b89752; margin-bottom: 5px;'>{simboli_segni.get(c, '')}</div>
+            <div style='font-family: Cinzel, serif; font-size: 14pt; color: #0d1321; margin-bottom: 8px;'>{c}</div>
+            <div style='font-size: 10pt; color: #555; line-height: 1.4;'>{testo_comp}</div>
+        </div>
+        """
+    compatibili_html += "</div>"
 
-    # RESOCONTO ANNUALE
+    # RESOCONTO ANNUALE (Con retry e fallback)
     stelle_anno = get_stelle_finte(nome, "2027")
     stelle_anno_html = f"<div style='text-align: center; margin-bottom: 20px; font-size: 20pt; color: #b89752;'>{render_stelle(stelle_anno)}</div>"
     
-    await asyncio.sleep(1)
     prompt_resoconto = f"Scrivi un resoconto annuale per il 2027 per {nome} (Sole in {segno_sole}). Massimo 300 parole. Tono: ispirazionale."
-    resoconto = pulisci_testo(await _chiama_ai(prompt_resoconto, max_tokens=600)) or "Il 2027 è un anno di crescita."
+    resoconto = ""
+    for _ in range(2): # Riprova 2 volte
+        resoconto = pulisci_testo(await _chiama_ai(prompt_resoconto, max_tokens=600))
+        if resoconto and len(resoconto) > 50: break
+        await asyncio.sleep(2)
+    
+    if not resoconto or len(resoconto) < 50:
+        resoconto = f"Caro {nome}, il 2027 si prospetta come un anno di profonda evoluzione. Le stelle ti invitano a guardare dentro te stesso e a coltivare i tuoi talenti nascosti. È il momento di lasciare andare ciò che non ti serve più e di abbracciare le nuove opportunità che l'universo ha in serbo per te. Con il tuo Sole in {segno_sole}, la tua sensibilità sarà la tua guida."
     
     if resoconto:
         resoconto = f"<span style='font-size: 40pt; float: left; line-height: 1; margin-right: 10px; color: #b89752; font-family: Cinzel;'>{resoconto[0]}</span>{resoconto[1:]}"
 
-    # MESI con stelle
+    # MESI con stelle e decorazione finale per riempire il vuoto
     mesi_nomi = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"]
     capitoli_mesi = ""
     
@@ -244,24 +221,28 @@ async def genera_libro_completo(profile: dict, report: dict, tema: dict, settori
         stelle_mese = get_stelle_finte(nome, mese)
         stelline_html = f"<span style='color: #b89752; font-size: 14pt;'>{render_stelle(stelle_mese)}</span>"
         
-        prompt_mese = f"Scrivi un testo di almeno 150 parole per il mese di {mese} 2027 per {nome} (Sole in {segno_sole}). Parla dell'energia del mese."
-        testo_mese = pulisci_testo(await _chiama_ai(prompt_mese, max_tokens=400)) or f"Il mese di {mese} porta nuove energie."
+        prompt_mese = f"Scrivi un testo di almeno 200 parole per il mese di {mese} 2027 per {nome} (Sole in {segno_sole}). Parla dell'energia del mese."
+        testo_mese = pulisci_testo(await _chiama_ai(prompt_mese, max_tokens=500)) or f"Il mese di {mese} porta nuove energie."
         
         if testo_mese:
             testo_mese = f"<span style='font-size: 40pt; float: left; line-height: 1; margin-right: 10px; color: #b89752; font-family: Cinzel;'>{testo_mese[0]}</span>{testo_mese[1:]}"
         
         stelle_box = f"<div style='text-align: center; margin-bottom: 15px; font-size: 12pt; color: #333;'><strong>Le stelle indicano:</strong> {stelline_html}</div>"
         
-        capitoli_mesi += f"<div class='capitolo'><h2>{mese} 2027</h2>{stelle_box}<p>{testo_mese}</p></div>"
+        # DECORAZIONE FINALE DEL MESE (Segno del periodo)
+        segno_mese, sym_mese = SEGNI_MESI.get(mese, ("Ariete", "♈"))
+        decorazione_mese = f"""
+        <div style='margin-top: 50px; text-align: center; border-top: 1px solid #e0d5c1; padding-top: 20px; page-break-inside: avoid;'>
+            <div style='font-size: 45pt; color: #b89752; line-height: 1;'>{sym_mese}</div>
+            <div style='font-family: Cinzel, serif; font-size: 13pt; color: #0d1321; letter-spacing: 2px; margin-top: 10px;'>IL SOLE IN {segno_mese.upper()}</div>
+        </div>
+        """
+        
+        capitoli_mesi += f"<div class='capitolo'><h2>{mese} 2027</h2>{stelle_box}<p>{testo_mese}</p>{decorazione_mese}</div>"
 
-    # AMBITI (con retry per i testi vuoti)
+    # AMBITI
     settori_html = ""
-    ambiti = [
-        ("Amore e Relazioni", f"Venere in {tema.get('planets', {}).get('Venere', {}).get('segno', '')}"),
-        ("Lavoro e Carriera", f"Marte in {tema.get('planets', {}).get('Marte', {}).get('segno', '')}"),
-        ("Salute e Benessere", f"Luna in {segno_luna}"),
-        ("Crescita Personale", f"Nodo Nord in {tema.get('planets', {}).get('NodoNord', {}).get('segno', '')}")
-    ]
+    ambiti = [("Amore e Relazioni", f"Venere in {tema.get('planets', {}).get('Venere', {}).get('segno', '')}"), ("Lavoro e Carriera", f"Marte in {tema.get('planets', {}).get('Marte', {}).get('segno', '')}"), ("Salute e Benessere", f"Luna in {segno_luna}"), ("Crescita Personale", f"Nodo Nord in {tema.get('planets', {}).get('NodoNord', {}).get('segno', '')}")]
     for titolo, contesto in ambiti:
         await asyncio.sleep(1)
         stelle_ambito = get_stelle_finte(nome, titolo)
@@ -270,14 +251,12 @@ async def genera_libro_completo(profile: dict, report: dict, tema: dict, settori
         prompt_ambito = f"Scrivi un capitolo di almeno 250 parole sull'ambito '{titolo}' per {nome} nel 2027. Contesto: {contesto}. Tono: empatico."
         testo_ambito = pulisci_testo(await _chiama_ai(prompt_ambito, max_tokens=600))
         
-        # Retry se l'AI fallisce (es. Salute e Benessere)
         if not testo_ambito:
-            print(f"=== RETRY AMBITO {titolo} ===")
             await asyncio.sleep(2)
             testo_ambito = pulisci_testo(await _chiama_ai(prompt_ambito, max_tokens=800))
             
         if not testo_ambito:
-            testo_ambito = f"Quest'anno l'energia del tuo tema natale ti guida a esplorare nuove dimensioni di {titolo.lower()}. Le stelle suggeriscono di ascoltare il tuo intuito."
+            testo_ambito = f"Quest'anno l'energia del tuo tema natale ti guida a esplorare nuove dimensioni di {titolo.lower()}. Le stelle suggeriscono di ascoltare il tuo intuito e di muoverti con coraggio."
         
         settori_html += f"<div class='capitolo'><h2>{titolo}</h2><div style='text-align: center; margin-bottom: 15px; font-size: 14pt;'>Le stelle indicano: {stelline_ambito}</div><p>{testo_ambito}</p></div>"
 
@@ -287,22 +266,20 @@ async def genera_libro_completo(profile: dict, report: dict, tema: dict, settori
         html_content = f.read()
     html_content = html_content.replace("{{NOME_CLIENTE}}", nome)
     
-    # DEDICA
     dedica_html = f"""
     <div class="capitolo">
         <div class="dedica">
             <div class="simbolo-segno">{simbolo_segno}</div>
             <p class="testo-dedica">Questo libro porta un nome che è anche un augurio.</p>
-            <p class="testo-dedica" style="margin-top: 20px;">Tufelia nasce da un "tu" e da una "Felia": il "tu" è la scusa per guardare il cielo da vicino, senza il filtro delle previsioni uguali per tutti; "Felia" viene dal latino felix, che significa felice, fortunato, fecondo — e conserva dentro di sé l'antica radice di chi porta aiuto.</p>
-            <p class="testo-dedica" style="margin-top: 20px;">Tu, Felia: tu che questo cielo lo abiti, tu a cui le stelle parlano al singolare.</p>
-            <p class="testo-dedica" style="margin-top: 20px;">Le pagine che seguono non vogliono dirti cosa accadrà, ma aiutarti a leggere ciò che già sei. Il tuo cielo personalizzato comincia qui, con il tuo nome sulla prima riga e il tuo tempo scritto nelle pagine.</p>
-            <p class="testo-dedica" style="margin-top: 20px;">Che questo sia un anno felice. Che le stelle ti siano, come si dice, favorevoli — e che tu sappia riconoscerle anche quando si nascondono.</p>
-            <p class="testo-dedica" style="margin-top: 30px; font-size: 14pt;">Con affetto,<br>tuFelia</p>
+            <p class="testo-dedica">Tufelia nasce da un "tu" e da una "Felia": il "tu" è la scusa per guardare il cielo da vicino, senza il filtro delle previsioni uguali per tutti; "Felia" viene dal latino felix, che significa felice, fortunato, fecondo — e conserva dentro di sé l'antica radice di chi porta aiuto.</p>
+            <p class="testo-dedica">Tu, Felia: tu che questo cielo lo abiti, tu a cui le stelle parlano al singolare.</p>
+            <p class="testo-dedica">Le pagine che seguono non vogliono dirti cosa accadrà, ma aiutarti a leggere ciò che già sei. Il tuo cielo personalizzato comincia qui, con il tuo nome sulla prima riga e il tuo tempo scritto nelle pagine.</p>
+            <p class="testo-dedica">Che questo sia un anno felice. Che le stelle ti siano, come si dice, favorevoli — e che tu sappia riconoscerle anche quando si nascondono.</p>
+            <p class="testo-dedica" style="margin-top: 40px; font-size: 20pt; color: #0d1321;">Con affetto,<br>tuFelia</p>
         </div>
     </div>
     """
 
-    # PAGINA FINALE CON MARCHIO
     pagina_finale_html = f"""
     <div class="capitolo">
         <div class="dedica" style="margin-top: 80px;">
@@ -320,7 +297,7 @@ async def genera_libro_completo(profile: dict, report: dict, tema: dict, settori
     
     <div class="capitolo">
         <h2>La Tua Ruota e i Tuoi Dati</h2>
-        <div class="ruota-container" style="text-align: center;">{ruota_svg}</div>
+        <div class="ruota-container">{ruota_svg}</div>
         <h3>I Pianeti</h3>{tab_pianeti}
         <h3>Le Case</h3>{tab_case}
         <h3>Gli Aspetti</h3>{tab_aspetti}
@@ -341,7 +318,7 @@ async def genera_libro_completo(profile: dict, report: dict, tema: dict, settori
     
     <div class="capitolo">
         <h2>I Tuoi Segni Compatibili</h2>
-        <p>Le tue energie si armonizzano meglio con:</p>
+        <p style="text-align: center; font-style: italic; color: #555; margin-bottom: 20px;">Le tue energie si armonizzano meglio con:</p>
         {compatibili_html}
     </div>
     
@@ -357,7 +334,6 @@ async def genera_libro_completo(profile: dict, report: dict, tema: dict, settori
     """
     
     html_content = html_content.replace('<div id="contenuto"></div>', f'<div id="contenuto">{corpo_libro}</div>')
-    
     html_content = html_content.replace('</body>', '<div style="text-align:center; font-size:9pt; color:#aaa; position:fixed; bottom:0; width:100%;">© tufelia.com — Marchio Registrato</div></body>')
     
     nome_file = f"libro_{profile['id']}_{datetime.now().strftime('%Y%m%d%H%M%S')}.pdf"
