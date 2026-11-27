@@ -1058,13 +1058,25 @@ async def cron_alert_mensili(request: Request):
             alert_per_utente[prof_id].append(el)
 
         inviati = 0
+        adesso = datetime.now(timezone.utc)
+
         for prof_id, lista_alert in alert_per_utente.items():
             prof = lista_alert[0].get("profiles")
             if not prof or not prof.get("telegram_id"):
                 continue
 
-            # 3. Scegliamo UN SOLO alert per utente: quello con la data_evento più vicina
-            # (Se la data è nel passato, lo consideriamo comunque, ma ordiniamo per data)
+            # --- CONTROLLO DEL FRENO (Max 2 al mese distanziati) ---
+            ultimo_invio_str = prof.get("last_alert_sent")
+            if ultimo_invio_str:
+                try:
+                    dt_ultimo = datetime.fromisoformat(ultimo_invio_str.replace("Z", "+00:00"))
+                    giorni_passati = (adesso - dt_ultimo).days
+                    if giorni_passati < 14:
+                        continue # Salta questo utente, ha ricevuto un alert da meno di 14 giorni
+                except Exception as e:
+                    print(f"=== Errore parsing last_alert_sent per {prof.get('nome')}: {e} ===")
+
+            # 3. Scegliamo UN SOLO alert per utente (il più vicino nel tempo)
             lista_alert.sort(key=lambda x: x.get("data_evento", "9999-12-31"))
             alert_da_inviare = lista_alert[0]
 
@@ -1072,7 +1084,7 @@ async def cron_alert_mensili(request: Request):
                 chat_id = int(prof["telegram_id"])
                 nome = prof.get("nome", "")
                 
-                # Formattiamo il messaggio in modo elegante
+                # Formattiamo il messaggio
                 descrizione = alert_da_inviare.get("descrizione", "")
                 parti = descrizione.split("_")
                 if len(parti) >= 3:
@@ -1080,11 +1092,21 @@ async def cron_alert_mensili(request: Request):
                 else:
                     testo_evento = descrizione
 
-                testo = f"Ciao <b>{nome}</b>, un segnale dalle stelle 🌙\n\n{testo_evento}\n\n🌐 <a href='{SITE_URL}/sala'>Approfondisci nella tua sala</a>"
+                # Se è un alert veloce, aggiungiamo un'emoji diversa o un testo più snello
+                tipo_alert = alert_da_inviare.get("tipo", "transito_lento")
+                if tipo_alert == "transito_veloce":
+                    testo = f"Ciao <b>{nome}</b>, un soffio dalle stelle 🌬️\n\n{testo_evento}\n\n🌐 <a href='{SITE_URL}/sala'>Scopri di più nella tua sala</a>"
+                else:
+                    testo = f"Ciao <b>{nome}</b>, un segnale importante dalle stelle 🌙\n\n{testo_evento}\n\n🌐 <a href='{SITE_URL}/sala'>Approfondisci nella tua sala</a>"
+
                 await send_telegram(chat_id, testo)
                 
                 # Segniamo come inviato SOLO l'alert scelto
                 sb.table("alerts").update({"inviato": True}).eq("id", alert_da_inviare["id"]).execute()
+                
+                # AGGIORNIAMO LA DATA DELL'ULTIMO ALERT INVIATO SUL PROFILO
+                sb.table("profiles").update({"last_alert_sent": adesso.isoformat()}).eq("id", prof["id"]).execute()
+                
                 inviati += 1
                 
             except Exception as e:
