@@ -233,8 +233,9 @@ def calcola_transiti_con_durata(tema: dict, giorni: int = 365, orb_max: float = 
 
 def genera_alert_futuri(profile_id: str, tema: dict, sb):
     try:
-        transiti = calcola_transiti_con_durata(tema, giorni=365, orb_max=3.0)
-        for t in transiti:
+        # --- 1. ALERT LENTI (i "biblici") ---
+        transiti_lenti = calcola_transiti_con_durata(tema, giorni=365, orb_max=3.0)
+        for t in transiti_lenti:
             existing = sb.table("alerts").select("*").eq("profile_id", profile_id).eq("descrizione", t["chiave"]).execute()
             if not existing.data:
                 sb.table("alerts").insert({
@@ -244,8 +245,36 @@ def genera_alert_futuri(profile_id: str, tema: dict, sb):
                     "data_evento": t["inizio"],
                     "inviato": False,
                 }).execute()
-        print(f"=== ALERT: generati {len(transiti)} alert per {profile_id} ===")
-        return transiti
+        
+        # --- 2. ALERT VELOCI (i "leggeri") ---
+        from transiti import calcola_transiti_veloci
+        from datetime import datetime as _dt
+        oggi_str = _dt.now().strftime("%Y-%m-%d")
+        
+        transiti_veloci = calcola_transiti_veloci(
+            data_inizio=oggi_str,
+            planets=tema["planets"],
+            houses=tema["houses"],
+            ascendant=tema["ascendant"],
+            mc=tema["mc"],
+            planets_in_houses=tema["planets_in_houses"],
+            giorni_finestra=30,
+        )
+        
+        for t in transiti_veloci:
+            chiave = f"{t['pianeta_transito']}_{t['aspetto']}_{t['punto_natale']}"
+            existing = sb.table("alerts").select("*").eq("profile_id", profile_id).eq("descrizione", chiave).eq("tipo", "transito_veloce").execute()
+            if not existing.data:
+                sb.table("alerts").insert({
+                    "profile_id": profile_id,
+                    "tipo": "transito_veloce",
+                    "descrizione": chiave,
+                    "data_evento": t["data_esatta"],
+                    "inviato": False,
+                }).execute()
+        
+        print(f"=== ALERT: generati {len(transiti_lenti)} lenti + {len(transiti_veloci)} veloci per {profile_id} ===")
+        return transiti_lenti + transiti_veloci
     except Exception as e:
         print(f"=== ERRORE generazione alert: {e} ===")
         return []
