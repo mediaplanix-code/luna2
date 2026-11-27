@@ -1,16 +1,16 @@
-name: Alert Mensili
+name: Alert Settimanali
 
 on:
   schedule:
-    # Il primo giorno di ogni mese alle 8:00 UTC (9:00 italiane)
-    - cron: '0 8 1 * *'
+    # Ogni lunedì alle 8:00 UTC (9:00 italiane)
+    - cron: '0 8 * * 1'
   workflow_dispatch: {}
 
 jobs:
   invia:
     runs-on: ubuntu-latest
     steps:
-      - name: Chiama endpoint alert mensili
+      - name: Chiama endpoint alert
         run: |
           curl -sS -X POST "https://luna2-api.onrender.com/cron/alert-mensili" \
             -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
